@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#131316",
+                        "inverse-surface": "#e4e1e6",
+                        "outline": "#a98a7d",
+                        "secondary-fixed-dim": "#ffb693",
+                        "on-primary-container": "#572000",
+                        "surface-container": "#1f1f22",
+                        "on-tertiary": "#003257",
+                        "surface-container-high": "#2a2a2d",
+                        "tertiary": "#9ccaff",
+                        "on-secondary-fixed": "#351000",
+                        "on-error-container": "#ffdad6",
+                        "tertiary-fixed": "#d0e4ff",
+                        "surface": "#131316",
+                        "inverse-primary": "#a04100",
+                        "surface-bright": "#39393c",
+                        "secondary-fixed": "#ffdbcc",
+                        "on-secondary-container": "#ffa173",
+                        "on-tertiary-fixed-variant": "#00497b",
+                        "on-surface": "#e4e1e6",
+                        "inverse-on-surface": "#303033",
+                        "tertiary-fixed-dim": "#9ccaff",
+                        "surface-container-highest": "#353438",
+                        "tertiary-container": "#059eff",
+                        "background": "#131316",
+                        "primary-container": "#ff6b00",
+                        "on-primary": "#561f00",
+                        "error": "#ffb4ab",
+                        "primary": "#ffb693",
+                        "on-background": "#e4e1e6",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed": "#001d35",
+                        "on-primary-fixed-variant": "#7a3000",
+                        "secondary": "#ffb693",
+                        "on-surface-variant": "#e2bfb0",
+                        "on-primary-fixed": "#351000",
+                        "surface-variant": "#353438",
+                        "on-secondary": "#561f00",
+                        "surface-container-lowest": "#0e0e11",
+                        "secondary-container": "#7b3409",
+                        "on-error": "#690005",
+                        "outline-variant": "#5a4136",
+                        "surface-container-low": "#1b1b1e",
+                        "on-tertiary-container": "#003357",
+                        "on-secondary-fixed-variant": "#783207",
+                        "primary-fixed-dim": "#ffb693",
+                        "surface-tint": "#ffb693",
+                        "primary-fixed": "#ffdbcc"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .neumorphic-lift {
+            box-shadow: -6px -6px 12px rgba(255, 255, 255, 0.03), 6px 6px 12px rgba(0, 0, 0, 0.6);
+        }
+        .neumorphic-inset {
+            box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.5), inset -4px -4px 8px rgba(255, 255, 255, 0.02);
+        }
+        .glass-edge {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .neon-glow {
+            text-shadow: 0 0 10px rgba(255, 107, 0, 0.5), 0 0 20px rgba(255, 107, 0, 0.3);
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0F0F12; }
+        ::-webkit-scrollbar-thumb { background: #2a2a2d; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-[#0F0F12] text-on-surface font-body selection:bg-primary-container/30">
+<!-- SideNavBar (Shared Component) -->
+<aside class="bg-[#0F0F12]/60 backdrop-blur-3xl h-screen w-72 fixed left-0 top-0 z-40 flex flex-col py-8 px-4 font-['Space_Grotesk'] tracking-tight shadow-[-6px_-6px_12px_rgba(255,255,255,0.05),6px_6px_12px_rgba(0,0,0,0.8)]">
+<div class="mb-10 px-4">
+<h1 class="text-2xl font-bold tracking-tighter text-orange-500">AchadinhosPRO</h1>
+<p class="text-xs text-gray-500 uppercase tracking-widest mt-1">Operational Hub</p>
+</div>
+<nav class="flex-1 space-y-2">
+<!-- Command Center Active -->
+<a class="bg-[#0E0E11] text-orange-500 shadow-[inset_2px_2px_5px_rgba(0,0,0,0.5)] rounded-lg mx-2 flex items-center px-4 py-3 space-x-3 active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-medium">Command Center</span>
+</a>
+<a class="text-gray-400 hover:text-white transition-all hover:bg-[#353438]/20 hover:backdrop-blur-md flex items-center px-4 py-3 space-x-3 mx-2 rounded-lg active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span>Inventory</span>
+</a>
+<a class="text-gray-400 hover:text-white transition-all hover:bg-[#353438]/20 hover:backdrop-blur-md flex items-center px-4 py-3 space-x-3 mx-2 rounded-lg active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+<span>Analytics</span>
+</a>
+<a class="text-gray-400 hover:text-white transition-all hover:bg-[#353438]/20 hover:backdrop-blur-md flex items-center px-4 py-3 space-x-3 mx-2 rounded-lg active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="local_shipping">local_shipping</span>
+<span>Logistics</span>
+</a>
+<a class="text-gray-400 hover:text-white transition-all hover:bg-[#353438]/20 hover:backdrop-blur-md flex items-center px-4 py-3 space-x-3 mx-2 rounded-lg active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span>Team Ops</span>
+</a>
+<a class="text-gray-400 hover:text-white transition-all hover:bg-[#353438]/20 hover:backdrop-blur-md flex items-center px-4 py-3 space-x-3 mx-2 rounded-lg active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-white/5 pt-6 space-y-2">
+<a class="text-gray-400 hover:text-white flex items-center px-4 py-2 space-x-3 mx-2" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="text-sm">Help Center</span>
+</a>
+<a class="text-gray-400 hover:text-white flex items-center px-4 py-2 space-x-3 mx-2" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="text-sm">Logout</span>
+</a>
+<button class="w-full mt-4 bg-gradient-to-r from-[#FF6B00] to-[#b64c00] py-3 rounded-lg font-bold text-white shadow-lg active:scale-[0.98] transition-all">
+                Deploy Update
+            </button>
+</div>
+</aside>
+<!-- TopNavBar (Shared Component) -->
+<header class="fixed top-0 right-0 left-72 h-16 z-30 bg-[#0F0F12]/60 backdrop-blur-2xl border-b border-white/10 flex items-center justify-between px-8 w-full shadow-lg font-['Inter'] text-sm font-medium">
+<div class="flex items-center space-x-6">
+<div class="relative">
+<span class="absolute inset-y-0 left-3 flex items-center text-gray-500">
+<span class="material-symbols-outlined text-lg" data-icon="search">search</span>
+</span>
+<input class="bg-[#0E0E11] border-none rounded-lg pl-10 pr-4 py-1.5 w-64 text-sm focus:ring-1 focus:ring-orange-500 neumorphic-inset transition-all" placeholder="Search Offer Radar..." type="text"/>
+</div>
+<div class="flex items-center space-x-4 text-gray-400">
+<span class="flex items-center space-x-1"><span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> <span>Status: Online</span></span>
+<span class="text-white/10">|</span>
+<span>Region: NA-West</span>
+</div>
+</div>
+<div class="flex items-center space-x-6">
+<div class="flex items-center space-x-4">
+<button class="material-symbols-outlined text-gray-400 hover:text-white transition-colors" data-icon="notifications">notifications</button>
+<button class="material-symbols-outlined text-gray-400 hover:text-white transition-colors" data-icon="terminal">terminal</button>
+<button class="material-symbols-outlined text-gray-400 hover:text-white transition-colors" data-icon="account_circle">account_circle</button>
+</div>
+<button class="bg-surface-container-highest text-orange-500 px-4 py-1.5 rounded-lg font-bold neumorphic-lift active:scale-95 transition-all">
+                New Mission
+            </button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-72 pt-24 pb-32 px-8 min-h-screen">
+<!-- Marketplace Tab System -->
+<section class="mb-12">
+<div class="flex items-center justify-between mb-8">
+<div>
+<h2 class="text-4xl font-headline font-bold tracking-tight text-white mb-2">Offer Radar</h2>
+<p class="text-gray-500 font-medium">Global marketplace synchronization active.</p>
+</div>
+<div class="flex bg-[#0E0E11] p-1.5 rounded-xl neumorphic-inset">
+<button class="px-6 py-2 rounded-lg bg-surface-container-highest text-orange-500 font-bold neumorphic-lift shadow-sm">Shopee</button>
+<button class="px-6 py-2 rounded-lg text-gray-500 hover:text-gray-300 transition-colors">Amazon</button>
+<button class="px-6 py-2 rounded-lg text-gray-500 hover:text-gray-300 transition-colors">Mercado Livre</button>
+<button class="px-6 py-2 rounded-lg text-gray-500 hover:text-gray-300 transition-colors">AliExpress</button>
+</div>
+</div>
+<!-- Bento Grid of Product Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+<!-- Card 1 -->
+<div class="bg-surface-container-low rounded-3xl p-4 neumorphic-lift glass-edge group transition-all">
+<div class="relative overflow-hidden rounded-2xl mb-4 h-52 bg-[#0E0E11]">
+<img alt="Premium Headphones" class="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-700" data-alt="Close-up of premium black wireless headphones on a dark textured background with dramatic orange rim lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgU0eWChu5p0QRZrcx7w5tIHCpFU8X-_O6LpNJM_k2joO-Rv7IRyrlS6Gk4h6MOhcb9sa6iAH9saaYyxFCyeK89qcISMYyHkc9we00TTk3aIJF2qnUvX3BYlS41LV99ZJ7WHjmtzYSfZDpYPlklvV2fL2EPqhjs5zZM8AlUu8YNYn7h8cHjS_fQINiu0Wig6Qkyzc0eBCCCx4gPmd5IPwx7mrl3cYeOFrsk_vaS_Ekwm7b221PHrYEltQaJ13JtfPNoxjxlWMOR9o"/>
+<div class="absolute top-3 right-3 bg-primary-container text-on-primary text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-tighter">
+                            85% OFF
+                        </div>
+</div>
+<h3 class="font-headline font-semibold text-lg text-white line-clamp-1">SonicX Wireless v2</h3>
+<p class="text-gray-500 text-sm mb-4">Market: Shopee Flash</p>
+<div class="flex items-end justify-between">
+<div>
+<span class="text-xs text-gray-600 line-through block">$299.00</span>
+<span class="text-2xl font-headline font-bold text-orange-500 neon-glow">$44.85</span>
+</div>
+<button class="bg-surface-container-highest p-3 rounded-xl neumorphic-lift active:neumorphic-inset transition-all">
+<span class="material-symbols-outlined text-orange-500" data-icon="add_shopping_cart">add_shopping_cart</span>
+</button>
+</div>
+</div>
+<!-- Card 2 (Large Highlight) -->
+<div class="bg-surface-container-low rounded-3xl p-4 neumorphic-lift glass-edge xl:col-span-2 group">
+<div class="flex h-full gap-6">
+<div class="w-1/2 relative overflow-hidden rounded-2xl bg-[#0E0E11]">
+<img alt="Smart Watch" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700" data-alt="A minimalist white smart watch laying on a dark slate surface with moody cinematic lighting and soft orange glows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPOKYxuR1chYjHuJsXUqqekCbGWZ_aZulmio5TYZYqziwrbYJTRzBMf04Gqgdv9xtUBj4YBdjgEm_byf_CtQQl9kMhA_bL-sU4lfGmugh5Iz_OOoL_Xr32oKi5fuUfdl9dx32XFh5uXqznnjwPX6hvbYJID_TUUXlQqHnUGeAd9BCiildKJkAFbI_5V5y2YPn_iGKCJuZndLadabhV5QhbcnD-bzReMns2s3_teCySEo_WWFy1tzIJUgh98SUqNOO_3vI-yJgymPU"/>
+<div class="absolute bottom-3 left-3 flex space-x-2">
+<span class="bg-green-500/20 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-sm backdrop-blur-md">PRIME SHIPPING</span>
+</div>
+</div>
+<div class="w-1/2 flex flex-col justify-between py-2">
+<div>
+<div class="flex justify-between items-start mb-2">
+<span class="bg-[#0E0E11] text-orange-500 text-[10px] font-bold px-2 py-1 rounded border border-orange-500/20 uppercase tracking-widest">Global Top Deal</span>
+<span class="material-symbols-outlined text-gray-600 hover:text-white cursor-pointer" data-icon="share">share</span>
+</div>
+<h3 class="font-headline font-bold text-2xl text-white mb-2 leading-tight">Quantum Watch Series 7</h3>
+<p class="text-gray-500 text-sm">Automated price drop detected. Lowest value in 90 days. Ideal for dropshipping arbitrage.</p>
+</div>
+<div class="flex items-center justify-between mt-4">
+<div>
+<span class="text-xs text-gray-600 line-through block">$899.00</span>
+<span class="text-4xl font-headline font-bold text-orange-500 neon-glow">$122.00</span>
+</div>
+<button class="bg-primary-container text-on-primary font-bold px-8 py-3 rounded-xl shadow-[0_10px_20px_rgba(255,107,0,0.3)] active:translate-y-1 transition-all">
+                                    Quick Select
+                                </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="bg-surface-container-low rounded-3xl p-4 neumorphic-lift glass-edge group">
+<div class="relative overflow-hidden rounded-2xl mb-4 h-52 bg-[#0E0E11]">
+<img alt="Red Sneakers" class="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-700" data-alt="Vibrant red performance sneakers against a dark matte background with sharp studio lighting creating a sleek aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIj9k7jR5OwwxWCbCQP4tavJf9zq1RN7BQw11Egtbuz81GLzhd8OlBk2t1YXLXDqPk217SsQ_QyRnTsxLSJz45L682LSeKuLQGyAWBuIC6a_PjAUh3xQTqCVYH0Rr9UT7O1AEf2aMFedtr9QkXNvbk0ibzrZ8-npgcNTcloGmRWbPOzWz36Y6VN26BuAfeUsO4FM1f2q8ArKqnW_cxxwL-wXorhwzqx63fyWHdWxsFdlzQuTOhuvu_gZ43C5X-0xH67f8-fVgI6hk"/>
+<div class="absolute top-3 left-3 bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-full">
+                            LOW STOCK
+                        </div>
+</div>
+<h3 class="font-headline font-semibold text-lg text-white line-clamp-1">AeroDash Runners</h3>
+<p class="text-gray-500 text-sm mb-4">Market: Amazon US</p>
+<div class="flex items-end justify-between">
+<div>
+<span class="text-xs text-gray-600 line-through block">$120.00</span>
+<span class="text-2xl font-headline font-bold text-orange-500 neon-glow">$79.90</span>
+</div>
+<button class="bg-surface-container-highest p-3 rounded-xl neumorphic-lift active:neumorphic-inset transition-all">
+<span class="material-symbols-outlined text-orange-500" data-icon="add_shopping_cart">add_shopping_cart</span>
+</button>
+</div>
+</div>
+<!-- Card 5 -->
+<div class="bg-surface-container-low rounded-3xl p-4 neumorphic-lift glass-edge group">
+<div class="relative overflow-hidden rounded-2xl mb-4 h-52 bg-[#0E0E11]">
+<img alt="Mechanical Keyboard" class="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-700" data-alt="A macro shot of a sleek mechanical keyboard with RGB backlighting reflecting orange hues onto a dark desk surface" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnCX9g-QGOXOTADfQUstz2EK6M7DEBYyhu11wJWrmtGWU9iHwS8Sfwn6EIGJ2JPfjjPlAD0oZ9ltMlHXtX12PF63_ot1cnfJ16_9H5xgLZ8WSXjUxTAzJNqPz-8-9a24ICzYhKQGAtWBk5ub3c0wlRrbfT_LhqYSlbNv6_3VvrhLZPUtvZzUK29KvBppa9f7CrWBi-O6Jx-tRPcGg4JLhYdMaQbQpyG_UUO9YGq9BBfzgpX8uWMCKkbVXjirLxHIezvQsqNPIrQFo"/>
+</div>
+<h3 class="font-headline font-semibold text-lg text-white line-clamp-1">Tactile Pro 65%</h3>
+<p class="text-gray-500 text-sm mb-4">Market: AliExpress</p>
+<div class="flex items-end justify-between">
+<div>
+<span class="text-xs text-gray-600 line-through block">$159.00</span>
+<span class="text-2xl font-headline font-bold text-orange-500 neon-glow">$21.15</span>
+</div>
+<button class="bg-surface-container-highest p-3 rounded-xl neumorphic-lift active:neumorphic-inset transition-all">
+<span class="material-symbols-outlined text-orange-500" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</button>
+</div>
+</div>
+<!-- Card 6 -->
+<div class="bg-surface-container-low rounded-3xl p-4 neumorphic-lift glass-edge group">
+<div class="relative overflow-hidden rounded-2xl mb-4 h-52 bg-[#0E0E11]">
+<img alt="Sunglasses" class="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-700" data-alt="Stylish dark sunglasses resting on a reflective black surface with atmospheric orange and blue light trails" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJwWxZyb4U2B2oUfCQNNpfyVScragXbhyblW8FVKz_LYB7TpK-rT6DH4_fTX0kSOD-zLd-jDhns7ongzrEYCZL2PciFxT-V4M-Zl_cWl0DsbjRy4kCZZ5G7t_RmqEbdrpZFtWfEa16OWIldkKvLXcvxduzIrHYaswYFwmVRkuLf_nbOhuGQjgVMRpxKNjwSkFRzoTZx_cIDgeoAV_xV656V1itFGVyBSJOefwwJ5P1a0Dh6KvAw1vJVl90RMm70_Xs1FFFugM155Q"/>
+</div>
+<h3 class="font-headline font-semibold text-lg text-white line-clamp-1">NeoVision Shades</h3>
+<p class="text-gray-500 text-sm mb-4">Market: Mercado Livre</p>
+<div class="flex items-end justify-between">
+<div>
+<span class="text-xs text-gray-600 line-through block">$65.00</span>
+<span class="text-2xl font-headline font-bold text-orange-500 neon-glow">$12.50</span>
+</div>
+<button class="bg-surface-container-highest p-3 rounded-xl neumorphic-lift active:neumorphic-inset transition-all">
+<span class="material-symbols-outlined text-orange-500" data-icon="add_shopping_cart">add_shopping_cart</span>
+</button>
+</div>
+</div>
+<!-- Card 7 -->
+<div class="bg-surface-container-low rounded-3xl p-4 neumorphic-lift glass-edge group">
+<div class="relative overflow-hidden rounded-2xl mb-4 h-52 bg-[#0E0E11]">
+<img alt="Tablet" class="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-700" data-alt="Modern tablet device showing a vibrant interface glowing in the dark with soft studio lighting and deep shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuApPwctlAu-h7uzjJaL3rcHADGCHLrAM_gYfyhGE6cn-aq3438iDuZ3DtDFfHhX-0mbDsWtLPuIUmuHXeyB04O7cIg5zcPTh-xVrCrzsfAAIqXdO12FqA7MeYe8VCwG5A1uxLKHA54iJzyVMeKtP91Expy8kmErMUT5DHzhzyWPu3E0rvawhqdxoiOY-ZVhyx4nJy2FeSBqIFkY52vl9_Yjl73kOzLBX5Z14Rdqs5Hm-gBNYDKNv52acZDXCrLCgogGzVv2UinSdsI"/>
+</div>
+<h3 class="font-headline font-semibold text-lg text-white line-clamp-1">CorePad 11 Air</h3>
+<p class="text-gray-500 text-sm mb-4">Market: Shopee</p>
+<div class="flex items-end justify-between">
+<div>
+<span class="text-xs text-gray-600 line-through block">$450.00</span>
+<span class="text-2xl font-headline font-bold text-orange-500 neon-glow">$315.00</span>
+</div>
+<button class="bg-surface-container-highest p-3 rounded-xl neumorphic-lift active:neumorphic-inset transition-all">
+<span class="material-symbols-outlined text-orange-500" data-icon="add_shopping_cart">add_shopping_cart</span>
+</button>
+</div>
+</div>
+<!-- Card 8 -->
+<div class="bg-surface-container-low rounded-3xl p-4 neumorphic-lift glass-edge group">
+<div class="relative overflow-hidden rounded-2xl mb-4 h-52 bg-[#0E0E11]">
+<img alt="Earbuds" class="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-700" data-alt="Professional wireless earbuds case open on a dark metallic surface with orange ambient lighting and industrial aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkAkZiFDZysPYDDNZJlEMZEk7g56Udc6D8ZN5vVf8FODo9cSrG0r39NxtsZn_VYZSLdeKd6hpf4QxFIHxR7n0dHlP59-tEhKCQJdf13bsirMYDtBgNW2wV6eXLm7myNaCKVqfsf-CznismmJI6mhjHf6-bNB-jRJRqFBSIoM5q0URZIYTPfKsYqpCoCLvVi6MWLkwlIvXKCO6mIo7e0xwRMLX2wRzKjQaTrzbb9V1meBU6wrjH-A3jrn_h3082_F-sasSdxcoH3rY"/>
+<div class="absolute top-3 right-3 bg-primary-container text-on-primary text-[10px] font-bold px-3 py-1 rounded-full">
+                            NEW ARRIVAL
+                        </div>
+</div>
+<h3 class="font-headline font-semibold text-lg text-white line-clamp-1">SyncPods Ultra</h3>
+<p class="text-gray-500 text-sm mb-4">Market: Amazon BR</p>
+<div class="flex items-end justify-between">
+<div>
+<span class="text-xs text-gray-600 line-through block">$199.00</span>
+<span class="text-2xl font-headline font-bold text-orange-500 neon-glow">$89.00</span>
+</div>
+<button class="bg-surface-container-highest p-3 rounded-xl neumorphic-lift active:neumorphic-inset transition-all">
+<span class="material-symbols-outlined text-orange-500" data-icon="add_shopping_cart">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Persistent Bottom Selection Bar -->
+<footer class="fixed bottom-0 right-0 left-72 z-50 h-24 bg-[#0F0F12]/80 backdrop-blur-3xl px-12 flex items-center justify-between glass-edge">
+<div class="flex items-center space-x-8">
+<div class="flex items-center space-x-3">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest neumorphic-lift flex items-center justify-center border border-orange-500/30">
+<span class="font-headline font-bold text-orange-500 text-xl">03</span>
+</div>
+<div>
+<p class="text-sm font-bold text-white uppercase tracking-wider">Offers Selected</p>
+<p class="text-xs text-gray-500">Estimated Profit: <span class="text-green-500 font-bold">+$482.50</span></p>
+</div>
+</div>
+<div class="hidden lg:flex items-center -space-x-3">
+<div class="w-10 h-10 rounded-lg border-2 border-[#131316] overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="item thumbnail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDnc5Q1oRQIIEW4hMnc0ViEMEVijb2k5RJmO2Q2fS3psD1EYRv3JC9o1f3mgtmJJMH9YNviglOmwAxYCD-Wchkdq3IuQOsdIWLcW6TK2yyWXMPhfegHh_FskkaY81k4Za4nCS_kgsFGEJ8dpgQER_qUkDNTRokY-ge25KJTTf1RSXghBLPGuukVeA2SK78Db7K0phInrz_SvIBeuuRpCH4wM6R5WXXeemKg48gkce8y0fT57eN7lpO9G7WMoygbV2qR_d_oSPDDRYY"/>
+</div>
+<div class="w-10 h-10 rounded-lg border-2 border-[#131316] overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="item thumbnail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTfeTzeBJU_UE9O2Eb0OZO33odqYjMqesU__B6goSn9cPmLN-ATXcrB-4G_PhK9cT_XIcXxxyd2_PlXIGNDX0VZHAWyDNsfb9iO4QbfayS2iJVCdlNHeB5pHzg8_g7E2RtlD9wkRP4EQkg3iRXa4e2IbnazeJfNl5gI_GGFXkOoHnyuxu7heJbqSJjipR0wYS7LnatfrNlE9nNsW0P1v6jGfZx2dugbZF-a-5o6HHpZE2UVdiptJPWW8gGjbpA75aqAoseFCKuobw"/>
+</div>
+<div class="w-10 h-10 rounded-lg border-2 border-[#131316] overflow-hidden bg-surface-container-highest flex items-center justify-center text-[10px] text-gray-400">
+                    +1
+                </div>
+</div>
+</div>
+<div class="flex items-center space-x-4">
+<button class="px-6 py-3 rounded-xl text-gray-400 font-medium hover:text-white transition-colors">
+                Clear All
+            </button>
+<button class="bg-gradient-to-br from-[#FF6B00] to-[#FF8C33] text-on-primary font-headline font-extrabold px-10 py-4 rounded-xl shadow-[0_15px_30px_rgba(255,107,0,0.4)] flex items-center space-x-3 active:scale-95 transition-all border-t border-white/20">
+<span>Forward to Cart</span>
+<span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</footer>
+</body></html>

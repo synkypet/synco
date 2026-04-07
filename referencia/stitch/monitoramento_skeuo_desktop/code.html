@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AchadinhosPRO | Command Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#131316",
+                        "inverse-surface": "#e4e1e6",
+                        "outline": "#a98a7d",
+                        "secondary-fixed-dim": "#ffb693",
+                        "on-primary-container": "#572000",
+                        "surface-container": "#1f1f22",
+                        "on-tertiary": "#003257",
+                        "surface-container-high": "#2a2a2d",
+                        "tertiary": "#9ccaff",
+                        "on-secondary-fixed": "#351000",
+                        "on-error-container": "#ffdad6",
+                        "tertiary-fixed": "#d0e4ff",
+                        "surface": "#131316",
+                        "inverse-primary": "#a04100",
+                        "surface-bright": "#39393c",
+                        "secondary-fixed": "#ffdbcc",
+                        "on-secondary-container": "#ffa173",
+                        "on-tertiary-fixed-variant": "#00497b",
+                        "on-surface": "#e4e1e6",
+                        "inverse-on-surface": "#303033",
+                        "tertiary-fixed-dim": "#9ccaff",
+                        "surface-container-highest": "#353438",
+                        "tertiary-container": "#059eff",
+                        "background": "#131316",
+                        "primary-container": "#ff6b00",
+                        "on-primary": "#561f00",
+                        "error": "#ffb4ab",
+                        "primary": "#ffb693",
+                        "on-background": "#e4e1e6",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed": "#001d35",
+                        "on-primary-fixed-variant": "#7a3000",
+                        "secondary": "#ffb693",
+                        "on-surface-variant": "#e2bfb0",
+                        "on-primary-fixed": "#351000",
+                        "surface-variant": "#353438",
+                        "on-secondary": "#561f00",
+                        "surface-container-lowest": "#0e0e11",
+                        "secondary-container": "#7b3409",
+                        "on-error": "#690005",
+                        "outline-variant": "#5a4136",
+                        "surface-container-low": "#1b1b1e",
+                        "on-tertiary-container": "#003357",
+                        "on-secondary-fixed-variant": "#783207",
+                        "primary-fixed-dim": "#ffb693",
+                        "surface-tint": "#ffb693",
+                        "primary-fixed": "#ffdbcc"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .neumorphic-extruded {
+            box-shadow: -6px -6px 12px rgba(255, 255, 255, 0.05), 6px 6px 12px rgba(0, 0, 0, 0.8);
+        }
+        .neumorphic-pressed {
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5);
+        }
+        .glass-panel {
+            backdrop-filter: blur(40px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .specular-edge {
+            box-shadow: inset 1px 1px 0px rgba(255, 255, 255, 0.1);
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0E0E11; }
+        ::-webkit-scrollbar-thumb { background: #353438; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #FF6B00; }
+    </style>
+</head>
+<body class="bg-surface-dim text-on-surface font-body overflow-hidden">
+<!-- SideNavBar Shell -->
+<aside class="h-screen w-72 fixed left-0 top-0 z-40 bg-[#0F0F12]/60 backdrop-blur-3xl flex flex-col py-8 px-4 font-['Space_Grotesk'] tracking-tight shadow-[-6px_-6px_12px_rgba(255,255,255,0.05),6px_6px_12px_rgba(0,0,0,0.8)]">
+<div class="mb-10 px-2">
+<h1 class="text-2xl font-bold tracking-tighter text-orange-500">AchadinhosPRO</h1>
+<p class="text-xs text-gray-500 uppercase tracking-widest mt-1">Operational Hub</p>
+</div>
+<nav class="flex-1 space-y-2">
+<!-- Command Center is Active -->
+<a class="flex items-center gap-3 py-3 px-4 bg-[#0E0E11] text-orange-500 shadow-[inset_2px_2px_5px_rgba(0,0,0,0.5)] rounded-lg mx-2 transition-transform active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-medium">Command Center</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-gray-400 hover:text-white hover:bg-[#353438]/20 hover:backdrop-blur-md rounded-lg transition-all active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span>Inventory</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-gray-400 hover:text-white hover:bg-[#353438]/20 hover:backdrop-blur-md rounded-lg transition-all active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+<span>Analytics</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-gray-400 hover:text-white hover:bg-[#353438]/20 hover:backdrop-blur-md rounded-lg transition-all active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="local_shipping">local_shipping</span>
+<span>Logistics</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-gray-400 hover:text-white hover:bg-[#353438]/20 hover:backdrop-blur-md rounded-lg transition-all active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span>Team Ops</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-gray-400 hover:text-white hover:bg-[#353438]/20 hover:backdrop-blur-md rounded-lg transition-all active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="mt-auto space-y-2 pt-6 border-t border-white/5">
+<button class="w-full bg-gradient-to-r from-[#FF6B00] to-[#b84d00] text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-transform mb-6">
+                Deploy Update
+            </button>
+<a class="flex items-center gap-3 py-2 px-4 text-gray-500 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="help">help</span>
+<span class="text-sm">Help Center</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-4 text-gray-500 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="logout">logout</span>
+<span class="text-sm">Logout</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="fixed top-0 right-0 left-72 h-16 z-30 bg-[#0F0F12]/60 backdrop-blur-2xl border-b border-white/10 flex items-center justify-between px-8 w-full font-['Inter'] text-sm font-medium shadow-lg">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 bg-[#0E0E11] px-4 py-1.5 rounded-full shadow-[inset_1px_1px_3px_rgba(0,0,0,0.4)]">
+<span class="material-symbols-outlined text-orange-500 text-sm" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-xs w-48 text-on-surface" placeholder="Search intercepted nodes..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-orange-500 font-bold border-b-2 border-orange-500 pb-1">Status: Online</span>
+<span class="text-gray-400 hover:bg-white/5 cursor-pointer px-2 py-1 rounded transition-colors">Region: NA-West</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 text-gray-400">
+<span class="material-symbols-outlined cursor-pointer hover:text-white transition-colors" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-white transition-colors" data-icon="terminal">terminal</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-white transition-colors" data-icon="account_circle">account_circle</span>
+</div>
+<button class="bg-[#353438] text-on-surface px-4 py-1.5 rounded-lg border border-white/5 shadow-md hover:bg-surface-bright active:opacity-80 transition-all font-bold">
+                New Mission
+            </button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-72 pt-16 h-screen flex flex-col bg-surface-dim p-6 gap-6">
+<!-- Top Statistics Row -->
+<div class="grid grid-cols-4 gap-6 shrink-0">
+<div class="bg-surface-container-low p-5 rounded-2xl neumorphic-extruded border-t border-l border-white/5">
+<div class="flex justify-between items-start mb-2">
+<span class="text-xs text-gray-500 font-headline uppercase tracking-widest">Intercept Rate</span>
+<span class="material-symbols-outlined text-orange-500" data-icon="radar">radar</span>
+</div>
+<div class="text-3xl font-headline font-bold text-on-surface">94.2%</div>
+<div class="text-[10px] text-green-500 mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="trending_up">trending_up</span> +2.4% from last hour
+                </div>
+</div>
+<div class="bg-surface-container-low p-5 rounded-2xl neumorphic-extruded border-t border-l border-white/5">
+<div class="flex justify-between items-start mb-2">
+<span class="text-xs text-gray-500 font-headline uppercase tracking-widest">Active Links</span>
+<span class="material-symbols-outlined text-orange-500" data-icon="link">link</span>
+</div>
+<div class="text-3xl font-headline font-bold text-on-surface">1,842</div>
+<div class="text-[10px] text-orange-500 mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="bolt">bolt</span> High volume detected
+                </div>
+</div>
+<div class="bg-surface-container-low p-5 rounded-2xl neumorphic-extruded border-t border-l border-white/5">
+<div class="flex justify-between items-start mb-2">
+<span class="text-xs text-gray-500 font-headline uppercase tracking-widest">Neural Latency</span>
+<span class="material-symbols-outlined text-orange-500" data-icon="speed">speed</span>
+</div>
+<div class="text-3xl font-headline font-bold text-on-surface">12ms</div>
+<div class="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="check_circle">check_circle</span> Optimized
+                </div>
+</div>
+<div class="bg-surface-container-low p-5 rounded-2xl neumorphic-extruded border-t border-l border-white/5">
+<div class="flex justify-between items-start mb-2">
+<span class="text-xs text-gray-500 font-headline uppercase tracking-widest">Data Flux</span>
+<span class="material-symbols-outlined text-orange-500" data-icon="waves">waves</span>
+</div>
+<div class="text-3xl font-headline font-bold text-on-surface">4.2 TB/s</div>
+<div class="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="schedule">schedule</span> Last sync: 2m ago
+                </div>
+</div>
+</div>
+<div class="flex flex-1 gap-6 min-h-0">
+<!-- Central Intercept Feed -->
+<div class="flex-[3] flex flex-col bg-surface-container-low rounded-3xl neumorphic-extruded border-t border-l border-white/5 overflow-hidden">
+<div class="p-6 border-b border-white/5 flex items-center justify-between">
+<h2 class="font-headline font-bold text-lg tracking-tight flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                        Live Intercept Feed
+                    </h2>
+<div class="flex gap-2">
+<button class="bg-surface-container-highest px-3 py-1 rounded text-xs font-bold border border-white/5 shadow-sm">All Streams</button>
+<button class="bg-[#0E0E11] px-3 py-1 rounded text-xs text-gray-500 shadow-inner">Priority Only</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-3">
+<!-- Bevelled Row 1 -->
+<div class="group flex items-center gap-4 p-4 bg-surface-container rounded-xl border-t border-l border-white/10 shadow-lg hover:bg-surface-container-high transition-colors cursor-pointer">
+<div class="w-12 h-12 rounded-lg bg-[#0E0E11] flex items-center justify-center shadow-inner text-orange-500">
+<span class="material-symbols-outlined" data-icon="shopping_cart">shopping_cart</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2">
+<span class="font-bold text-sm tracking-tight">AMZN-US-3942</span>
+<span class="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 font-bold border border-orange-500/20">NEW PRICE DROP</span>
+</div>
+<div class="text-xs text-gray-500 font-mono mt-1">https://amazon.com/dp/B09G9F...</div>
+</div>
+<div class="text-right">
+<div class="text-sm font-bold text-orange-500">$129.99</div>
+<div class="text-[10px] text-gray-500 uppercase tracking-tighter">1.2s Ago</div>
+</div>
+<div class="pl-4 border-l border-white/5">
+<span class="material-symbols-outlined text-green-500 text-lg" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</div>
+<!-- Bevelled Row 2 -->
+<div class="group flex items-center gap-4 p-4 bg-surface-container rounded-xl border-t border-l border-white/10 shadow-lg hover:bg-surface-container-high transition-colors cursor-pointer">
+<div class="w-12 h-12 rounded-lg bg-[#0E0E11] flex items-center justify-center shadow-inner text-blue-400">
+<span class="material-symbols-outlined" data-icon="devices">devices</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2">
+<span class="font-bold text-sm tracking-tight">MELI-BR-0122</span>
+<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-bold border border-blue-500/20">RESTOCK</span>
+</div>
+<div class="text-xs text-gray-500 font-mono mt-1">https://produto.mercadolivre.com.br/...</div>
+</div>
+<div class="text-right">
+<div class="text-sm font-bold text-on-surface">R$ 2.450,00</div>
+<div class="text-[10px] text-gray-500 uppercase tracking-tighter">4.8s Ago</div>
+</div>
+<div class="pl-4 border-l border-white/5">
+<span class="material-symbols-outlined text-orange-500 text-lg animate-pulse" data-icon="sync">sync</span>
+</div>
+</div>
+<!-- Bevelled Row 3 -->
+<div class="group flex items-center gap-4 p-4 bg-surface-container rounded-xl border-t border-l border-white/10 shadow-lg hover:bg-surface-container-high transition-colors cursor-pointer">
+<div class="w-12 h-12 rounded-lg bg-[#0E0E11] flex items-center justify-center shadow-inner text-orange-500">
+<span class="material-symbols-outlined" data-icon="shopping_cart">shopping_cart</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2">
+<span class="font-bold text-sm tracking-tight">WMT-US-9981</span>
+<span class="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 font-bold border border-orange-500/20">HOT DEAL</span>
+</div>
+<div class="text-xs text-gray-500 font-mono mt-1">https://walmart.com/ip/electronics/...</div>
+</div>
+<div class="text-right">
+<div class="text-sm font-bold text-orange-500">$45.00</div>
+<div class="text-[10px] text-gray-500 uppercase tracking-tighter">12s Ago</div>
+</div>
+<div class="pl-4 border-l border-white/5">
+<span class="material-symbols-outlined text-green-500 text-lg" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Sidebar: System Nodes & Logic Rules -->
+<div class="w-80 flex flex-col gap-6">
+<!-- System Nodes Status -->
+<div class="bg-surface-container-low rounded-3xl neumorphic-extruded border-t border-l border-white/5 p-6">
+<h3 class="font-headline font-bold text-sm uppercase tracking-widest text-gray-500 mb-6">System Nodes Status</h3>
+<div class="space-y-6">
+<!-- Node 1 -->
+<div>
+<div class="flex justify-between text-xs mb-2">
+<span class="font-bold">Crawler-Alpha</span>
+<span class="text-orange-500 font-mono">82%</span>
+</div>
+<div class="h-3 bg-[#0E0E11] rounded-full shadow-inner overflow-hidden flex items-center px-1">
+<div class="h-1 bg-orange-500 rounded-full shadow-[0_0_8px_#FF6B00]" style="width: 82%"></div>
+</div>
+</div>
+<!-- Node 2 -->
+<div>
+<div class="flex justify-between text-xs mb-2">
+<span class="font-bold">Parser-Core</span>
+<span class="text-orange-500 font-mono">45%</span>
+</div>
+<div class="h-3 bg-[#0E0E11] rounded-full shadow-inner overflow-hidden flex items-center px-1">
+<div class="h-1 bg-orange-500 rounded-full shadow-[0_0_8px_#FF6B00]" style="width: 45%"></div>
+</div>
+</div>
+<!-- Node 3 -->
+<div>
+<div class="flex justify-between text-xs mb-2">
+<span class="font-bold">Alert-Relay</span>
+<span class="text-green-500 font-mono">12%</span>
+</div>
+<div class="h-3 bg-[#0E0E11] rounded-full shadow-inner overflow-hidden flex items-center px-1">
+<div class="h-1 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e]" style="width: 12%"></div>
+</div>
+</div>
+</div>
+<div class="mt-8 pt-6 border-t border-white/5">
+<div class="flex items-center justify-between p-3 bg-[#0E0E11] rounded-xl shadow-inner">
+<span class="text-[10px] text-gray-500 uppercase tracking-tighter">Global Load</span>
+<div class="flex gap-1">
+<div class="w-1.5 h-4 bg-orange-500"></div>
+<div class="w-1.5 h-4 bg-orange-500"></div>
+<div class="w-1.5 h-4 bg-orange-500"></div>
+<div class="w-1.5 h-4 bg-orange-500 opacity-20"></div>
+<div class="w-1.5 h-4 bg-orange-500 opacity-20"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Active Logic Rules -->
+<div class="bg-surface-container-low flex-1 rounded-3xl neumorphic-extruded border-t border-l border-white/5 p-6">
+<h3 class="font-headline font-bold text-sm uppercase tracking-widest text-gray-500 mb-6">Active Logic Rules</h3>
+<div class="space-y-4">
+<!-- Switch 1 -->
+<div class="flex items-center justify-between p-3 bg-surface-container rounded-xl border border-white/5 shadow-md">
+<span class="text-xs font-medium">Price Drop Filter</span>
+<button class="w-10 h-5 bg-orange-500 rounded-full relative shadow-inner">
+<div class="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-md"></div>
+</button>
+</div>
+<!-- Switch 2 -->
+<div class="flex items-center justify-between p-3 bg-surface-container rounded-xl border border-white/5 shadow-md">
+<span class="text-xs font-medium">Auto-Post Discord</span>
+<button class="w-10 h-5 bg-orange-500 rounded-full relative shadow-inner">
+<div class="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-md"></div>
+</button>
+</div>
+<!-- Switch 3 -->
+<div class="flex items-center justify-between p-3 bg-surface-container rounded-xl border border-white/5 shadow-md">
+<span class="text-xs font-medium text-gray-500">Affiliate Injection</span>
+<button class="w-10 h-5 bg-[#0E0E11] rounded-full relative shadow-inner">
+<div class="absolute left-0.5 top-0.5 w-4 h-4 bg-gray-600 rounded-full"></div>
+</button>
+</div>
+<!-- Switch 4 -->
+<div class="flex items-center justify-between p-3 bg-surface-container rounded-xl border border-white/5 shadow-md">
+<span class="text-xs font-medium">OCR Image Scraping</span>
+<button class="w-10 h-5 bg-orange-500 rounded-full relative shadow-inner">
+<div class="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-md"></div>
+</button>
+</div>
+</div>
+<button class="w-full mt-6 flex items-center justify-center gap-2 p-3 bg-[#0E0E11] hover:bg-[#1a1a1e] rounded-xl shadow-inner text-xs font-bold text-orange-500 transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span> New Logic Node
+                    </button>
+</div>
+</div>
+</div>
+<!-- Bottom Event Log Terminal -->
+<div class="h-48 bg-[#0E0E11] rounded-3xl p-5 shadow-[inset_4px_4px_10px_rgba(0,0,0,0.8)] border border-white/5 relative overflow-hidden shrink-0">
+<div class="absolute top-0 left-0 w-full h-8 bg-surface-container-high/30 backdrop-blur-sm px-6 flex items-center justify-between border-b border-white/5">
+<span class="text-[10px] font-mono text-gray-500 uppercase tracking-widest">System Event Log - TTY/01</span>
+<div class="flex gap-1.5">
+<div class="w-2 h-2 rounded-full bg-red-500/40"></div>
+<div class="w-2 h-2 rounded-full bg-yellow-500/40"></div>
+<div class="w-2 h-2 rounded-full bg-green-500/40"></div>
+</div>
+</div>
+<div class="mt-8 font-mono text-[11px] text-green-500/80 leading-relaxed overflow-y-auto h-[calc(100%-32px)]">
+<p><span class="text-gray-600">[20:42:12]</span> <span class="text-orange-500">INFO:</span> Handshake established with Amazon Scraper-V4</p>
+<p><span class="text-gray-600">[20:42:15]</span> <span class="text-blue-400">DEBUG:</span> Received payload: 42 items from Region: NA-East</p>
+<p><span class="text-gray-600">[20:42:18]</span> <span class="text-orange-500">INFO:</span> Logic Rule [Price Drop] applied to item B09G9F...</p>
+<p><span class="text-gray-600">[20:42:18]</span> <span class="text-green-500">SUCCESS:</span> Alert dispatched to Telegram Channel #AchadosGold</p>
+<p><span class="text-gray-600">[20:42:20]</span> <span class="text-yellow-500">WARN:</span> Node [Crawler-Alpha] reaching 85% memory threshold</p>
+<p><span class="text-gray-600">[20:42:22]</span> <span class="text-orange-500">INFO:</span> Syncing state with Master Controller...</p>
+<p><span class="text-gray-600">[20:42:25]</span> <span class="animate-pulse">_</span></p>
+</div>
+</div>
+</main>
+<!-- Visual Accents: Speckle Grain Overlay -->
+<div class="fixed inset-0 pointer-events-none opacity-[0.03] mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
+</body></html>

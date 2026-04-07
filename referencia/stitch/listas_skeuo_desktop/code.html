@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AchadinhosPRO | Destination Lists</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#131316",
+                        "inverse-surface": "#e4e1e6",
+                        "outline": "#a98a7d",
+                        "secondary-fixed-dim": "#ffb693",
+                        "on-primary-container": "#572000",
+                        "surface-container": "#1f1f22",
+                        "on-tertiary": "#003257",
+                        "surface-container-high": "#2a2a2d",
+                        "tertiary": "#9ccaff",
+                        "on-secondary-fixed": "#351000",
+                        "on-error-container": "#ffdad6",
+                        "tertiary-fixed": "#d0e4ff",
+                        "surface": "#131316",
+                        "inverse-primary": "#a04100",
+                        "surface-bright": "#39393c",
+                        "secondary-fixed": "#ffdbcc",
+                        "on-secondary-container": "#ffa173",
+                        "on-tertiary-fixed-variant": "#00497b",
+                        "on-surface": "#e4e1e6",
+                        "inverse-on-surface": "#303033",
+                        "tertiary-fixed-dim": "#9ccaff",
+                        "surface-container-highest": "#353438",
+                        "tertiary-container": "#059eff",
+                        "background": "#131316",
+                        "primary-container": "#ff6b00",
+                        "on-primary": "#561f00",
+                        "error": "#ffb4ab",
+                        "primary": "#ffb693",
+                        "on-background": "#e4e1e6",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed": "#001d35",
+                        "on-primary-fixed-variant": "#7a3000",
+                        "secondary": "#ffb693",
+                        "on-surface-variant": "#e2bfb0",
+                        "on-primary-fixed": "#351000",
+                        "surface-variant": "#353438",
+                        "on-secondary": "#561f00",
+                        "surface-container-lowest": "#0e0e11",
+                        "secondary-container": "#7b3409",
+                        "on-error": "#690005",
+                        "outline-variant": "#5a4136",
+                        "surface-container-low": "#1b1b1e",
+                        "on-tertiary-container": "#003357",
+                        "on-secondary-fixed-variant": "#783207",
+                        "primary-fixed-dim": "#ffb693",
+                        "surface-tint": "#ffb693",
+                        "primary-fixed": "#ffdbcc"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .neumorphic-extruded {
+            box-shadow: -6px -6px 12px rgba(255, 255, 255, 0.03), 6px 6px 12px rgba(0, 0, 0, 0.5);
+        }
+        .neumorphic-pressed {
+            box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.5);
+        }
+        .glass-specular {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .orange-glow {
+            filter: drop-shadow(0 0 8px #FF6B00);
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0F0F12; }
+        ::-webkit-scrollbar-thumb { background: #353438; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-surface-dim text-on-surface font-body overflow-hidden">
+<!-- SideNavBar (Authority Source: JSON) -->
+<aside class="bg-[#0F0F12]/60 backdrop-blur-3xl font-['Space_Grotesk'] tracking-tight h-screen w-72 fixed left-0 top-0 z-40 flex flex-col py-8 px-4 glass-specular shadow-[-6px_-6px_12px_rgba(255,255,255,0.05),6px_6px_12px_rgba(0,0,0,0.8)]">
+<div class="mb-12 px-4">
+<h1 class="text-2xl font-bold tracking-tighter text-orange-500">AchadinhosPRO</h1>
+<p class="text-[10px] uppercase tracking-[0.2em] text-gray-500 mt-1">Operational Hub</p>
+</div>
+<nav class="flex-1 space-y-2">
+<!-- Mapping JSON labels & icons. Logic: "Inventory" is active for Destination Lists -->
+<div class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white transition-all hover:bg-[#353438]/20 hover:backdrop-blur-md cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Command Center</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 bg-[#0E0E11] text-orange-500 shadow-[inset_2px_2px_5px_rgba(0,0,0,0.5)] rounded-lg mx-2 active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="inventory_2" style="font-variation-settings: 'FILL' 1;">inventory_2</span>
+<span class="font-bold">Inventory</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white transition-all hover:bg-[#353438]/20 hover:backdrop-blur-md cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+<span>Analytics</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white transition-all hover:bg-[#353438]/20 hover:backdrop-blur-md cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="local_shipping">local_shipping</span>
+<span>Logistics</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white transition-all hover:bg-[#353438]/20 hover:backdrop-blur-md cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span>Team Ops</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white transition-all hover:bg-[#353438]/20 hover:backdrop-blur-md cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</div>
+</nav>
+<div class="mt-auto border-t border-white/5 pt-6 px-4 space-y-4">
+<button class="w-full bg-gradient-to-br from-orange-500 to-orange-700 text-white font-headline font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-all text-sm">
+                Deploy Update
+            </button>
+<div class="space-y-1">
+<div class="flex items-center gap-3 px-2 py-2 text-xs text-gray-500 hover:text-white cursor-pointer transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="help">help</span>
+<span>Help Center</span>
+</div>
+<div class="flex items-center gap-3 px-2 py-2 text-xs text-gray-500 hover:text-white cursor-pointer transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="logout">logout</span>
+<span>Logout</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Shell -->
+<main class="ml-72 flex flex-col h-screen">
+<!-- TopNavBar (Authority Source: JSON) -->
+<header class="fixed top-0 right-0 left-72 h-16 z-30 bg-[#0F0F12]/60 backdrop-blur-2xl border-b border-white/10 flex items-center justify-between px-8 w-full font-['Inter'] text-sm font-medium shadow-lg">
+<div class="flex items-center gap-8">
+<div class="bg-[#0E0E11] neumorphic-pressed rounded-full px-4 py-2 flex items-center gap-3 w-80">
+<span class="material-symbols-outlined text-gray-500 text-sm" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-xs w-full text-on-surface" placeholder="Search operational clusters..." type="text"/>
+</div>
+<div class="flex gap-6">
+<span class="text-orange-500 font-bold border-b-2 border-orange-500 pb-5 pt-5 cursor-pointer">Status: Online</span>
+<span class="text-gray-400 hover:bg-white/5 transition-colors px-2 py-5 cursor-pointer">Region: NA-West</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<button class="bg-[#353438] hover:bg-white/5 transition-colors px-4 py-2 rounded-lg text-xs font-headline font-bold active:opacity-80">
+                    New Mission
+                </button>
+<div class="flex gap-4 text-gray-400">
+<span class="material-symbols-outlined cursor-pointer hover:text-orange-500 transition-colors" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-orange-500 transition-colors" data-icon="terminal">terminal</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest border border-white/10 flex items-center justify-center cursor-pointer overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="professional portrait of a tech operator with clean studio lighting and dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlLRRFHVoIztociq6O-Zvf6GyBpmKw34iF6o-tdHU5SGEGTvk40ns9-0jtpuA_nEjIpUXDCMhnFOdA5jTi1ChYK29q1iKz19TXJA-BP0Kv0eq_O1pfR1YZsCVMhm7JTDzfBBq5olEvrc3tR81TT9o7HNKfizLWCtbIC4TNM3SliFJ6eROzjK1a2OoAweDQp_o2DRy_brRNa_sGtK9NA07jv3IALmIamUv7QmTGK32t0HK-ck8NmbmIWI1OYATGuUtZUcVtoh6Iw8o"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Content Canvas -->
+<section class="mt-16 p-8 flex gap-8 h-full overflow-hidden">
+<!-- Left Side: Cluster Grid -->
+<div class="flex-1 overflow-y-auto pr-4">
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline text-4xl font-bold tracking-tight text-on-surface">Operational Clusters</h2>
+<p class="text-gray-500 mt-2">Manage your active distribution destinations and health metrics.</p>
+</div>
+<!-- Large Raised 'Create New Cluster' button -->
+<button class="neumorphic-extruded bg-surface-container-high px-6 py-4 rounded-2xl flex items-center gap-3 border border-white/5 active:scale-95 transition-transform">
+<div class="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center orange-glow">
+<span class="material-symbols-outlined text-white" data-icon="add">add</span>
+</div>
+<span class="font-headline font-bold text-lg">Create New Cluster</span>
+</button>
+</div>
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-20">
+<!-- Cluster Card 1 -->
+<div class="bg-surface-container-low rounded-3xl p-6 neumorphic-extruded border border-white/5 group">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h3 class="font-headline text-xl font-bold text-on-surface">Alpha Prime Distribution</h3>
+<div class="flex gap-2 mt-1">
+<span class="text-[10px] bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded font-bold uppercase tracking-wider">High Velocity</span>
+<span class="text-[10px] bg-surface-container-highest text-gray-400 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Sector 7G</span>
+</div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-lowest neumorphic-pressed flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="grid grid-cols-2 gap-4 mb-8">
+<div class="bg-surface-container-lowest neumorphic-pressed rounded-2xl p-4">
+<p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Group Count</p>
+<p class="font-headline text-2xl font-bold text-on-surface">1,248</p>
+</div>
+<div class="bg-surface-container-lowest neumorphic-pressed rounded-2xl p-4">
+<p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Total Reach</p>
+<p class="font-headline text-2xl font-bold text-on-surface">8.4M</p>
+</div>
+</div>
+<!-- Health Meter -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="text-xs font-bold text-gray-400 uppercase tracking-widest">Cluster Health</label>
+<span class="text-orange-500 font-headline font-bold">94%</span>
+</div>
+<div class="h-4 bg-surface-container-lowest neumorphic-pressed rounded-full p-1 relative overflow-hidden">
+<div class="h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full orange-glow" style="width: 94%;"></div>
+<div class="absolute top-0 right-[6%] w-0.5 h-full bg-white/20"></div>
+</div>
+</div>
+</div>
+<!-- Cluster Card 2 -->
+<div class="bg-surface-container-low rounded-3xl p-6 neumorphic-extruded border border-white/5 group">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h3 class="font-headline text-xl font-bold text-on-surface">Beta Gamma Retail</h3>
+<div class="flex gap-2 mt-1">
+<span class="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Optimized</span>
+<span class="text-[10px] bg-surface-container-highest text-gray-400 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Sector 4F</span>
+</div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-lowest neumorphic-pressed flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="grid grid-cols-2 gap-4 mb-8">
+<div class="bg-surface-container-lowest neumorphic-pressed rounded-2xl p-4">
+<p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Group Count</p>
+<p class="font-headline text-2xl font-bold text-on-surface">432</p>
+</div>
+<div class="bg-surface-container-lowest neumorphic-pressed rounded-2xl p-4">
+<p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Total Reach</p>
+<p class="font-headline text-2xl font-bold text-on-surface">2.1M</p>
+</div>
+</div>
+<!-- Health Meter (Needle Style) -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="text-xs font-bold text-gray-400 uppercase tracking-widest">Cluster Health</label>
+<span class="text-on-surface-variant font-headline font-bold">62%</span>
+</div>
+<div class="h-4 bg-surface-container-lowest neumorphic-pressed rounded-full p-1 relative">
+<div class="h-full bg-surface-container-highest rounded-full w-full"></div>
+<div class="absolute top-[-4px] bottom-[-4px] w-2 bg-orange-500 rounded-full shadow-[0_0_10px_#FF6B00]" style="left: 62%;"></div>
+</div>
+</div>
+</div>
+<!-- Cluster Card 3 -->
+<div class="bg-surface-container-low rounded-3xl p-6 neumorphic-extruded border border-white/5 group opacity-70">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h3 class="font-headline text-xl font-bold text-on-surface">Omega Static Fleet</h3>
+<div class="flex gap-2 mt-1">
+<span class="text-[10px] bg-red-500/10 text-red-400 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Warning</span>
+</div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-lowest neumorphic-pressed flex items-center justify-center text-gray-500">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="grid grid-cols-2 gap-4 mb-8">
+<div class="bg-surface-container-lowest neumorphic-pressed rounded-2xl p-4">
+<p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Group Count</p>
+<p class="font-headline text-2xl font-bold text-on-surface">88</p>
+</div>
+<div class="bg-surface-container-lowest neumorphic-pressed rounded-2xl p-4">
+<p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Total Reach</p>
+<p class="font-headline text-2xl font-bold text-on-surface">140K</p>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="text-xs font-bold text-gray-400 uppercase tracking-widest">Cluster Health</label>
+<span class="text-red-500 font-headline font-bold">24%</span>
+</div>
+<div class="h-4 bg-surface-container-lowest neumorphic-pressed rounded-full p-1 relative overflow-hidden">
+<div class="h-full bg-red-500/40 rounded-full" style="width: 24%;"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Side: Cluster Optimizer Panel -->
+<aside class="w-96 flex flex-col gap-6">
+<div class="bg-surface-container-high rounded-3xl p-8 neumorphic-extruded border border-white/10 h-full flex flex-col">
+<div class="flex items-center gap-3 mb-8">
+<div class="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-orange-500" data-icon="smart_toy">smart_toy</span>
+</div>
+<div>
+<h3 class="font-headline text-xl font-bold text-on-surface">AI Optimizer</h3>
+<p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tactile Recommendations</p>
+</div>
+</div>
+<div class="space-y-6 flex-1">
+<!-- Recommendation 1 -->
+<div class="bg-surface-container-lowest p-4 rounded-2xl neumorphic-pressed border border-white/5">
+<div class="flex justify-between mb-2">
+<span class="text-xs font-bold text-orange-500 uppercase">Critical Flow</span>
+<span class="text-[10px] text-gray-500">2m ago</span>
+</div>
+<p class="text-sm font-medium text-on-surface leading-relaxed">
+                                Alpha Prime is experiencing data throttling. Merge 3 sub-clusters to restore velocity.
+                            </p>
+<button class="mt-4 w-full py-2 bg-surface-container-highest rounded-lg text-xs font-bold hover:bg-orange-500 hover:text-white transition-all active:scale-95">
+                                Execute Merge
+                            </button>
+</div>
+<!-- Recommendation 2 -->
+<div class="bg-surface-container-lowest p-4 rounded-2xl neumorphic-pressed border border-white/5">
+<div class="flex justify-between mb-2">
+<span class="text-xs font-bold text-tertiary uppercase">Optimization</span>
+<span class="text-[10px] text-gray-500">15m ago</span>
+</div>
+<p class="text-sm font-medium text-on-surface leading-relaxed">
+                                Reach expansion available for Beta Gamma. Predicted 12% increase via Segment re-indexing.
+                            </p>
+<button class="mt-4 w-full py-2 bg-surface-container-highest rounded-lg text-xs font-bold hover:bg-tertiary-container hover:text-white transition-all active:scale-95">
+                                Start Indexing
+                            </button>
+</div>
+<!-- Data Visualization -->
+<div class="mt-8">
+<h4 class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-4">Network Load Distribution</h4>
+<div class="flex items-end gap-3 h-32 px-4">
+<div class="flex-1 bg-surface-container-lowest neumorphic-pressed rounded-t-lg relative group">
+<div class="absolute bottom-0 left-0 right-0 bg-orange-500 rounded-t-lg transition-all h-[40%] group-hover:h-[60%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-lowest neumorphic-pressed rounded-t-lg relative group">
+<div class="absolute bottom-0 left-0 right-0 bg-orange-500 rounded-t-lg transition-all h-[75%] group-hover:h-[90%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-lowest neumorphic-pressed rounded-t-lg relative group">
+<div class="absolute bottom-0 left-0 right-0 bg-orange-500 rounded-t-lg transition-all h-[55%] group-hover:h-[70%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-lowest neumorphic-pressed rounded-t-lg relative group">
+<div class="absolute bottom-0 left-0 right-0 bg-orange-500 rounded-t-lg transition-all h-[30%] group-hover:h-[45%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-lowest neumorphic-pressed rounded-t-lg relative group">
+<div class="absolute bottom-0 left-0 right-0 bg-orange-500 rounded-t-lg transition-all h-[85%] group-hover:h-[100%]"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-auto pt-8 border-t border-white/5">
+<div class="bg-surface-container-lowest rounded-2xl p-4 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+<span class="text-xs font-bold text-gray-400">AI Core Active</span>
+</div>
+<span class="material-symbols-outlined text-gray-500 text-sm" data-icon="settings_input_component">settings_input_component</span>
+</div>
+</div>
+</div>
+</aside>
+</section>
+</main>
+<!-- Contextual FAB (Hidden for Details/Settings as per Mandate, but here relevant for Dashboard flow) -->
+<button class="fixed bottom-10 right-10 w-16 h-16 rounded-full bg-orange-500 text-white shadow-[0_10px_30px_rgba(255,107,0,0.4)] flex items-center justify-center z-50 hover:scale-110 active:scale-90 transition-all border-4 border-surface-dim">
+<span class="material-symbols-outlined text-3xl" data-icon="bolt" style="font-variation-settings: 'FILL' 1;">bolt</span>
+</button>
+</body></html>
