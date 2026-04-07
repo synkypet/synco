@@ -109,7 +109,9 @@ export default function EnvioRapidoPage() {
       items: processedProducts.map(p => ({
         product_id: p.id,
         product_name: p.name,
-        custom_text: generatedTexts[p.id] || ''
+        custom_text: generatedTexts[p.id] || '',
+        image_url: p.imageUrl,
+        affiliate_url: p.affiliateUrl
       })),
       destinations: selectedDestinations.map(id => ({
         type: 'list' as const,

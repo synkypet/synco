@@ -44,26 +44,31 @@ export const campaignService = {
     }
 
     // 2. Insert items
+    let insertedItems: any[] = [];
     if (dto.items && dto.items.length > 0) {
       const itemsToInsert = dto.items.map(item => ({
         campaign_id: campaign.id,
         product_id: item.product_id,
         product_name: item.product_name,
         custom_text: item.custom_text,
-        affiliate_url: item.affiliate_url
+        affiliate_url: item.affiliate_url,
+        image_url: item.image_url // Garantir que image_url possa passar se adicionado ao DTO
       }));
 
-      const { error: itemsError } = await supabase
+      const { data: items, error: itemsError } = await supabase
         .from('campaign_items')
-        .insert(itemsToInsert);
+        .insert(itemsToInsert)
+        .select();
 
       if (itemsError) {
         console.error('Error inserting campaign items:', itemsError);
         throw itemsError;
       }
+      insertedItems = items;
     }
 
     // 3. Insert destinations
+    let insertedDestinations: any[] = [];
     if (dto.destinations && dto.destinations.length > 0) {
       const destinationsToInsert = dto.destinations.map(dest => ({
         campaign_id: campaign.id,
@@ -71,13 +76,67 @@ export const campaignService = {
         destination_id: dest.id
       }));
 
-      const { error: destError } = await supabase
+      const { data: dests, error: destError } = await supabase
         .from('campaign_destinations')
-        .insert(destinationsToInsert);
+        .insert(destinationsToInsert)
+        .select();
 
       if (destError) {
         console.error('Error inserting campaign destinations:', destError);
         throw destError;
+      }
+      insertedDestinations = dests;
+    }
+
+    // 4. Transformar em Send Jobs (Geração Real da Fila)
+    // Para cada canal de destino (group/list), e cada item de campanha, gerar um send_job
+    if (insertedItems.length > 0 && insertedDestinations.length > 0) {
+      // Buscar a config e os detalhes dos destinos (grupos) para pegar remote_id e session_id
+      const groupIds = insertedDestinations.map(d => d.destination_id);
+      const { data: groupsInfo } = await supabase
+        .from('groups')
+        .select('id, remote_id, name, channel_id, channels(config)')
+        .in('id', groupIds);
+
+      if (groupsInfo && groupsInfo.length > 0) {
+        const jobsToInsert: any[] = [];
+
+        insertedItems.forEach(item => {
+          groupsInfo.forEach(group => {
+            const channelConfig = (group.channels as any)?.config || {};
+            const sessionId = channelConfig.sessionId;
+
+            // Só insere se tiver session_id válida
+            if (sessionId) {
+              jobsToInsert.push({
+                user_id: userId,
+                campaign_id: campaign.id,
+                campaign_item_id: item.id,
+                channel_id: group.channel_id,
+                session_id: sessionId,
+                destination: group.remote_id,
+                destination_name: group.name,
+                message_body: item.custom_text || item.product_name,
+                message_type: item.image_url ? 'image' : 'text',
+                image_url: item.image_url,
+                status: 'pending',
+                try_count: 0
+              });
+            }
+          });
+        });
+
+        if (jobsToInsert.length > 0) {
+          // On-conflict garante idempotência. A database ignora se a constraint única for violada
+          const { error: jobsError } = await supabase
+            .from('send_jobs')
+            .upsert(jobsToInsert, { onConflict: 'campaign_id, campaign_item_id, destination', ignoreDuplicates: true });
+
+          if (jobsError) {
+             console.error('Falha ao gerar send_jobs:', jobsError);
+             throw new Error(`Failed to generate send jobs: ${jobsError.message}`);
+          }
+        }
       }
     }
 

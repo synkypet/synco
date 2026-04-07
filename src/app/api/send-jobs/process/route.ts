@@ -1,13 +1,13 @@
 // src/app/api/send-jobs/process/route.ts
 // Worker de fila — consome send_jobs pendentes e envia via Wasender com pacing e idempotência.
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { WasenderClient } from '@/lib/wasender/client';
 
 // ─── Configuração de Pacing ────────────────────────────────────────────────
-const BATCH_SIZE = 5;                    // Máximo de jobs processados por invocação
-const COOLDOWN_BETWEEN_MSGS_MS = 3000;   // 3 segundos entre mensagens (safety)
-const MAX_RETRIES = 3;
+const BATCH_SIZE = parseInt(process.env.SEND_BATCH_SIZE || '5', 10);
+const COOLDOWN_BETWEEN_MSGS_MS = parseInt(process.env.SEND_COOLDOWN_MS || '3000', 10);
+const MAX_RETRIES = parseInt(process.env.SEND_MAX_RETRIES || '3', 10);
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -15,7 +15,7 @@ function sleep(ms: number) {
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient();
+    const supabase = createAdminClient();
 
     // ─── 1. Autenticação / Proteção ────────────────────────────────────────
     // Em produção, essa rota deve ser protegida por um secret header (CRON_SECRET)
@@ -109,13 +109,27 @@ export async function POST(request: Request) {
 
       // ─── 6. Enviar mensagem via Wasender ───────────────────────────────
       try {
-        const response = await WasenderClient.sendMessage(
-          job.session_id,
-          job.destination,
-          job.message_body
-        );
+        let response;
+        const messageText = job.message_body || '';
 
-        const messageId = response?.message_id || response?.id || null;
+        // Se houver imagem, envia imagem com legenda (caption)
+        if (job.image_url) {
+          response = await WasenderClient.sendImage(
+            job.session_id,
+            job.destination,
+            job.image_url,
+            messageText
+          );
+        } else {
+          // Apenas texto
+          response = await WasenderClient.sendMessage(
+            job.session_id,
+            job.destination,
+            messageText
+          );
+        }
+
+        const messageId = response?.message_id || response?.id || response?.data?.id || null;
 
         // Marcar job como completado
         await supabase
