@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { WasenderClient } from '@/lib/wasender/client';
 import { WasenderConfig } from '@/types/group';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const supabase = createClient();
