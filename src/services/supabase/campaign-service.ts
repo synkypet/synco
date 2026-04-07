@@ -95,8 +95,15 @@ export const campaignService = {
       const groupIds = insertedDestinations.map(d => d.destination_id);
       const { data: groupsInfo } = await supabase
         .from('groups')
-        .select('id, remote_id, name, channel_id, channels(config)')
+        .select('id, remote_id, name, channel_id, channels(config, type)')
         .in('id', groupIds);
+
+      // Buscar outros canais ativos do usuário para fallback
+      const { data: userChannels } = await supabase
+        .from('channels')
+        .select('id, type, config')
+        .eq('user_id', userId)
+        .eq('is_active', true);
 
       if (groupsInfo && groupsInfo.length > 0) {
         const jobsToInsert: any[] = [];
@@ -104,10 +111,21 @@ export const campaignService = {
         insertedItems.forEach(item => {
           groupsInfo.forEach(group => {
             const channelConfig = (group.channels as any)?.config || {};
-            const sessionId = channelConfig.sessionId;
+            const channelType = (group.channels as any)?.type || 'whatsapp';
+            const sessionId = channelConfig.sessionId || channelConfig.bot_id || null;
 
-            // Só insere se tiver session_id válida
-            if (sessionId) {
+            // Aceitar canais Telegram (que usam bot_id) e WhatsApp (que usam sessionId)
+            const isConnected = channelType === 'telegram' 
+              ? channelConfig.status === 'connected'
+              : !!sessionId;
+
+            if (isConnected) {
+              // Buscar canal de fallback (outro canal ativo do mesmo user, tipo diferente)
+              const fallbackChannel = userChannels?.find(ch => 
+                ch.id !== group.channel_id && 
+                ch.config?.status === 'connected'
+              );
+
               jobsToInsert.push({
                 user_id: userId,
                 campaign_id: campaign.id,
@@ -120,7 +138,8 @@ export const campaignService = {
                 message_type: item.image_url ? 'image' : 'text',
                 image_url: item.image_url,
                 status: 'pending',
-                try_count: 0
+                try_count: 0,
+                fallback_channel_id: fallbackChannel?.id || null,
               });
             }
           });

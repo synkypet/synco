@@ -63,4 +63,46 @@ export class TelegramClient {
     }
     return data;
   }
+
+  /**
+   * Registra um webhook no Telegram para receber atualizações
+   */
+  static async setWebhook(token: string, url: string, secretToken?: string) {
+    const body: Record<string, any> = {
+      url,
+      allowed_updates: ['message', 'my_chat_member', 'chat_member'],
+    };
+    if (secretToken) {
+      body.secret_token = secretToken;
+    }
+
+    const res = await fetch(`${this.getBaseUrl(token)}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(`Failed to set webhook: ${data.description || 'Unknown error'}`);
+    }
+    return data;
+  }
+
+  /**
+   * Remove o webhook registrado
+   */
+  static async deleteWebhook(token: string) {
+    const res = await fetch(`${this.getBaseUrl(token)}/deleteWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drop_pending_updates: true }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(`Failed to delete webhook: ${data.description || 'Unknown error'}`);
+    }
+    return data;
+  }
 }

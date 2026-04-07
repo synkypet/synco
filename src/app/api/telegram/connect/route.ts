@@ -65,13 +65,33 @@ export async function POST(request: Request) {
       throw new Error(`Failed to update channel config: ${updateError.message}`);
     }
 
+    // 4. Registrar webhook automaticamente para auto-discovery de grupos
+    let webhookRegistered = false;
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : null);
+      
+      if (appUrl) {
+        const webhookUrl = `${appUrl}/api/telegram/webhook`;
+        const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+        await TelegramClient.setWebhook(botToken, webhookUrl, webhookSecret);
+        webhookRegistered = true;
+        console.log(`[TG-CONNECT] Webhook registrado: ${webhookUrl}`);
+      }
+    } catch (webhookErr: any) {
+      // Não bloquear a conexão se o webhook falhar (pode ser localhost)
+      console.warn(`[TG-CONNECT] Webhook não registrado (ambiente local?): ${webhookErr.message}`);
+    }
+
     return NextResponse.json({
       success: true,
       bot: {
         id: botInfo.id,
         username: botInfo.username,
         name: botInfo.first_name
-      }
+      },
+      webhookRegistered,
     });
 
   } catch (error: any) {
