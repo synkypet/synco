@@ -36,9 +36,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Channel not connected (missing sessionId)' }, { status: 400 });
     }
 
-    // 2. Disparar direto no Wasender
-    const response = await WasenderClient.sendMessage(sessionId, phone, message);
+    // Formata o número (Wasender exige '@c.us' para DMs e números limpos)
+    let formattedPhone = phone.replace(/[^\d@.us]/g, ''); // remove + e espaços, mantém partes do c.us
+    if (!formattedPhone.includes('@')) {
+      formattedPhone = `${formattedPhone}@c.us`;
+    }
 
+    console.log(`[TEST-SEND] Disparando de sessionId: ${sessionId} para: ${formattedPhone}`);
+    
+    // 2. Disparar direto no Wasender
+    const response = await WasenderClient.sendMessage(sessionId, formattedPhone, message);
+
+    console.log(`[TEST-SEND] Sucesso:`, response);
     return NextResponse.json({ success: true, response });
 
   } catch (error: any) {
