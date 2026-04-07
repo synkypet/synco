@@ -3,7 +3,6 @@
 
 import { MarketplaceAdapter, AffiliateResult } from './marketplaces/BaseAdapter';
 import { ShopeeAdapter } from './marketplaces/ShopeeAdapter';
-import { marketplaceService } from '@/services/supabase/marketplace-service';
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
 
@@ -49,21 +48,12 @@ function findAdapter(url: string): MarketplaceAdapter | null {
 }
 
 /**
- * Processa uma lista de links usando os adapters reais, com cache opcional e conexões de usuário.
+ * Processa uma lista de links usando os adapters reais e injeta as conexões cacheadas.
  * Para marketplaces sem adapter implementado, retorna dados básicos com fallback.
  */
-export async function processLinks(links: string[], userId?: string): Promise<ProcessedProduct[]> {
+export async function processLinks(links: string[], userConnections: any[] = []): Promise<ProcessedProduct[]> {
   const validLinks = links.filter(link => link.trim().length > 0);
   const results: ProcessedProduct[] = [];
-
-  let userConnections: any[] = [];
-  if (userId) {
-    try {
-      userConnections = await marketplaceService.getUserConnections(userId);
-    } catch (error) {
-      console.warn('linkProcessor: Failed to fetch user connections', error);
-    }
-  }
 
   for (const link of validLinks) {
     const id = `proc_${Date.now()}_${results.length}`;

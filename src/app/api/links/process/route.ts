@@ -19,8 +19,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No links provided' }, { status: 400 });
     }
 
-    // Server-side processing with user context for real affiliate configs
-    const results = await processLinks(links, user.id);
+    // Buscar conexões do usuário de forma segura no server-side usando o token atual
+    const { data: userConnections } = await supabase
+      .from('user_marketplaces')
+      .select('*')
+      .eq('user_id', user.id);
+
+    // Server-side processing with safely fetched user context
+    const results = await processLinks(links, userConnections || []);
 
     return NextResponse.json({ results });
   } catch (error: any) {

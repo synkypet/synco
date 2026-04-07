@@ -22,7 +22,10 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     // Resolver short-links (shope.ee/xxx)
     if (url.includes('shope.ee')) {
       try {
-        const res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: controller.signal });
+        clearTimeout(timeout);
         resolvedUrl = res.url || url;
       } catch {
         // Se falhar a resolução, continuar com a URL original
@@ -63,13 +66,18 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     try {
       // Tentar via API pública da Shopee (pode ser bloqueada sem credenciais)
       const apiUrl = `https://shopee.com.br/api/v4/item/get?shopid=${shopId}&itemid=${itemId}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4500);
+
       const res = await fetch(apiUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'application/json',
           'Referer': 'https://shopee.com.br/'
-        }
+        },
+        signal: controller.signal
       });
+      clearTimeout(timeout);
 
       if (!res.ok) {
         console.warn(`ShopeeAdapter: API returned ${res.status} for item ${itemId}`);
