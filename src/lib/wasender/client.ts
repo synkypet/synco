@@ -24,24 +24,30 @@ export class WasenderClient {
     phoneNumber: string;
     webhookUrl?: string;
   }) {
+    const body: Record<string, any> = {
+      name: params.name,
+      phone_number: params.phoneNumber,
+      account_protection: true,
+      log_messages: true,
+      read_incoming_messages: false,
+    };
+
+    // Só incluir webhook se tiver URL pública
+    if (params.webhookUrl) {
+      body.webhook_url = params.webhookUrl;
+      body.webhook_enabled = true;
+      body.webhook_events = [
+        'messages.received',
+        'session.status',
+        'messages.update',
+        'qrcode.updated'
+      ];
+    }
+
     const res = await fetch(`${this.baseURL}/whatsapp-sessions`, {
       method: 'POST',
       headers: this.headers,
-      body: JSON.stringify({
-        name: params.name,
-        phone_number: params.phoneNumber,
-        account_protection: true,
-        log_messages: true,
-        read_incoming_messages: false,
-        webhook_url: params.webhookUrl || '',
-        webhook_enabled: !!params.webhookUrl,
-        webhook_events: [
-          'messages.received',
-          'session.status',
-          'messages.update',
-          'qrcode.updated'
-        ]
-      })
+      body: JSON.stringify(body)
     });
     
     if (!res.ok) {

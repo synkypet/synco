@@ -34,16 +34,17 @@ export async function POST(request: Request) {
        return NextResponse.json({ error: 'Channel not found or unauthorized' }, { status: 404 });
     }
 
-    // 2. Construir webhook URL automaticamente
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const webhookUrl = `${appUrl}/api/webhooks/wasender`;
+    // 2. Construir webhook URL — só envia se for uma URL pública (não localhost)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+    const isPublicUrl = appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1');
+    const webhookUrl = isPublicUrl ? `${appUrl}/api/webhooks/wasender` : undefined;
 
     // 3. Criar sessão na Wasender com todos os campos obrigatórios
     const sessionName = `synco_${user.id}_${channel.id}`;
     const wasenderSession = await WasenderClient.createSession({
       name: sessionName,
       phoneNumber: phone_number,
-      webhookUrl
+      webhookUrl: webhookUrl
     });
     
     // A API retorna: { success: true, data: { id, api_key, webhook_secret, ... } }
