@@ -19,11 +19,29 @@ export class WasenderClient {
 
   // ─── Session Lifecycle ──────────────────────────────────────────────────
 
-  static async createSession(name: string) {
+  static async createSession(params: {
+    name: string;
+    phoneNumber: string;
+    webhookUrl?: string;
+  }) {
     const res = await fetch(`${this.baseURL}/whatsapp-sessions`, {
       method: 'POST',
       headers: this.headers,
-      body: JSON.stringify({ name })
+      body: JSON.stringify({
+        name: params.name,
+        phone_number: params.phoneNumber,
+        account_protection: true,
+        log_messages: true,
+        read_incoming_messages: false,
+        webhook_url: params.webhookUrl || '',
+        webhook_enabled: !!params.webhookUrl,
+        webhook_events: [
+          'messages.received',
+          'session.status',
+          'messages.update',
+          'qrcode.updated'
+        ]
+      })
     });
     
     if (!res.ok) {

@@ -12,10 +12,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { channel_id } = await request.json();
+    const { channel_id, phone_number } = await request.json();
 
     if (!channel_id) {
        return NextResponse.json({ error: 'channel_id is required' }, { status: 400 });
+    }
+
+    if (!phone_number) {
+       return NextResponse.json({ error: 'phone_number is required' }, { status: 400 });
     }
 
     // 1. Validar se o canal pertence ao usuário
@@ -30,31 +34,43 @@ export async function POST(request: Request) {
        return NextResponse.json({ error: 'Channel not found or unauthorized' }, { status: 404 });
     }
 
-    // 2. Criar sessão na Wasender (nomeamos como synco_sessao_userId_channelId para facilitar dump externo)
-    const sessionName = `synco_sessao_${user.id}_${channel.id}`;
-    const wasenderSession = await WasenderClient.createSession(sessionName);
-    
-    // Assumindo retornos comuns da WasenderAPI: { id: "xx", session_api_key: "yy" } ou similar
-    const sessionId = wasenderSession.id || wasenderSession.session_id || sessionName; 
-    const sessionApiKey = wasenderSession.session_api_key || wasenderSession.api_key || '';
+    // 2. Construir webhook URL automaticamente
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const webhookUrl = `${appUrl}/api/webhooks/wasender`;
 
-    // 3. Salvar o segredo rigidamente em channel_secrets
+    // 3. Criar sessão na Wasender com todos os campos obrigatórios
+    const sessionName = `synco_${user.id}_${channel.id}`;
+    const wasenderSession = await WasenderClient.createSession({
+      name: sessionName,
+      phoneNumber: phone_number,
+      webhookUrl
+    });
+    
+    // A API retorna: { success: true, data: { id, api_key, webhook_secret, ... } }
+    const sessionData = wasenderSession.data || wasenderSession;
+    const sessionId = String(sessionData.id || sessionData.session_id || sessionName); 
+    const sessionApiKey = sessionData.api_key || sessionData.session_api_key || '';
+    const webhookSecret = sessionData.webhook_secret || '';
+
+    // 4. Salvar os segredos rigidamente em channel_secrets
     const { error: secretsError } = await supabase
       .from('channel_secrets')
       .upsert({
          channel_id,
          user_id: user.id,
-         session_api_key: sessionApiKey
+         session_api_key: sessionApiKey,
+         webhook_secret: webhookSecret
       });
 
     if (secretsError) {
       throw new Error(`Failed to save secrets: ${secretsError.message}`);
     }
 
-    // 4. Salvar metadados no config JSONB (channels)
+    // 5. Salvar metadados no config JSONB (channels) — SEM segredos
     const configUpdate: WasenderConfig = {
        sessionId,
        status: 'qrcode_pending',
+       phoneNumber: phone_number,
     };
 
     await supabase
@@ -62,7 +78,7 @@ export async function POST(request: Request) {
       .update({ config: configUpdate })
       .eq('id', channel_id);
 
-    // 5. Acionar o endpoint de "connect" para a sessão criada
+    // 6. Acionar o endpoint de "connect" para a sessão criada
     await WasenderClient.connectSession(sessionId);
 
     return NextResponse.json({ success: true, sessionId, status: 'qrcode_pending' });

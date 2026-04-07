@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, RefreshCw, CheckCircle2, XCircle, Phone } from 'lucide-react';
 import { Channel } from '@/types/group';
 import QRCode from 'react-qr-code';
 
@@ -13,22 +14,29 @@ interface ChannelWasenderConnectDialogProps {
 }
 
 export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConnected }: ChannelWasenderConnectDialogProps) {
-  const [step, setStep] = useState<'init' | 'qrcode' | 'connected' | 'error'>('init');
+  const [step, setStep] = useState<'phone_input' | 'init' | 'qrcode' | 'connected' | 'error'>('phone_input');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [qrString, setQrString] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Passo 1: Solicitar conexão ao abrir se não estiver em andamento
+  // Ao abrir, verificar se já está conectado
   useEffect(() => {
     if (isOpen && channel) {
       if (channel.config?.status === 'connected') {
          setStep('connected');
          return;
       }
-      handleInitiateConnection();
+      // Se já tem telefone no config, pular para init
+      if (channel.config?.phoneNumber) {
+        setPhoneNumber(channel.config.phoneNumber);
+        handleInitiateConnection(channel.config.phoneNumber);
+      } else {
+        setStep('phone_input');
+      }
     }
   }, [isOpen, channel]);
 
-  // Passo 2: Polling de Status
+  // Polling de Status
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
@@ -41,8 +49,6 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
           if (data.status === 'connected') {
             setStep('connected');
             onConnected();
-          } else if (data.status === 'qrcode_pending') {
-             // Continue polling
           } else if (data.status === 'disconnected' || data.status === 'session_lost') {
             setStep('error');
             setErrorMsg('A sessão foi desconectada.');
@@ -50,7 +56,7 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
         } catch (err) {
             console.error("Polling error", err);
         }
-      }, 5000); // Poll a cada 5 segundos
+      }, 5000);
     }
 
     return () => {
@@ -58,17 +64,22 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
     }
   }, [isOpen, step, channel?.id, onConnected]);
 
-  const handleInitiateConnection = async () => {
+  const handlePhoneSubmit = () => {
+    if (!phoneNumber.trim()) return;
+    handleInitiateConnection(phoneNumber.trim());
+  };
+
+  const handleInitiateConnection = async (phone: string) => {
     try {
       setStep('init');
       setErrorMsg('');
       setQrString(null);
 
-      // Trigger server-side Create + Connect
+      // Trigger server-side Create + Connect com phone_number
       const res = await fetch('/api/wasender/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel_id: channel?.id })
+        body: JSON.stringify({ channel_id: channel?.id, phone_number: phone })
       });
       const data = await res.json();
 
@@ -111,6 +122,33 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
         </DialogHeader>
 
         <div className="flex flex-col items-center justify-center min-h-[300px] py-6">
+          {step === 'phone_input' && (
+            <div className="flex flex-col items-center gap-5 w-full px-4 animate-in fade-in zoom-in duration-300">
+               <div className="w-14 h-14 rounded-full bg-kinetic-orange/10 flex items-center justify-center">
+                 <Phone className="w-7 h-7 text-kinetic-orange" />
+               </div>
+               <div className="text-center space-y-1">
+                 <p className="text-sm font-semibold text-white/80">Informe seu número do WhatsApp</p>
+                 <p className="text-xs text-white/40">Com código do país. Ex: +5511999999999</p>
+               </div>
+               <Input
+                 type="tel"
+                 placeholder="+5511999999999"
+                 value={phoneNumber}
+                 onChange={(e) => setPhoneNumber(e.target.value)}
+                 className="bg-deep-void border-white/10 text-white text-center text-lg tracking-wider placeholder:text-white/20"
+                 onKeyDown={(e) => e.key === 'Enter' && handlePhoneSubmit()}
+               />
+               <Button 
+                 onClick={handlePhoneSubmit}
+                 disabled={!phoneNumber.trim()}
+                 className="w-full bg-kinetic-orange hover:bg-kinetic-orange/90 text-white font-bold shadow-glow-orange"
+               >
+                 Conectar
+               </Button>
+            </div>
+          )}
+
           {step === 'init' && (
             <div className="flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-300">
                <Loader2 className="w-12 h-12 animate-spin text-kinetic-orange" />
@@ -149,7 +187,7 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
                 <XCircle className="w-12 h-12" />
                 <p className="font-bold">Ocorreu um erro</p>
                 <p className="text-sm text-red-500/70">{errorMsg}</p>
-                <Button variant="outline" className="mt-4 border-red-500/20 hover:bg-red-500/10 text-red-500" onClick={handleInitiateConnection}>
+                <Button variant="outline" className="mt-4 border-red-500/20 hover:bg-red-500/10 text-red-500" onClick={() => setStep('phone_input')}>
                   <RefreshCw className="w-4 h-4 mr-2" /> Tentar Novamente
                 </Button>
              </div>
