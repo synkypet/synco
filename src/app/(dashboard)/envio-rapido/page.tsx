@@ -33,7 +33,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ProcessedProduct, processLinks } from '@/lib/linkProcessor';
+import { ProcessedProduct } from '@/lib/linkProcessor';
 
 // Opções de Tonalidade da IA (Base44)
 const TONE_OPTIONS = [
@@ -138,7 +138,11 @@ export default function EnvioRapidoPage() {
     processedProducts.forEach(p => {
       // Se não tem texto ainda ou o tom mudou, gera um novo
       if (!newTexts[p.id]) {
-        newTexts[p.id] = `🔥 *OFERTA DETECTADA* [Tom: ${toneLabel}]\n\n*${p.name}*\n\n💰 De: ~~R$ ${p.originalPrice.toFixed(2)}~~\n✅ Por: *R$ ${p.currentPrice.toFixed(2)}*\n📉 *${p.discountPercent}% de DESCONTO!*\n\n🚀 Compre aqui: ${p.affiliateUrl}\n\n#oferta #promoção #${p.marketplace.toLowerCase()}`;
+        if (p.metadata_failed) {
+          newTexts[p.id] = `🔥 *OFERTA DETECTADA* [Tom: ${toneLabel}]\n\n🚨 *Produto exclusivo!*\n\n🚀 Compre aqui: ${p.affiliateUrl}\n\n#oferta #promoção #${p.marketplace.toLowerCase()}`;
+        } else {
+          newTexts[p.id] = `🔥 *OFERTA DETECTADA* [Tom: ${toneLabel}]\n\n*${p.name}*\n\n💰 De: ~~R$ ${p.originalPrice.toFixed(2)}~~\n✅ Por: *R$ ${p.currentPrice.toFixed(2)}*\n📉 *${p.discountPercent}% de DESCONTO!*\n\n🚀 Compre aqui: ${p.affiliateUrl}\n\n#oferta #promoção #${p.marketplace.toLowerCase()}`;
+        }
       }
     });
     setGeneratedTexts(newTexts);
@@ -153,10 +157,21 @@ export default function EnvioRapidoPage() {
     setIsProcessing(true);
     try {
       const links = linksInput.split('\n').filter(l => l.trim());
-      const results = await processLinks(links);
-      setProcessedProducts(results);
-      toast.success(`${results.length} link(s) processado(s) com sucesso!`);
+      const res = await fetch('/api/links/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ links })
+      });
+      
+      if (!res.ok) {
+        throw new Error('Falha na API de processamento');
+      }
+      
+      const data = await res.json();
+      setProcessedProducts(data.results);
+      toast.success(`${data.results.length} link(s) processado(s) com sucesso!`);
     } catch (error) {
+      console.error('Process error:', error);
       toast.error('Erro ao processar links. Tente novamente.');
     } finally {
       setIsProcessing(false);
@@ -350,7 +365,13 @@ export default function EnvioRapidoPage() {
                     {/* Imagem e Marketplace */}
                     <div className="w-full md:w-32 bg-deep-void/50 p-4 flex flex-col items-center justify-center gap-2 border-r border-white/5">
                       <div className="w-20 h-20 rounded-xl overflow-hidden shadow-skeuo-flat group-hover:shadow-glow-orange/10 transition-all duration-500">
-                        <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
+                        {product.metadata_failed || !product.imageUrl ? (
+                          <div className="flex flex-col items-center justify-center h-full opacity-40 bg-black/20">
+                            <span className="text-[8px] font-bold uppercase tracking-tighter text-white mt-1">S/ Imagem</span>
+                          </div>
+                        ) : (
+                          <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
+                        )}
                       </div>
                       <Badge variant="outline" className="bg-white/5 border-none text-[8px] font-black uppercase tracking-widest h-5 px-2">
                         {product.marketplace}
@@ -362,11 +383,22 @@ export default function EnvioRapidoPage() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="flex flex-col">
                           <h4 className="text-xs font-black uppercase tracking-widest text-white/90 line-clamp-1">{product.name}</h4>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-[10px] font-bold text-white/20 line-through">R$ {product.originalPrice.toFixed(2)}</span>
-                            <span className="text-xs font-black text-kinetic-orange">R$ {product.currentPrice.toFixed(2)}</span>
-                            <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-1.5 rounded">-{product.discountPercent}%</span>
-                          </div>
+                          {!product.metadata_failed && product.originalPrice > 0 && (
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-[10px] font-bold text-white/20 line-through">R$ {product.originalPrice.toFixed(2)}</span>
+                              <span className="text-xs font-black text-kinetic-orange">R$ {product.currentPrice.toFixed(2)}</span>
+                              {product.discountPercent > 0 && (
+                                <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-1.5 rounded">-{product.discountPercent}%</span>
+                              )}
+                            </div>
+                          )}
+                          {product.metadata_failed && (
+                            <div className="flex items-center gap-3 mt-1">
+                              <Badge variant="outline" className="bg-kinetic-orange/10 text-kinetic-orange border-none px-2 h-4 text-[9px]">
+                                Tracking Oficial Ativo
+                              </Badge>
+                            </div>
+                          )}
                         </div>
                         <Button 
                           variant="ghost" 
