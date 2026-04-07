@@ -3,6 +3,7 @@
 
 import { MarketplaceAdapter, ProductMetadata } from './BaseAdapter';
 import { UserMarketplaceConnection } from '@/types/marketplace';
+import { shopeeClient } from '@/lib/shopee-affiliate/client';
 
 export class ShopeeAdapter extends MarketplaceAdapter {
   readonly name = 'Shopee';
@@ -114,34 +115,41 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     }
   }
 
-  // ─── Link de Afiliado ───────────────────────────────────────────────────
+  // ─── Link de Afiliado Oficial ──────────────────────────────────────────
 
   async generateAffiliateLink(cleanUrl: string, connection?: UserMarketplaceConnection): Promise<string> {
-    // Se houver credenciais passadas do banco
-    const affiliateId = connection?.is_active ? connection.affiliate_id : null;
-    const fallbackEnvId = process.env.SHOPEE_AFFILIATE_ID;
-    
-    const resolvedId = affiliateId || fallbackEnvId;
+    // Prepara trackers internos pra conversões da Open API (subIds suporta até 5 strings)
+    const subIds: string[] = [];
+    if (connection?.is_active && connection.affiliate_id) subIds.push(connection.affiliate_id);
+    if (connection?.is_active && connection.affiliate_code) subIds.push(connection.affiliate_code);
 
-    if (resolvedId) {
-      // Formato básico do link de afiliado Shopee
-      try {
-        const encoded = encodeURIComponent(cleanUrl);
-        let link = `https://shope.ee/redirect?url=${encoded}&af_id=${resolvedId}`;
-        
-        // Injetar rastreio adicional (utm_source)
-        if (connection?.affiliate_code && connection.is_active) {
-            link += `&utm_source=${connection.affiliate_code}`;
+    try {
+      // Disparo via GraphQL (First-class route)
+      const officialShortLink = await shopeeClient.generateShortLink(cleanUrl, subIds);
+      return officialShortLink;
+    } catch (error: any) {
+      console.error(`ShopeeAdapter: GQL Fallback Triggered - ${error.message}`);
+
+      // Graceful Downgrade: Se a API oficial falhar pesadamente, tentamos o fallback url-based antigo
+      const affiliateId = connection?.is_active ? connection.affiliate_id : null;
+      const fallbackEnvId = process.env.SHOPEE_AFFILIATE_ID;
+      const resolvedId = affiliateId || fallbackEnvId;
+
+      if (resolvedId) {
+        try {
+          const encoded = encodeURIComponent(cleanUrl);
+          let link = `https://shope.ee/redirect?url=${encoded}&af_id=${resolvedId}`;
+          if (connection?.affiliate_code && connection.is_active) {
+              link += `&utm_source=${connection.affiliate_code}`;
+          }
+          return link;
+        } catch {
+          return cleanUrl;
         }
-        
-        return link;
-      } catch {
-        return cleanUrl;
       }
-    }
 
-    // Sem credenciais → retornar URL limpa (afiliação manual pelo usuário)
-    console.warn('ShopeeAdapter: SHOPEE_AFFILIATE_ID not configured, returning clean URL');
-    return cleanUrl;
+      console.warn('ShopeeAdapter: API Falhou e sem fallback config, returning raw URL');
+      return cleanUrl;
+    }
   }
 }

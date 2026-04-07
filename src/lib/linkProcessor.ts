@@ -16,6 +16,7 @@ export interface ProcessedProduct {
   imageUrl: string;
   originalUrl: string;
   affiliateUrl: string;
+  metadata_failed?: boolean;
 }
 
 // ─── Registry de Adapters ──────────────────────────────────────────────────
@@ -77,35 +78,38 @@ export async function processLinks(links: string[], userConnections: any[] = [])
           discountPercent: result.metadata?.discountPercent || 0,
           imageUrl: result.metadata?.imageUrl || '',
           originalUrl: link,
-          affiliateUrl: result.affiliateUrl
+          affiliateUrl: result.affiliateUrl,
+          metadata_failed: !result.metadata
         });
       } catch (error) {
         console.error(`linkProcessor: Failed to process ${link}:`, error);
         // Fallback: retornar dados mínimos
         results.push({
           id,
-          name: `Produto ${marketplace} (erro no processamento)`,
+          name: `Produto ${marketplace} (Tracking Aplicado)`,
           marketplace,
           originalPrice: 0,
           currentPrice: 0,
           discountPercent: 0,
           imageUrl: '',
           originalUrl: link,
-          affiliateUrl: link
+          affiliateUrl: link,
+          metadata_failed: true
         });
       }
     } else {
       // ─── Sem Adapter — Retorna dados básicos ───────────────────────────
       results.push({
         id,
-        name: `Produto ${marketplace}`,
+        name: `Original ${marketplace}`,
         marketplace,
         originalPrice: 0,
         currentPrice: 0,
         discountPercent: 0,
         imageUrl: '',
         originalUrl: link,
-        affiliateUrl: link // Sem conversão
+        affiliateUrl: link,
+        metadata_failed: true
       });
     }
   }
