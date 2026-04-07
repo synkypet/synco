@@ -63,8 +63,8 @@ export async function processLinks(links: string[], userConnections: any[] = [])
     if (adapter) {
       // ─── Processamento Real via Adapter ────────────────────────────────
       try {
-        const dbMarketplaceId = marketplace.toLowerCase().replace(' ', '');
-        const connection = userConnections.find(c => c.marketplace_id === dbMarketplaceId);
+        const dbMarketplaceName = marketplace.toLowerCase().replace(' ', '');
+        const connection = userConnections.find(c => c.marketplace_name?.toLowerCase().replace(' ', '') === dbMarketplaceName);
         
         const result: AffiliateResult = await adapter.process(link, connection);
 
