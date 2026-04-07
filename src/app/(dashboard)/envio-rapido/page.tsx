@@ -23,6 +23,7 @@ import {
 import { useDestinations } from '@/hooks/use-destinations';
 import { useChannels } from '@/hooks/use-channels';
 import { useCreateCampaign } from '@/hooks/use-campaigns';
+import { useGroups } from '@/hooks/use-groups';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,6 +48,7 @@ const TONE_OPTIONS = [
 export default function EnvioRapidoPage() {
   const { user } = useAuth();
   const { data: destinations, isLoading: loadingDestinations } = useDestinations(user?.id);
+  const { data: groups, isLoading: loadingGroups } = useGroups(user?.id);
   const { mutate: createCampaign, isPending: isSending } = useCreateCampaign();
   const router = useRouter();
 
@@ -77,6 +79,12 @@ export default function EnvioRapidoPage() {
   // Detectar o canal selecionado e seu tipo
   const selectedChannel = useMemo(() => channels?.find(c => c.id === testChannelId), [channels, testChannelId]);
   const selectedChannelType = selectedChannel?.type || 'whatsapp';
+
+  // Sugestões de grupos para o canal selecionado
+  const discoveredGroups = useMemo(() => {
+    if (!testChannelId || !groups) return [];
+    return groups.filter(g => g.channel_id === testChannelId);
+  }, [testChannelId, groups]);
 
   const linksCount = useMemo(() => linksInput.split('\n').filter(l => l.trim()).length, [linksInput]);
 
@@ -564,8 +572,32 @@ export default function EnvioRapidoPage() {
                 placeholder={selectedChannelType === 'telegram' ? 'Ex: -1001234567890 ou 123456789' : 'Ex: +5547990000000'}
                 className="bg-deep-void border-none shadow-skeuo-pressed font-mono text-sm"
               />
+              
+              {/* Sugestões de Grupos (Auto-Discovery) */}
+              {discoveredGroups.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">Grupos detectados neste canal:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {discoveredGroups.map(group => (
+                      <button
+                        key={group.id}
+                        onClick={() => setTestPhone(group.remote_id || '')}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all",
+                          testPhone === group.remote_id 
+                            ? "bg-kinetic-orange text-black shadow-glow-orange/20" 
+                            : "bg-white/5 text-white/40 hover:bg-white/10"
+                        )}
+                      >
+                        👥 {group.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {selectedChannelType === 'telegram' && (
-                <p className="text-[9px] text-white/20 font-bold mt-1.5 uppercase tracking-tight">
+                <p className="text-[9px] text-white/20 font-bold mt-3 uppercase tracking-tight">
                   💡 Para grupos, use o ID numérico negativo. Ex: -1001234567890
                 </p>
               )}
