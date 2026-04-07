@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     // 1. Validar se o canal pertence ao usuário
     const { data: channel, error: channelError } = await supabase
       .from('channels')
-      .select('id, name')
+      .select('id, name, config')
       .eq('id', channel_id)
       .eq('user_id', user.id)
       .single();
@@ -34,12 +34,32 @@ export async function POST(request: Request) {
        return NextResponse.json({ error: 'Channel not found or unauthorized' }, { status: 404 });
     }
 
-    // 2. Construir webhook URL — só envia se for uma URL pública (não localhost)
+    // 2. Verificar se já existe uma sessão para este canal
+    const existingSessionId = channel.config?.sessionId;
+    
+    if (existingSessionId) {
+      // Sessão já existe — reconectar em vez de criar nova
+      try {
+        await WasenderClient.connectSession(existingSessionId);
+        
+        await supabase
+          .from('channels')
+          .update({ config: { ...channel.config, status: 'qrcode_pending' } })
+          .eq('id', channel_id);
+
+        return NextResponse.json({ success: true, sessionId: existingSessionId, status: 'qrcode_pending' });
+      } catch (connectError: any) {
+        console.log('Reconnect failed, will create new session:', connectError.message);
+        // Se falhar (sessão deletada no Wasender), continuar e criar nova
+      }
+    }
+
+    // 3. Construir webhook URL — só envia se for uma URL pública (não localhost)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
     const isPublicUrl = appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1');
     const webhookUrl = isPublicUrl ? `${appUrl}/api/webhooks/wasender` : undefined;
 
-    // 3. Criar sessão na Wasender com todos os campos obrigatórios
+    // 4. Criar sessão na Wasender com todos os campos obrigatórios
     const sessionName = `synco_${user.id}_${channel.id}`;
     const wasenderSession = await WasenderClient.createSession({
       name: sessionName,
@@ -53,7 +73,7 @@ export async function POST(request: Request) {
     const sessionApiKey = sessionData.api_key || sessionData.session_api_key || '';
     const webhookSecret = sessionData.webhook_secret || '';
 
-    // 4. Salvar os segredos rigidamente em channel_secrets
+    // 5. Salvar os segredos rigidamente em channel_secrets
     const { error: secretsError } = await supabase
       .from('channel_secrets')
       .upsert({
@@ -67,7 +87,7 @@ export async function POST(request: Request) {
       throw new Error(`Failed to save secrets: ${secretsError.message}`);
     }
 
-    // 5. Salvar metadados no config JSONB (channels) — SEM segredos
+    // 6. Salvar metadados no config JSONB (channels) — SEM segredos
     const configUpdate: WasenderConfig = {
        sessionId,
        status: 'qrcode_pending',
@@ -79,7 +99,7 @@ export async function POST(request: Request) {
       .update({ config: configUpdate })
       .eq('id', channel_id);
 
-    // 6. Acionar o endpoint de "connect" para a sessão criada
+    // 7. Acionar o endpoint de "connect" para a sessão criada
     await WasenderClient.connectSession(sessionId);
 
     return NextResponse.json({ success: true, sessionId, status: 'qrcode_pending' });

@@ -18,7 +18,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 1. Validar e pegar a config do canal para extrair a sessionId
+    // 1. Pegar a sessionId do canal
     const { data: channel, error: channelError } = await supabase
       .from('channels')
       .select('config')
@@ -32,17 +32,35 @@ export async function GET(request: Request) {
 
     const sessionId = channel.config.sessionId;
 
-    // 2. Buscar o payload puro do QRCode na API Wasender
-    const qrData = await WasenderClient.getQrCode(sessionId);
-    
-    // Assumimos que qrData contém um campo { qrcode: "..." } ou é diretamente a string, ou algo acessível
-    const payload = qrData.qrcode || qrData.qr || qrData.base64 || null;
+    // 2. Tentar buscar QR Code do endpoint dedicado
+    try {
+      const qrData = await WasenderClient.getQrCode(sessionId);
+      const responseData = qrData.data || qrData;
+      
+      // A API pode retornar em diferentes formatos: qrCode, qrcode, qr, base64
+      const payload = responseData.qrCode || responseData.qrcode || responseData.qr || responseData.base64 || null;
 
-    if (!payload) {
-      return NextResponse.json({ error: 'QR Code not available inside response', raw: qrData }, { status: 404 });
+      if (payload) {
+        return NextResponse.json({ qrcode: payload });
+      }
+    } catch (qrError: any) {
+      console.log('QR endpoint failed, trying connect endpoint:', qrError.message);
     }
 
-    return NextResponse.json({ qrcode: payload });
+    // 3. Fallback: chamar connect que também retorna o QR Code
+    try {
+      const connectData = await WasenderClient.connectSession(sessionId);
+      const connectResponse = connectData.data || connectData;
+      const qrFromConnect = connectResponse.qrCode || connectResponse.qrcode || connectResponse.qr || null;
+
+      if (qrFromConnect) {
+        return NextResponse.json({ qrcode: qrFromConnect });
+      }
+    } catch (connectError: any) {
+      console.log('Connect endpoint also failed:', connectError.message);
+    }
+
+    return NextResponse.json({ error: 'QR Code not available. A sessão pode precisar de mais tempo para inicializar.' }, { status: 404 });
 
   } catch (error: any) {
     console.error('Wasender Session QRCode GET Error:', error);
