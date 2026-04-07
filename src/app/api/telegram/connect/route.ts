@@ -68,9 +68,9 @@ export async function POST(request: Request) {
     // 4. Registrar webhook automaticamente para auto-discovery de grupos
     let webhookRegistered = false;
     try {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : null);
+      const host = request.headers.get('host');
+      const protocol = host?.includes('localhost') ? 'http' : 'https';
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || (host ? `${protocol}://${host}` : null);
       
       if (appUrl) {
         const webhookUrl = `${appUrl}/api/telegram/webhook`;

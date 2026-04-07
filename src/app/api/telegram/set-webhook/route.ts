@@ -34,9 +34,9 @@ export async function POST(request: Request) {
     }
 
     // Montar URL do webhook
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000';
+    const host = request.headers.get('host');
+    const protocol = host?.includes('localhost') ? 'http' : 'https';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || (host ? `${protocol}://${host}` : null);
 
     const webhookUrl = `${appUrl}/api/telegram/webhook`;
     const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
