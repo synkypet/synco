@@ -7,9 +7,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   NAV_SECTIONS,
-  APP_ICON,
-  APP_NAME,
 } from '@/lib/navigation';
+import Image from 'next/image';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,7 +31,6 @@ interface SidebarProps {
  */
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const AppIcon = APP_ICON;
 
   return (
     <aside
@@ -45,22 +43,27 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       )}
     >
       {/* Logo */}
-      <div className="flex flex-col justify-center px-4 h-16 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-kinetic-orange shadow-glow-orange flex items-center justify-center flex-shrink-0 transition-all duration-300 group-hover:shadow-glow-orange-intense">
-            <AppIcon className="w-4 h-4 text-white" />
+      <div className={cn(
+        "flex flex-col justify-center h-16 flex-shrink-0 transition-all duration-300",
+        collapsed ? "px-2 items-center" : "px-4"
+      )}>
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className={cn(
+            "relative transition-all duration-300",
+            collapsed ? "w-10 h-10" : "w-32 h-10"
+          )}>
+            <Image 
+              src="/logo-synco.png" 
+              alt="SYNCO Logo" 
+              fill
+              priority
+              className={cn(
+                "object-contain transition-all duration-300",
+                collapsed ? "scale-150" : "scale-100" // Ajuste para o ícone aparecer melhor quando colapsado
+              )}
+            />
           </div>
-          {!collapsed && (
-            <div className="flex flex-col leading-none">
-              <span className="text-white font-black text-lg tracking-tighter font-headline uppercase">
-                {APP_NAME}
-              </span>
-              <span className="text-[10px] text-white/20 font-bold uppercase tracking-[0.2em] mt-0.5">
-                Operational Hub
-              </span>
-            </div>
-          )}
-        </div>
+        </Link>
       </div>
 
       {/* Gradient separator — No-Line: visual depth via gradient instead of solid border */}
