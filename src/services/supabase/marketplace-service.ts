@@ -43,7 +43,7 @@ export const marketplaceService = {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('user_marketplaces')
-      .upsert(connection)
+      .upsert(connection, { onConflict: 'user_id, marketplace_id' })
       .select()
       .single();
     

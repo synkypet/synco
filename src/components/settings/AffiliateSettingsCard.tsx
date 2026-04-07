@@ -57,6 +57,7 @@ export function AffiliateSettingsCard({
 
   const handleSave = () => {
     onSave({
+      ...(connection?.id ? { id: connection.id } : {}),
       marketplace_id: marketplace.id,
       affiliate_id: affiliateId,
       affiliate_code: affiliateCode,
