@@ -1,0 +1,19 @@
+{
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": true,
+    "SUPABASE_SERVICE_ROLE_KEY": true,
+    "SYNCO_MASTER_KEY_SET": true,
+    "SYNCO_MASTER_KEY_LENGTH": 64
+  },
+  "db_checks": {
+    "user_marketplaces": {
+      "exists": true,
+      "has_shopee_app_id": true,
+      "has_has_secret": true
+    },
+    "user_marketplace_secrets": {
+      "exists": true
+    }
+  },
+  "encryption_test": "SKIP (Master Key length != 32)"
+}

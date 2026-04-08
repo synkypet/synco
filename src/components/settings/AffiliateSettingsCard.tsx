@@ -15,7 +15,9 @@ import {
   HelpCircle, 
   Info,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Marketplace, UserMarketplaceConnection } from '@/types/marketplace';
 import { cn } from '@/lib/utils';
@@ -40,6 +42,9 @@ export function AffiliateSettingsCard({
   const [isActive, setIsActive] = useState(connection?.is_active ?? false);
   const [hasChanges, setHasChanges] = useState(false);
   const [isInjectingSecret, setIsInjectingSecret] = useState(false);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ valid: boolean; message: string } | null>(null);
 
   useEffect(() => {
     setAffiliateId(connection?.affiliate_id || '');
@@ -57,10 +62,10 @@ export function AffiliateSettingsCard({
       shopeeAppSecret !== '' ||
       isActive !== (connection?.is_active ?? false);
     setHasChanges(changed);
-  }, [affiliateId, affiliateCode, isActive, connection]);
+  }, [affiliateId, affiliateCode, shopeeAppId, shopeeAppSecret, isActive, connection]);
 
-  const isConfigured = !!affiliateId;
   const isShopee = marketplace.name.toLowerCase() === 'shopee';
+  const isConfigured = isShopee ? !!shopeeAppId : !!affiliateId;
 
   const handleSave = async () => {
     setIsInjectingSecret(true);
@@ -93,11 +98,33 @@ export function AffiliateSettingsCard({
 
       // Clear the local state secret input proactively after successfully storing it
       setShopeeAppSecret('');
+      setTestResult(null); // Reset test status on save
     } catch (e: any) {
       console.error(e);
-      // The parent Tanstack handler catches connection errors usually, but we stop flow if crypto fails
     } finally {
       setIsInjectingSecret(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const response = await fetch('/api/settings/marketplaces/shopee/test', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      setTestResult({
+        valid: data.valid,
+        message: data.message
+      });
+    } catch (e: any) {
+      setTestResult({
+        valid: false,
+        message: 'Erro ao tentar conectar com a Shopee.'
+      });
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -151,75 +178,102 @@ export function AffiliateSettingsCard({
       </div>
 
       {/* Fields */}
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">
-              {isShopee ? 'mmp_pid (ID de Afiliado)' : 'ID de Afiliado / Publisher'}
-            </Label>
-            {isShopee && (
-              <a 
-                href="https://affiliate.shopee.com.br/" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-[9px] font-bold text-kinetic-orange hover:underline flex items-center gap-1"
-              >
-                Onde encontrar? <ExternalLink className="w-2.5 h-2.5" />
-              </a>
-            )}
-          </div>
-          <Input 
-            value={affiliateId}
-            onChange={(e) => setAffiliateId(e.target.value)}
-            placeholder={isShopee ? "Ex: AN_12345678" : "Insira seu ID"}
-            className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl"
-          />
-        </div>
-
-        {isShopee && (
-          <div className="space-y-4 animate-in slide-in-from-top-2">
+      <div className="space-y-6">
+          {!isShopee && (
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                utm_source (Código Opcional)
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  ID de Afiliado / Publisher
+                </Label>
+              </div>
               <Input 
-                value={affiliateCode}
-                onChange={(e) => setAffiliateCode(e.target.value)}
-                placeholder="Ex: synco_wa"
+                value={affiliateId}
+                onChange={(e) => setAffiliateId(e.target.value)}
+                placeholder="Insira seu ID"
                 className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl"
               />
             </div>
-            
-            <div className="pt-4 border-t border-white/5 space-y-4">
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black tracking-widest uppercase text-kinetic-orange">Acesso Open API (Avançado)</span>
-                <span className="text-[9px] text-white/30 uppercase mt-1 tracking-tighter">Obrigatório para geração de links curtos rastreáveis.</span>
-              </div>
+          )}
+
+          {isShopee && (
+            <div className="space-y-4 animate-in slide-in-from-top-2">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Shopee App ID</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">AppID da Shopee</Label>
                 <Input 
                   value={shopeeAppId}
                   onChange={(e) => setShopeeAppId(e.target.value)}
                   placeholder="Ex: 123456789"
                   className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl"
                 />
+                <p className="text-[8px] text-white/20 tracking-tighter leading-tight mt-1">Cole aqui o AppID que aparece na área “Abrir API” da Shopee.</p>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Shopee App Secret</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Senha da API da Shopee</Label>
+                  {connection?.has_secret && (
+                    <Badge variant="outline" className="h-4 px-1.5 text-[7px] border-emerald-500/20 bg-emerald-500/5 text-emerald-400 font-black uppercase tracking-widest">
+                      Senha Cadastrada
+                    </Badge>
+                  )}
+                </div>
                 <Input 
                   type="password"
                   value={shopeeAppSecret}
                   onChange={(e) => setShopeeAppSecret(e.target.value)}
-                  placeholder={connection?.has_secret ? "••••••••••••••••••••••••" : "Cole seu App Secret (Chave Criptográfica)"}
+                  placeholder={connection?.has_secret ? "••••••••••••••••••••••••" : "Cole a senha/chave"}
                   className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl placeholder:tracking-[0.2em]"
                 />
-                <p className="text-[8px] text-white/20 tracking-tighter">
-                  Por segurança, o Secret não é exibido. Insira um novo para substituir o atual.
-                </p>
+                <div className="space-y-1">
+                  <p className="text-[8px] text-white/20 tracking-tighter leading-tight">
+                    {connection?.has_secret 
+                      ? "Uma chave já está salva com segurança. Para trocar, digite uma nova e salve."
+                      : "Cole aqui a senha/chave que aparece na área “Abrir API” da Shopee."}
+                  </p>
+                  {connection?.updated_at && connection.has_secret && (
+                    <p className="text-[7px] text-white/10 uppercase font-bold tracking-widest">
+                      Última atualização: {new Date(connection.updated_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' } as any)}
+                    </p>
+                  )}
+                </div>
+
+                {connection?.has_secret && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-500">
+                    <button
+                      type="button"
+                      onClick={handleTestConnection}
+                      disabled={isTesting}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all",
+                        testResult?.valid 
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                          : testResult?.valid === false
+                          ? "bg-red-500/10 border-red-500/20 text-red-400 col-span-2"
+                          : "bg-deep-void/50 border-white/5 text-white/40 hover:text-white/60 hover:border-white/10"
+                      )}
+                    >
+                      {isTesting ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="w-3 h-3" />
+                      )}
+                      {isTesting ? 'Validando...' : 'Testar Conexão Open API'}
+                    </button>
+
+                    {testResult && (
+                      <p className={cn(
+                        "mt-2 text-[8px] font-bold uppercase tracking-tighter leading-tight",
+                        testResult.valid ? "text-emerald-500/70" : "text-red-400"
+                      )}>
+                        {testResult.message}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        )}
+          )}
+
+        {/* Remove the redundant Shopee block since we moved it above */}
       </div>
 
       {/* Status & Validation */}

@@ -20,6 +20,11 @@ import { useDestinations } from '@/hooks/use-destinations';
 import { useChannels } from '@/hooks/use-channels';
 import { useCreateCampaign } from '@/hooks/use-campaigns';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -438,21 +443,63 @@ export default function EnvioRapidoPage() {
 
                               <div className="flex flex-wrap items-center gap-3">
                                 {!product.metadata_failed && product.currentPrice > 0 ? (
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-[13px] font-black text-kinetic-orange">
-                                      R$ {product.currentPrice.toFixed(2)}
-                                    </span>
-                                    {product.originalPrice > product.currentPrice && (
-                                      <span className="text-[10px] font-bold text-white/20 line-through decoration-white/10">
-                                        R$ {product.originalPrice.toFixed(2)}
-                                      </span>
-                                    )}
-                                    {product.discountPercent > 0 && (
-                                      <span className="text-[9px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                        -{product.discountPercent}%
-                                      </span>
-                                    )}
-                                  </div>
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <div className="flex items-center gap-2 cursor-pointer group/price hover:bg-white/5 px-2 -ml-2 py-0.5 rounded-md transition-all">
+                                        <span className="text-[13px] font-black text-kinetic-orange">
+                                          R$ {product.currentPrice.toFixed(2)}
+                                        </span>
+                                        {product.hasPixDiscount && (
+                                          <span className="text-[8px] font-black bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                                            Pix
+                                          </span>
+                                        )}
+                                        {product.originalPrice > product.currentPrice && !product.hasPixDiscount && (
+                                          <span className="text-[9px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                            -{product.discountPercent}%
+                                          </span>
+                                        )}
+                                        <Info className="w-3 h-3 text-white/20 group-hover/price:text-kinetic-orange transition-colors" />
+                                      </div>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-60 bg-deep-void border-none shadow-skeuo-elevated p-4 animate-in fade-in zoom-in duration-200">
+                                      <div className="space-y-3">
+                                        <h5 className="text-[10px] font-black uppercase tracking-widest text-white/30 border-b border-white/5 pb-2">
+                                          Detalhamento de Preço
+                                        </h5>
+                                        
+                                        <div className="space-y-2 text-[11px] font-bold">
+                                            <div className="flex justify-between items-center text-white/40">
+                                              <span>PREÇO ORIGINAL</span>
+                                              <span className="line-through decoration-white/10">R$ {product.originalPrice.toFixed(2)}</span>
+                                            </div>
+
+                                            {product.originalPrice > (product.promoPrice || product.currentPrice) && (
+                                              <div className="flex justify-between items-center text-emerald-400">
+                                                <span>DESCONTO PRODUTO</span>
+                                                <span>-R$ {(product.originalPrice - (product.promoPrice || product.currentPrice)).toFixed(2)}</span>
+                                              </div>
+                                            )}
+
+                                            {product.hasPixDiscount && (
+                                              <div className="flex justify-between items-center text-sky-400">
+                                                <span>DESCONTO PIX</span>
+                                                <span>-R$ {((product.promoPrice || product.currentPrice) - product.currentPrice).toFixed(2)}</span>
+                                              </div>
+                                            )}
+
+                                            <div className="flex justify-between items-center text-kinetic-orange pt-2 border-t border-white/5 text-[12px]">
+                                              <span>VALOR FINAL</span>
+                                              <span className="font-black">R$ {product.currentPrice.toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <p className="text-[9px] text-white/20 font-bold uppercase tracking-tight text-center pt-1">
+                                          {product.hasPixDiscount ? '💡 Economia máxima via Pix aplicada' : '💡 Preço promocional ativo'}
+                                        </p>
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
                                 ) : (
                                   <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest bg-white/5 px-2 py-1 rounded-lg">
                                     Preço sob consulta

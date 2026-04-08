@@ -1,0 +1,604 @@
+{
+  "appId": "18363940729",
+  "graphql": {
+    "introspection": {
+      "status": 200,
+      "response": {
+        "data": {
+          "__type": {
+            "fields": [
+              {
+                "name": "shopOfferV2",
+                "args": [
+                  {
+                    "name": "keyword",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "shopType",
+                    "type": {
+                      "name": null,
+                      "kind": "LIST",
+                      "ofType": {
+                        "name": null,
+                        "kind": "NON_NULL",
+                        "ofType": {
+                          "name": "Int"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "name": "sortType",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "sellerCommCoveRatio",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "page",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "limit",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "shopId",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "isKeySeller",
+                    "type": {
+                      "name": "Boolean",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "shopeeOfferV2",
+                "args": [
+                  {
+                    "name": "keyword",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "sortType",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "page",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "limit",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "productOfferV2",
+                "args": [
+                  {
+                    "name": "listType",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "matchId",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "keyword",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "sortType",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "page",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "limit",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "itemId",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "shopId",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "productCatId",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "isAMSOffer",
+                    "type": {
+                      "name": "Boolean",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "isKeySeller",
+                    "type": {
+                      "name": "Boolean",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "conversionReport",
+                "args": [
+                  {
+                    "name": "purchaseTimeStart",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "purchaseTimeEnd",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "completeTimeStart",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "completeTimeEnd",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "shopName",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "shopId",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "shopType",
+                    "type": {
+                      "name": null,
+                      "kind": "LIST",
+                      "ofType": {
+                        "name": null,
+                        "kind": "NON_NULL",
+                        "ofType": {
+                          "name": "ShopType"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "name": "conversionId",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "conversionStatus",
+                    "type": {
+                      "name": "ConversionStatus",
+                      "kind": "ENUM",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "checkoutId",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "orderId",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "productName",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "productId",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "categoryLv1Id",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "categoryLv2Id",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "categoryLv3Id",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "categoryType",
+                    "type": {
+                      "name": "CategoryType",
+                      "kind": "ENUM",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "orderStatus",
+                    "type": {
+                      "name": "DisplayOrderStatus",
+                      "kind": "ENUM",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "buyerType",
+                    "type": {
+                      "name": "BuyerType",
+                      "kind": "ENUM",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "productType",
+                    "type": {
+                      "name": "ProductType",
+                      "kind": "ENUM",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "fraudStatus",
+                    "type": {
+                      "name": "FraudStatus",
+                      "kind": "ENUM",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "device",
+                    "type": {
+                      "name": "DeviceType",
+                      "kind": "ENUM",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "attributionType",
+                    "type": {
+                      "name": "AttributionType",
+                      "kind": "ENUM",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "campaignPartnerName",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "campaignType",
+                    "type": {
+                      "name": "CampaignType",
+                      "kind": "ENUM",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "limit",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "scrollId",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "validatedReport",
+                "args": [
+                  {
+                    "name": "validationId",
+                    "type": {
+                      "name": null,
+                      "kind": "NON_NULL",
+                      "ofType": {
+                        "name": "Int64",
+                        "kind": "SCALAR",
+                        "ofType": null
+                      }
+                    }
+                  },
+                  {
+                    "name": "limit",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "scrollId",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "partnerOrderReport",
+                "args": [
+                  {
+                    "name": "purchaseTimeStart",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "purchaseTimeEnd",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "completeTimeStart",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "completeTimeEnd",
+                    "type": {
+                      "name": "Int64",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "limit",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "searchNextToken",
+                    "type": {
+                      "name": "String",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "listItemFeeds",
+                "args": [
+                  {
+                    "name": "feedMode",
+                    "type": {
+                      "name": "FeedMode",
+                      "kind": "ENUM",
+                      "ofType": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "getItemFeedData",
+                "args": [
+                  {
+                    "name": "datafeedId",
+                    "type": {
+                      "name": null,
+                      "kind": "NON_NULL",
+                      "ofType": {
+                        "name": "String",
+                        "kind": "SCALAR",
+                        "ofType": null
+                      }
+                    }
+                  },
+                  {
+                    "name": "offset",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  },
+                  {
+                    "name": "limit",
+                    "type": {
+                      "name": "Int",
+                      "kind": "SCALAR",
+                      "ofType": null
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "productList": {
+      "status": 200,
+      "response": {
+        "data": {
+          "productOfferV2": {
+            "nodes": [
+              {
+                "productName": "Patinete Elétrico De 350w Com Uma Bateria De Alta Alcança Velocidades De 25-30km/h, Com Autonomia De 4-5 Horas",
+                "imageUrl": "https://cf.shopee.com.br/file/br-11134207-81ztc-mk3vzlkhzqwz8e",
+                "price": "1169",
+                "commission": "35.07",
+                "commissionRate": "0.03"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "restV2": {
+    "status": 404,
+    "response": {
+      "error": "error_not_found"
+    }
+  }
+}

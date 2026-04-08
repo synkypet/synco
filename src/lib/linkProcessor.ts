@@ -19,6 +19,10 @@ export interface ProcessedProduct {
   metadata_failed?: boolean;
   commissionRate?: number;
   commissionValue?: number;
+  pixPrice?: number;
+  promoPrice?: number;
+  hasPixDiscount?: boolean;
+  pixDiscountPercent?: number;
 }
 
 // ─── Registry de Adapters ──────────────────────────────────────────────────
@@ -83,7 +87,11 @@ export async function processLinks(links: string[], userConnections: any[] = [])
           affiliateUrl: result.affiliateUrl,
           metadata_failed: result.metadata?.metadata_failed || !result.metadata,
           commissionRate: result.metadata?.commissionRate,
-          commissionValue: result.metadata?.commissionValue
+          commissionValue: result.metadata?.commissionValue,
+          pixPrice: result.metadata?.pixPrice,
+          promoPrice: result.metadata?.promoPrice,
+          hasPixDiscount: result.metadata?.hasPixDiscount,
+          pixDiscountPercent: result.metadata?.pixDiscountPercent
         });
       } catch (error) {
         console.error(`linkProcessor: Failed to process ${link}:`, error);

@@ -43,7 +43,7 @@ export const marketplaceService = {
     const supabase = createClient();
     
     // Separa o secret do payload normal (ele é enviado paralelamente à rota de API encrypt)
-    const { shopee_app_secret, has_secret, ...safeConnection } = connection;
+    const { shopee_app_secret, ...safeConnection } = connection;
 
     const { data, error } = await supabase
       .from('user_marketplaces')

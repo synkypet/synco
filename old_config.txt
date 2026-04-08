@@ -1,0 +1,166 @@
+﻿// src/app/(dashboard)/configuracoes/page.tsx
+"use client";
+
+import React, { useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import PageHeader from '@/components/shared/PageHeader';
+import {
+    User as UserIcon, Building2, Clock, Users, Palette, Save, Plus,
+    CheckCircle2, AlertCircle, TestTube, HelpCircle, Sparkles,
+    Shield, Send, BookOpen, Loader2
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { 
+  useMarketplaceCatalog, 
+  useUserMarketplaceConnections, 
+  useUpsertMarketplaceConnection 
+} from '@/hooks/use-marketplaces';
+import { AffiliateSettingsCard } from '@/components/settings/AffiliateSettingsCard';
+
+export default function ConfiguracoesPage() {
+    const { user } = useAuth();
+    const [activeTab, setActiveTab] = useState('profile');
+    
+    // Real Data Hooks
+    const { data: catalog, isLoading: isLoadingCatalog } = useMarketplaceCatalog();
+    const { data: connections, isLoading: isLoadingConnections } = useUserMarketplaceConnections(user?.id);
+    const updateConnection = useUpsertMarketplaceConnection();
+
+    const handleSaveConnection = (data: any) => {
+      if (!user?.id) return;
+      updateConnection.mutate({
+        user_id: user.id,
+        ...data
+      });
+    };
+
+    return (
+        <div className="space-y-6">
+            <PageHeader 
+                title="Configura├º├Áes" 
+                description="Gerencie seu perfil, programas de afiliado e prefer├¬ncias do sistema" 
+            />
+
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                <TabsList className="bg-muted/50 p-1 rounded-xl flex-wrap h-auto gap-1">
+                    <TabsTrigger value="profile" className="text-xs gap-2 rounded-lg"><UserIcon className="w-3.5 h-3.5" /> Perfil</TabsTrigger>
+                    <TabsTrigger value="org" className="text-xs gap-2 rounded-lg"><Building2 className="w-3.5 h-3.5" /> Organiza├º├úo</TabsTrigger>
+                    <TabsTrigger value="affiliates" className="text-xs gap-2 rounded-lg">­ƒøì´©Å Afiliados</TabsTrigger>
+                    <TabsTrigger value="send" className="text-xs gap-2 rounded-lg"><Send className="w-3.5 h-3.5" /> Envios</TabsTrigger>
+                    <TabsTrigger value="ia" className="text-xs gap-2 rounded-lg"><Sparkles className="w-3.5 h-3.5" /> IA & Texto</TabsTrigger>
+                    <TabsTrigger value="users" className="text-xs gap-2 rounded-lg"><Users className="w-3.5 h-3.5" /> Usu├írios</TabsTrigger>
+                    <TabsTrigger value="appearance" className="text-xs gap-2 rounded-lg"><Palette className="w-3.5 h-3.5" /> Apar├¬ncia</TabsTrigger>
+                    <TabsTrigger value="onboarding" className="text-xs gap-2 rounded-lg"><BookOpen className="w-3.5 h-3.5" /> Ajuda</TabsTrigger>
+                </TabsList>
+
+                {/* Profile Tab */}
+                <TabsContent value="profile" className="space-y-6 animate-in fade-in-50 duration-300">
+                    <div className="grid md:grid-cols-2 gap-6 max-w-4xl">
+                        <Card className="p-6 md:col-span-2">
+                            <h3 className="font-bold text-lg mb-6">Informa├º├Áes Pessoais</h3>
+                            <div className="flex items-center gap-6 mb-8">
+                                <Avatar className="w-20 h-20 border-2 border-primary/10">
+                                    <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-black">JS</AvatarFallback>
+                                </Avatar>
+                                <div className="space-y-2">
+                                    <Button variant="outline" size="sm">Alterar foto</Button>
+                                    <p className="text-xs text-muted-foreground">Recomendado: JPG ou PNG, m├íx 2MB</p>
+                                </div>
+                            </div>
+                            <div className="grid md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <Label>Nome completo</Label>
+                                    <Input defaultValue="Jo├úo Silva" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Email</Label>
+                                    <Input defaultValue={user?.email || ''} disabled className="bg-muted/50" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>WhatsApp</Label>
+                                    <Input placeholder="+55 11 99999-9999" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Fuso hor├írio</Label>
+                                    <Select defaultValue="america_sp">
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="america_sp">Am├®rica/S├úo Paulo (UTC-3)</SelectItem>
+                                            <SelectItem value="america_manaus">Am├®rica/Manaus (UTC-4)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <Button className="mt-8 font-bold" onClick={() => toast.success('Perfil salvo!')}>
+                                <Save className="w-4 h-4 mr-2" /> Salvar Altera├º├Áes
+                            </Button>
+                        </Card>
+                    </div>
+                </TabsContent>
+
+                {/* Affiliates Tab */}
+                <TabsContent value="affiliates" className="space-y-6 animate-in fade-in-50 duration-300">
+                    {isLoadingCatalog || isLoadingConnections ? (
+                      <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-30">
+                        <Loader2 className="w-10 h-10 animate-spin text-kinetic-orange" />
+                        <span className="font-black text-sm uppercase tracking-widest">Sincronizando Marketplace...</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+                        {catalog?.map(mp => {
+                          const connection = connections?.find(c => c.marketplace_id === mp.id);
+                          return (
+                            <AffiliateSettingsCard 
+                              key={mp.id}
+                              marketplace={mp}
+                              connection={connection}
+                              isSaving={updateConnection.isPending}
+                              onSave={handleSaveConnection}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                </TabsContent>
+
+                <TabsContent value="org" className="animate-in fade-in-50 duration-300">
+                    <Card className="p-6 max-w-xl">
+                        <h3 className="font-bold text-lg mb-6">Organiza├º├úo</h3>
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>Nome da organiza├º├úo</Label>
+                                <Input defaultValue="Synco Affiliate Ops" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Slug (identificador na URL)</Label>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground font-mono">synco.app/</span>
+                                    <Input defaultValue="synco-ops" className="font-mono h-8 text-xs" />
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/10">
+                                <div className="space-y-1">
+                                    <p className="text-sm font-bold">Plano Pro</p>
+                                    <p className="text-xs text-muted-foreground">Pr├│xima renova├º├úo em 12/04/2024</p>
+                                </div>
+                                <Button variant="ghost" size="sm" className="text-xs font-bold text-primary">Gerenciar Plano</Button>
+                            </div>
+                            <Button onClick={() => toast.success('Dados salvos!')} className="font-bold">
+                                <Save className="w-4 h-4 mr-2" /> Salvar Organiza├º├úo
+                            </Button>
+                        </div>
+                    </Card>
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
+}

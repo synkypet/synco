@@ -12,6 +12,11 @@ export interface ProductMetadata {
   metadata_failed?: boolean;
   commissionRate?: number;
   commissionValue?: number;
+  // Detalhamento de preço SYNCO
+  pixPrice?: number;
+  promoPrice?: number;
+  hasPixDiscount?: boolean;
+  pixDiscountPercent?: number;
 }
 
 export interface AffiliateResult {

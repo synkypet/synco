@@ -68,16 +68,39 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       console.error('ShopeeAdapter: URL parse fallback failed:', e);
     }
 
-    // 2. Extração robusta de IDs (ShopID e ItemID)
+    // 2. Extração robusta de IDs (ShopID, ItemID e ModelID)
     let shopId = '';
     let itemId = '';
-    const idMatch = url.match(/i\.(\d+)\.(\d+)/);
-    if (idMatch) {
-      shopId = idMatch[1];
-      itemId = idMatch[2];
+    let modelId = '';
+
+    // Regex 1: Formato clássico (...-i.SHOPID.ITEMID)
+    const classicMatch = url.match(/i\.(\d+)\.(\d+)/);
+    // Regex 2: Formato moderno (/product/SHOPID/ITEMID)
+    const modernMatch = url.match(/\/product\/(\d+)\/(\d+)/);
+
+    if (classicMatch) {
+      shopId = classicMatch[1];
+      itemId = classicMatch[2];
+    } else if (modernMatch) {
+      shopId = modernMatch[1];
+      itemId = modernMatch[2];
     }
 
-    // 3. Prioridade 1: Tentar via API v4 da Shopee (Scraper) - Mais estável para metadados visuais
+    // Extrair ModelId (se houver via query param)
+    try {
+      const urlObj = new URL(url);
+      modelId = urlObj.searchParams.get('display_model_id') || '';
+    } catch {
+      // Ignora erro de parse de URL
+    }
+
+    // LOG DE AUDITORIA EXIGIDO (Passo 3 do pedido)
+    console.log(`[SHOPEE AUDIT] Original URL: ${url}`);
+    console.log(`[SHOPEE AUDIT] shopId=${shopId || 'N/A'} itemId=${itemId || 'N/A'} modelId=${modelId || 'N/A'}`);
+    const scraperApiUrl = shopId && itemId ? `https://shopee.com.br/api/v4/item/get?shopid=${shopId}&itemid=${itemId}` : 'N/A';
+    console.log(`[SHOPEE AUDIT] Scraper API URL: ${scraperApiUrl}`);
+
+    // 3. Prioridade 1: Tentar via API v4 da Shopee (Scraper)
     if (shopId && itemId) {
       try {
         const apiUrl = `https://shopee.com.br/api/v4/item/get?shopid=${shopId}&itemid=${itemId}`;
@@ -86,25 +109,83 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
         const res = await fetch(apiUrl, {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'application/json',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
             'Referer': 'https://shopee.com.br/'
           },
           signal: controller.signal
         });
         clearTimeout(timeout);
 
+        if (!res.ok) {
+           console.warn(`[SHOPEE SCRAPER] HTTP Error ${res.status}: ${res.statusText}`);
+        }
+
+        const rawBody = await res.text();
+        console.log(`[SHOPEE SCRAPER] Raw Body Length: ${rawBody.length}`);
+        
         if (res.ok) {
-          const data = await res.json();
+          const data = JSON.parse(rawBody);
           const item = data.data || data.item;
+          
+          if (!item && data.error) {
+            console.warn(`[SHOPEE SCRAPER] API Error ${data.error}: ${data.message || 'Unknown error'}`);
+          }
 
           if (item) {
             const name = item.name || item.title || nameFallback;
-            const originalPrice = (item.price_before_discount || item.price || 0) / 100000;
-            const currentPrice = (item.price || item.price_min || 0) / 100000;
-            const discount = originalPrice > 0
-              ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100)
+            
+            // 1. Preço Original (Before Discount) - Tenta múltiplas fontes
+            const rawOriginal = item.price_before_discount || item.price_min_before_discount || item.price_max_before_discount || item.price || 0;
+            const originalPrice = rawOriginal / 100000;
+            
+            // 2. Preço Promocional Regular (Antes do Pix)
+            const rawPromo = item.price || item.price_min || 0;
+            const promoPrice = rawPromo / 100000;
+            
+            // 3. Lógica de Desconto Pix (Shopee BR) - Tenta múltiplas fontes
+            let pixPrice = promoPrice;
+            let hasPixDiscount = false;
+            let pixDiscountPercent = 0;
+
+            const pixInfo = item.campaign_attribute?.pix_discount_info || 
+                            item.offer_info?.pix_discount_info || 
+                            item.pix_info ||
+                            item.pix_discount_info;
+
+            // Busca por taxa de desconto Pix
+            const rawPixRate = pixInfo?.pix_discount_rate || item.campaign_attribute?.pix_discount_rate || item.pix_discount_rate;
+            
+            if (rawPixRate) {
+              pixDiscountPercent = rawPixRate / 1000; // Shopee usa 1000 = 1% ou escala similar
+              // Se for escala de 1000, 5000 = 5%. Se for escala de 10000, 500 = 5%.
+              // Na Shopee BR normalmente 5000 = 5% (milésimos de 100%).
+              // Mas aqui trataremos como percentual direto se for > 0.
+              if (pixDiscountPercent > 100) pixDiscountPercent = pixDiscountPercent / 10; // Ajuste de escala se necessário
+              
+              pixPrice = promoPrice * (1 - (pixDiscountPercent / 100));
+              hasPixDiscount = true;
+            } else if (pixInfo?.price_after_pix_discount || item.offer_info?.price_after_pix_discount) {
+              const rawPixPrice = pixInfo?.price_after_pix_discount || item.offer_info?.price_after_pix_discount;
+              pixPrice = rawPixPrice / 100000;
+              pixDiscountPercent = promoPrice > 0 ? Math.round(((promoPrice - pixPrice) / promoPrice) * 100) : 0;
+              hasPixDiscount = true;
+            } else if (item.campaign_attribute?.pix_discount_price) {
+               pixPrice = item.campaign_attribute.pix_discount_price / 100000;
+               pixDiscountPercent = promoPrice > 0 ? Math.round(((promoPrice - pixPrice) / promoPrice) * 100) : 0;
+               hasPixDiscount = true;
+            }
+
+            // 4. Preço Final (Prioridade: Pix > Promo)
+            const finalPrice = hasPixDiscount ? pixPrice : promoPrice;
+            const totalDiscount = originalPrice > 0
+              ? Math.round(((originalPrice - finalPrice) / originalPrice) * 100)
               : 0;
+
+            // LOG DE AUDITORIA EXIGIDO PELO USUÁRIO
+            console.log(`[SHOPEE ADAPTER] strategy=scraper original=${originalPrice.toFixed(2)} promo=${promoPrice.toFixed(2)} pix=${hasPixDiscount ? pixPrice.toFixed(2) : 'N/A'} final=${finalPrice.toFixed(2)}`);
+
             const imageUrl = item.image
               ? `https://cf.shopee.com.br/file/${item.image}`
               : '';
@@ -112,10 +193,14 @@ export class ShopeeAdapter extends MarketplaceAdapter {
             return {
               name,
               originalPrice,
-              currentPrice,
-              discountPercent: discount,
+              currentPrice: finalPrice, 
+              discountPercent: totalDiscount,
               imageUrl,
-              marketplace: 'Shopee'
+              marketplace: 'Shopee',
+              pixPrice: hasPixDiscount ? pixPrice : undefined,
+              promoPrice: promoPrice,
+              hasPixDiscount,
+              pixDiscountPercent: hasPixDiscount ? pixDiscountPercent : undefined
             };
           }
         }
@@ -139,11 +224,14 @@ export class ShopeeAdapter extends MarketplaceAdapter {
           const node = nodes[0];
           const cPrice = node.price ? parseFloat(node.price) : 0;
           
+          // LOG DE AUDITORIA EXIGIDO PELO USUÁRIO (FALLBACK)
+          console.log(`[SHOPEE ADAPTER] strategy=graphql original=${cPrice.toFixed(2)} promo=${cPrice.toFixed(2)} pix=N/A final=${cPrice.toFixed(2)}`);
+
           return {
             name: node.productName || nameFallback,
-            originalPrice: cPrice, // GraphQL api de afiliado removeu suporte a originalPrice em productOfferV2
+            originalPrice: cPrice, 
             currentPrice: cPrice,
-            discountPercent: 0, // GraphQL api removeu suporte a discount direto
+            discountPercent: 0, 
             imageUrl: node.imageUrl,
             marketplace: 'Shopee',
             commissionRate: node.commissionRate ? parseFloat(String(node.commissionRate)) : undefined,
