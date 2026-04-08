@@ -35,6 +35,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ProcessedProduct, processLinks } from '@/lib/linkProcessor';
+import { useTemplates } from '@/hooks/use-templates';
+import { templateService } from '@/services/supabase/template-service';
+import { Template } from '@/types/template';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
 
 // Opções de Tonalidade da IA (Base44)
 const TONE_OPTIONS = [
@@ -50,6 +60,7 @@ export default function EnvioRapidoPage() {
   const { data: destinations, isLoading: loadingDestinations } = useDestinations(user?.id);
   const { data: groups, isLoading: loadingGroups } = useGroups(user?.id);
   const { mutate: createCampaign, isPending: isSending } = useCreateCampaign();
+  const { data: templates = [] } = useTemplates(user?.id);
   const router = useRouter();
 
   // State Operacional (Base44 Flow)
@@ -87,6 +98,42 @@ export default function EnvioRapidoPage() {
   }, [testChannelId, groups]);
 
   const linksCount = useMemo(() => linksInput.split('\n').filter(l => l.trim()).length, [linksInput]);
+
+  const handleApplyTemplate = (template: Template, product?: ProcessedProduct) => {
+    if (product) {
+      // Aplica a um único produto
+      const rendered = templateService.renderTemplate(template.content, {
+        produto_nome: product.name,
+        preco_original: product.originalPrice.toFixed(2),
+        preco_atual: product.currentPrice.toFixed(2),
+        desconto_percentual: product.discountPercent.toString(),
+        valor_economizado: (product.originalPrice - product.currentPrice).toFixed(2),
+        link_afiliado: product.affiliateUrl,
+        loja: product.marketplace
+      });
+      setGeneratedTexts(prev => ({ ...prev, [product.id]: rendered }));
+      templateService.incrementUsage(template.id);
+      toast.success(`Template "${template.name}" aplicado em ${product.name}`);
+    } else {
+      // Aplica a todos os produtos processados
+      const newTexts = { ...generatedTexts };
+      processedProducts.forEach(p => {
+        const rendered = templateService.renderTemplate(template.content, {
+          produto_nome: p.name,
+          preco_original: p.originalPrice.toFixed(2),
+          preco_atual: p.currentPrice.toFixed(2),
+          desconto_percentual: p.discountPercent.toString(),
+          valor_economizado: (p.originalPrice - p.currentPrice).toFixed(2),
+          link_afiliado: p.affiliateUrl,
+          loja: p.marketplace
+        });
+        newTexts[p.id] = rendered;
+      });
+      setGeneratedTexts(newTexts);
+      templateService.incrementUsage(template.id);
+      toast.success(`Template "${template.name}" aplicado a todos os produtos!`);
+    }
+  };
 
   const handleTestSend = async () => {
     if (!testChannelId || !testPhone || !testMessage) {
@@ -349,8 +396,29 @@ export default function EnvioRapidoPage() {
           {/* 3. Produtos Processados */}
           {processedProducts.length > 0 && (
             <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
-              <div className="flex items-center gap-3 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/30 italic">
-                Resultados do Processamento ({processedProducts.length})
+              <div className="flex items-center justify-between px-4 py-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/30 italic">
+                  Resultados do Processamento ({processedProducts.length})
+                </span>
+                
+                {templates.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Aplicar modelo em todos:</span>
+                    <Select onValueChange={(val) => {
+                      const t = templates.find(temp => temp.id === val);
+                      if (t) handleApplyTemplate(t);
+                    }}>
+                      <SelectTrigger className="w-[180px] h-8 bg-deep-void shadow-skeuo-pressed border-none text-[9px] font-black uppercase tracking-widest text-white/60">
+                        <SelectValue placeholder="Escolha um Template..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-deep-void border-white/5 text-white/70 text-[10px] font-bold uppercase tracking-widest">
+                        {templates.map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
               {processedProducts.map((product) => (
                 <TactileCard key={product.id} className="p-0 overflow-hidden border-none group">
@@ -376,14 +444,31 @@ export default function EnvioRapidoPage() {
                             <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-1.5 rounded">-{product.discountPercent}%</span>
                           </div>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 w-8 p-0 rounded-lg hover:bg-white/5 text-white/20 hover:text-white"
-                          onClick={() => setEditingId(editingId === product.id ? null : product.id)}
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {templates.length > 0 && (
+                            <Select onValueChange={(val) => {
+                              const t = templates.find(temp => temp.id === val);
+                              if (t) handleApplyTemplate(t, product);
+                            }}>
+                              <SelectTrigger className="w-fit h-8 px-3 bg-white/5 border-none text-[8px] font-black uppercase tracking-widest text-white/40 hover:text-white transition-all">
+                                <SelectValue placeholder="Aplicar Template" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-deep-void border-white/5 text-white/70 text-[10px] font-bold uppercase tracking-widest">
+                                {templates.map(t => (
+                                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 rounded-lg hover:bg-white/5 text-white/20 hover:text-white"
+                            onClick={() => setEditingId(editingId === product.id ? null : product.id)}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="relative">
