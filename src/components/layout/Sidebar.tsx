@@ -50,7 +50,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <Link href="/" className="flex items-center gap-3 group">
           <div className={cn(
             "relative transition-all duration-300",
-            collapsed ? "w-10 h-10" : "w-32 h-10"
+            collapsed ? "w-14 h-14" : "w-full h-16"
           )}>
             <Image 
               src="/logo-synco.png" 
@@ -59,7 +59,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               priority
               className={cn(
                 "object-contain transition-all duration-300",
-                collapsed ? "scale-150" : "scale-100" // Ajuste para o ícone aparecer melhor quando colapsado
+                !collapsed && "object-left"
               )}
             />
           </div>
