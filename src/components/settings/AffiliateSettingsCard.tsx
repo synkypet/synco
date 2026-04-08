@@ -39,6 +39,7 @@ export function AffiliateSettingsCard({
   const [shopeeAppSecret, setShopeeAppSecret] = useState(''); // Always blank on load for security
   const [isActive, setIsActive] = useState(connection?.is_active ?? false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isInjectingSecret, setIsInjectingSecret] = useState(false);
 
   useEffect(() => {
     setAffiliateId(connection?.affiliate_id || '');
@@ -61,16 +62,43 @@ export function AffiliateSettingsCard({
   const isConfigured = !!affiliateId;
   const isShopee = marketplace.name.toLowerCase() === 'shopee';
 
-  const handleSave = () => {
-    onSave({
-      ...(connection?.id ? { id: connection.id } : {}),
-      marketplace_id: marketplace.id,
-      affiliate_id: affiliateId,
-      affiliate_code: affiliateCode,
-      shopee_app_id: shopeeAppId,
-      shopee_app_secret: shopeeAppSecret,
-      is_active: isActive
-    });
+  const handleSave = async () => {
+    setIsInjectingSecret(true);
+
+    try {
+      if (shopeeAppSecret) {
+        const response = await fetch('/api/settings/secrets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            marketplace_id: marketplace.id,
+            secret: shopeeAppSecret
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Falha ao instanciar segredo');
+        }
+      }
+
+      onSave({
+        ...(connection?.id ? { id: connection.id } : {}),
+        marketplace_id: marketplace.id,
+        affiliate_id: affiliateId,
+        affiliate_code: affiliateCode,
+        shopee_app_id: shopeeAppId,
+        has_secret: shopeeAppSecret ? true : connection?.has_secret,
+        is_active: isActive
+      });
+
+      // Clear the local state secret input proactively after successfully storing it
+      setShopeeAppSecret('');
+    } catch (e: any) {
+      console.error(e);
+      // The parent Tanstack handler catches connection errors usually, but we stop flow if crypto fails
+    } finally {
+      setIsInjectingSecret(false);
+    }
   };
 
   return (
@@ -103,7 +131,7 @@ export function AffiliateSettingsCard({
           >
             {isConfigured ? 'Parametrizado' : 'Pendente'}
           </Badge>
-          {isShopee && connection?.shopee_app_secret_id && (
+          {isShopee && connection?.has_secret && (
             <Badge 
               variant="outline" 
               className="text-[9px] font-black uppercase tracking-widest border-none px-2 h-6 shadow-skeuo-pressed bg-kinetic-orange/10 text-kinetic-orange flex items-center gap-1 mt-1"
@@ -182,7 +210,7 @@ export function AffiliateSettingsCard({
                   type="password"
                   value={shopeeAppSecret}
                   onChange={(e) => setShopeeAppSecret(e.target.value)}
-                  placeholder={connection?.shopee_app_secret_id ? "••••••••••••••••••••••••" : "Cole seu App Secret (Chave Criptográfica)"}
+                  placeholder={connection?.has_secret ? "••••••••••••••••••••••••" : "Cole seu App Secret (Chave Criptográfica)"}
                   className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl placeholder:tracking-[0.2em]"
                 />
                 <p className="text-[8px] text-white/20 tracking-tighter">
@@ -218,10 +246,10 @@ export function AffiliateSettingsCard({
       {/* Action */}
       <KineticButton 
         onClick={handleSave}
-        disabled={isSaving || !hasChanges}
+        disabled={isSaving || isInjectingSecret || !hasChanges}
         className="h-12 w-full font-black uppercase tracking-widest text-xs"
       >
-        {isSaving ? (
+        {isSaving || isInjectingSecret ? (
           <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Salvando...</>
         ) : (
           <><ShieldCheck className="w-3.5 h-3.5 mr-2" /> Salvar Configuração</>

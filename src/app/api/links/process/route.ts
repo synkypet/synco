@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { processLinks } from '@/lib/linkProcessor';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { decrypt, EncryptedData } from '@/lib/encryption';
 
 export async function POST(request: Request) {
   try {
@@ -33,14 +34,25 @@ export async function POST(request: Request) {
 
     const enrichedConnections = await Promise.all((userConnections || []).map(async (conn) => {
       let appSecret = '';
-      if (conn.shopee_app_secret_id) {
-        const { data: secretData } = await supabaseAdmin
-          .schema('vault')
-          .from('decrypted_secrets')
-          .select('decrypted_secret')
-          .eq('id', conn.shopee_app_secret_id)
+      if (conn.has_secret) {
+        const { data: secretRow } = await supabaseAdmin
+          .from('user_marketplace_secrets')
+          .select('encrypted_secret, iv, auth_tag')
+          .eq('user_id', user.id)
+          .eq('marketplace_id', conn.marketplace_id)
           .single();
-        appSecret = secretData?.decrypted_secret || '';
+          
+        if (secretRow) {
+          try {
+            appSecret = decrypt({
+              encryptedValue: secretRow.encrypted_secret,
+              iv: secretRow.iv,
+              authTag: secretRow.auth_tag
+            });
+          } catch (cryptoErr) {
+            console.error('Falha ao descriptografar segredo para o tenant:', cryptoErr);
+          }
+        }
       }
 
       return {
