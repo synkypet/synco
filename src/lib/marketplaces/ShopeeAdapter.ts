@@ -195,6 +195,8 @@ export class ShopeeAdapter extends MarketplaceAdapter {
         
         itemId: String(winner.itemId || itemId || ''),
         shopId: String(winner.shopId || shopId || ''),
+        productLink: winner.productLink,
+        offerLink: winner.offerLink,
         fetchedAt: new Date().toISOString()
       };
 

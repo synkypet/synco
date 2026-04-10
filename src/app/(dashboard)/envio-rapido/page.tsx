@@ -14,7 +14,9 @@ import {
   Loader2,
   Link2,
   Edit2,
-  Info
+  Info,
+  Copy,
+  Check
 } from 'lucide-react';
 import { useDestinations } from '@/hooks/use-destinations';
 import { useChannels } from '@/hooks/use-channels';
@@ -388,11 +390,11 @@ export default function EnvioRapidoPage() {
                                 </span>
                               </div>
                             ) : (
-                              <img
-                                src={product.factual.image}
-                                alt=""
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                              />
+                                <img
+                                  src={product.factual.image}
+                                  alt=""
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                />
                             )}
                             <div className="absolute top-1 right-1">
                               <Badge
@@ -408,9 +410,23 @@ export default function EnvioRapidoPage() {
                         <div className="flex-1 p-5 lg:p-6 space-y-4">
                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                             <div className="flex-1 space-y-2">
-                              <h4 className="text-[13px] font-black uppercase tracking-wider text-white/90 line-clamp-1 font-headline group-hover:text-kinetic-orange transition-colors">
-                                {product.factual.title}
-                              </h4>
+                                <div className="flex items-center gap-2 group/title">
+                                  <h4 className="text-[13px] font-black uppercase tracking-wider text-white/90 line-clamp-1 font-headline group-hover:text-kinetic-orange transition-colors inline-block">
+                                    {product.factual.title}
+                                  </h4>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 rounded-md bg-white/5 hover:bg-kinetic-orange/10 hover:text-kinetic-orange flex items-center gap-1.5 transition-all opacity-0 group-hover/title:opacity-100"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(product.factual.finalLinkToSend);
+                                      toast.success('Link copiado!');
+                                    }}
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                    <span className="text-[8px] font-black uppercase tracking-widest">Link</span>
+                                  </Button>
+                                </div>
 
                               <div className="flex flex-wrap items-center gap-3">
                                 {product.metadata.source !== 'fallback' && product.factual.price && product.factual.price > 0 ? (
@@ -435,7 +451,7 @@ export default function EnvioRapidoPage() {
                                               {product.factual.estimatedPixPriceFormatted}
                                             </span>
                                             <span className="text-[8px] font-bold text-white/40 uppercase tracking-tighter">
-                                              Estimativa no Pix
+                                              No Pix
                                             </span>
                                           </div>
                                         )}
@@ -466,7 +482,7 @@ export default function EnvioRapidoPage() {
                                             
                                             {product.factual.estimatedPixPrice && (
                                               <div className="flex justify-between items-baseline">
-                                                <span className="text-[9px] uppercase text-kinetic-orange/40 font-black">Estimativa Pix</span>
+                                                <span className="text-[9px] uppercase text-kinetic-orange/40 font-black">No Pix</span>
                                                 <span className="text-kinetic-orange/80">{product.factual.estimatedPixPriceFormatted}</span>
                                               </div>
                                             )}
@@ -501,7 +517,11 @@ export default function EnvioRapidoPage() {
                                     variant="outline"
                                     className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 h-5 text-[8px] font-black uppercase tracking-widest"
                                   >
-                                    💰 {product.factual.commissionValueFormatted} comissão
+                                    💰 {product.factual.commissionValueFormatted} 
+                                    {product.factual.commissionRatePercent && (
+                                      <span className="ml-1 opacity-60 font-bold">({product.factual.commissionRatePercent})</span>
+                                    )}
+                                    <span className="ml-1">comissão</span>
                                   </Badge>
                                 )}
                               </div>

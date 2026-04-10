@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     const idMatch = url.match(/i\.(\d+)\.(\d+)/);
     const shopId = idMatch?.[1] || '';
     const itemId = idMatch?.[2] || '';
-    const nodes = await client.getProductOfferV2(shopId, itemId);
+    const nodes = await client.searchProducts({ shopId, itemId });
 
     return NextResponse.json({
       query: 'productOfferV2',

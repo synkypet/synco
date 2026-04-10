@@ -38,6 +38,8 @@ export interface FactualData {
 
   affiliateLink?: string | null;
   shortLink?: string | null;
+  productLink?: string | null;
+  offerLink?: string | null;
   finalLinkToSend: string;
   fetchedAt: string;
 }
@@ -90,8 +92,8 @@ export function buildMessageFromSnapshot(factual: FactualData, tone: string): st
   // Heurística de exibição de Pix na copy (apenas se existir e for menor que o factual)
   let pixLine = '';
   if (factual.estimatedPixPrice && factual.currentPriceFactual && factual.estimatedPixPrice < factual.currentPriceFactual) {
-    const pixFormatted = `R$ ${factual.estimatedPixPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-    pixLine = `\n🎯 *No Pix (Estimado):* ${pixFormatted}`;
+    const pixFormatted = `R$ ${factual.estimatedPixPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    pixLine = `\n🎯 *No Pix:* ${pixFormatted}`;
   }
 
   const store = factual.shopName ? `🏪 *Loja:* ${factual.shopName}` : '';
@@ -148,7 +150,7 @@ export function buildProductSnapshot(opts: {
   const estimatedPix = metadata.estimatedPixPrice || null;
   const commissionRate = typeof metadata.commissionRate === 'number' ? metadata.commissionRate : null;
   
-  const formatBRL = (val: number | null) => val !== null ? `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : null;
+  const formatBRL = (val: number | null) => val !== null ? `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
 
   const factual: FactualData = {
     originalUrl,
@@ -181,6 +183,8 @@ export function buildProductSnapshot(opts: {
     commissionRatePercent: commissionRate !== null ? `${(commissionRate * 100).toFixed(2)}%` : null,
     affiliateLink: affiliateUrl,
     shortLink: affiliateUrl.includes('s.shopee') || affiliateUrl.includes('shope.ee') ? affiliateUrl : null,
+    productLink: metadata.productLink || null,
+    offerLink: metadata.offerLink || null,
     finalLinkToSend: affiliateUrl,
     fetchedAt: metadata.fetchedAt || new Date().toISOString()
   };

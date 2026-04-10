@@ -27,7 +27,7 @@ async function test() {
   const shopId = idMatch?.[1] || '';
   const itemId = idMatch?.[2] || '';
   try {
-    const nodes = await client.getProductOfferV2(shopId, itemId);
+    const nodes = await client.searchProducts({ shopId, itemId });
     console.log('Nodes returned:', nodes.length);
     if (nodes.length > 0) {
       console.log('DADOS REAIS:', JSON.stringify(nodes[0], null, 2));
