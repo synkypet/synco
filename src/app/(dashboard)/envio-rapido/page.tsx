@@ -33,7 +33,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ProcessedProduct } from '@/lib/linkProcessor';
+import { ProductSnapshot } from '@/lib/linkProcessor';
 
 // Opções de Tonalidade da IA (Base44)
 const TONE_OPTIONS = [
@@ -52,9 +52,9 @@ export default function EnvioRapidoPage() {
 
   const [linksInput, setLinksInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processedProducts, setProcessedProducts] = useState<ProcessedProduct[]>([]);
+  const [processedProducts, setProcessedProducts] = useState<ProductSnapshot[]>([]);
   const [tone, setTone] = useState('auto');
-  const [generatedTexts, setGeneratedTexts] = useState<Record<string, string>>({});
+  // generatedTexts removido: agora usamos o campo messageText dentro do snapshot
   const [selectedDestinations, setSelectedDestinations] = useState<string[]>([]);
   const [isSuccess, setIsSuccess] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -135,35 +135,6 @@ export default function EnvioRapidoPage() {
     }
   };
 
-  useEffect(() => {
-    const newTexts: Record<string, string> = { ...generatedTexts };
-    const toneLabel = TONE_OPTIONS.find(t => t.value === tone)?.label || 'Automático';
-
-    processedProducts.forEach(p => {
-      if (!newTexts[p.id]) {
-        if (p.metadata_failed) {
-          const productName = p.name || 'Produto Shopee';
-          newTexts[p.id] =
-            `🔥 *OFERTA DETECTADA* [Tom: ${toneLabel}]\n\n` +
-            `*${productName}*\n\n` +
-            `🚀 Compre aqui: ${p.affiliateUrl}\n\n` +
-            `#oferta #promoção #${p.marketplace.toLowerCase()}`;
-        } else {
-          newTexts[p.id] =
-            `🔥 *OFERTA DETECTADA* [Tom: ${toneLabel}]\n\n` +
-            `*${p.name}*\n\n` +
-            `💰 De: ~~R$ ${p.originalPrice.toFixed(2)}~~\n` +
-            `✅ Por: *R$ ${p.currentPrice.toFixed(2)}*\n` +
-            `📉 *${p.discountPercent}% de DESCONTO!*\n\n` +
-            `🚀 Compre aqui: ${p.affiliateUrl}\n\n` +
-            `#oferta #promoção #${p.marketplace.toLowerCase()}`;
-        }
-      }
-    });
-
-    setGeneratedTexts(newTexts);
-  }, [processedProducts, tone]);
-
   const handleProcess = async () => {
     if (!linksInput.trim()) {
       toast.error('Cole pelo menos um link para processar.');
@@ -177,7 +148,7 @@ export default function EnvioRapidoPage() {
       const res = await fetch('/api/links/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ links })
+        body: JSON.stringify({ links, tone })
       });
 
       if (!res.ok) {
@@ -211,10 +182,10 @@ export default function EnvioRapidoPage() {
       name: `Envio Rápido - ${new Date().toLocaleDateString()}`,
       items: processedProducts.map(p => ({
         product_id: p.id,
-        product_name: p.name,
-        custom_text: generatedTexts[p.id] || '',
-        image_url: p.imageUrl,
-        affiliate_url: p.affiliateUrl
+        product_name: p.factual.title,
+        custom_text: p.copy.messageText || '',
+        image_url: p.factual.image || undefined,
+        affiliate_url: p.factual.finalLinkToSend
       })),
       destinations: selectedDestinations.map(id => ({
         type: 'list' as const,
@@ -407,7 +378,7 @@ export default function EnvioRapidoPage() {
                       <div className="flex flex-col md:flex-row">
                         <div className="w-full md:w-32 bg-deep-void/50 p-4 flex flex-col items-center justify-center border-r border-white/5 bg-gradient-to-b from-transparent to-white/5">
                           <div className="w-20 h-20 rounded-xl overflow-hidden shadow-skeuo-flat group-hover:shadow-glow-orange/20 transition-all duration-500 bg-deep-void relative">
-                            {product.metadata_failed || !product.imageUrl ? (
+                            {product.metadata.source === 'fallback' || !product.factual.image ? (
                               <div className="flex flex-col items-center justify-center h-full bg-anthracite-surface/40 border border-white/5 rounded-xl">
                                 <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center mb-1.5 shadow-skeuo-pressed">
                                   <Info className="w-3.5 h-3.5 text-white/20" />
@@ -418,7 +389,7 @@ export default function EnvioRapidoPage() {
                               </div>
                             ) : (
                               <img
-                                src={product.imageUrl}
+                                src={product.factual.image}
                                 alt=""
                                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                               />
@@ -428,7 +399,7 @@ export default function EnvioRapidoPage() {
                                 variant="outline"
                                 className="bg-black/60 backdrop-blur-md border-none text-[7px] font-black uppercase tracking-tighter h-4 px-1.5"
                               >
-                                {product.marketplace}
+                                {product.factual.marketplace}
                               </Badge>
                             </div>
                           </div>
@@ -438,64 +409,76 @@ export default function EnvioRapidoPage() {
                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                             <div className="flex-1 space-y-2">
                               <h4 className="text-[13px] font-black uppercase tracking-wider text-white/90 line-clamp-1 font-headline group-hover:text-kinetic-orange transition-colors">
-                                {product.name}
+                                {product.factual.title}
                               </h4>
 
                               <div className="flex flex-wrap items-center gap-3">
-                                {!product.metadata_failed && product.currentPrice > 0 ? (
+                                {product.metadata.source !== 'fallback' && product.factual.price && product.factual.price > 0 ? (
                                   <Popover>
                                     <PopoverTrigger asChild>
-                                      <div className="flex items-center gap-2 cursor-pointer group/price hover:bg-white/5 px-2 -ml-2 py-0.5 rounded-md transition-all">
-                                        <span className="text-[13px] font-black text-kinetic-orange">
-                                          R$ {product.currentPrice.toFixed(2)}
-                                        </span>
-                                        {product.hasPixDiscount && (
-                                          <span className="text-[8px] font-black bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-tighter">
-                                            Pix
+                                      <div className="flex flex-col items-start gap-1 cursor-pointer group/price hover:bg-white/5 px-2 -ml-2 py-1 rounded-xl transition-all">
+                                        <div className="flex items-center gap-2">
+                                          {product.factual.originalPrice && product.factual.originalPrice > product.factual.currentPriceFactual! && (
+                                            <span className="text-[10px] line-through text-white/20 font-bold decoration-kinetic-orange/40">
+                                              {product.factual.originalPriceFormatted}
+                                            </span>
+                                          )}
+                                          <span className="text-[14px] font-black text-kinetic-orange shadow-glow-orange/10">
+                                            {product.factual.priceFormatted || 'Preço Indisponível'}
                                           </span>
+                                          <Info className="w-3 h-3 text-white/20 group-hover/price:text-kinetic-orange transition-colors" />
+                                        </div>
+                                        
+                                        {product.factual.estimatedPixPrice && (
+                                          <div className="flex items-center gap-1.5 bg-kinetic-orange/5 px-1.5 py-0.5 rounded-md border border-kinetic-orange/10">
+                                            <span className="text-[9px] font-black text-kinetic-orange/80 uppercase">
+                                              {product.factual.estimatedPixPriceFormatted}
+                                            </span>
+                                            <span className="text-[8px] font-bold text-white/40 uppercase tracking-tighter">
+                                              Estimativa no Pix
+                                            </span>
+                                          </div>
                                         )}
-                                        {product.originalPrice > product.currentPrice && !product.hasPixDiscount && (
-                                          <span className="text-[9px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                            -{product.discountPercent}%
-                                          </span>
-                                        )}
-                                        <Info className="w-3 h-3 text-white/20 group-hover/price:text-kinetic-orange transition-colors" />
                                       </div>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-60 bg-deep-void border-none shadow-skeuo-elevated p-4 animate-in fade-in zoom-in duration-200">
-                                      <div className="space-y-3">
+                                    <PopoverContent className="w-64 bg-deep-void border-none shadow-skeuo-elevated p-5 animate-in fade-in zoom-in duration-200 rounded-2xl ring-1 ring-white/5">
+                                      <div className="space-y-4">
                                         <h5 className="text-[10px] font-black uppercase tracking-widest text-white/30 border-b border-white/5 pb-2">
-                                          Detalhamento de Preço
+                                          Auditoria Factual Pro
                                         </h5>
                                         
-                                        <div className="space-y-2 text-[11px] font-bold">
-                                            <div className="flex justify-between items-center text-white/40">
-                                              <span>PREÇO ORIGINAL</span>
-                                              <span className="line-through decoration-white/10">R$ {product.originalPrice.toFixed(2)}</span>
+                                        <div className="space-y-2.5 text-[11px] font-bold text-white/40">
+                                            <div className="flex justify-between items-center bg-white/5 p-2 rounded-lg">
+                                              <span className="text-[9px] uppercase">Fonte do Preço</span>
+                                              <Badge variant="outline" className="h-4 text-[8px] border-none bg-deep-void uppercase">{product.factual.currentPriceSource || 'N/A'}</Badge>
                                             </div>
-
-                                            {product.originalPrice > (product.promoPrice || product.currentPrice) && (
-                                              <div className="flex justify-between items-center text-emerald-400">
-                                                <span>DESCONTO PRODUTO</span>
-                                                <span>-R$ {(product.originalPrice - (product.promoPrice || product.currentPrice)).toFixed(2)}</span>
+                                            <div className="flex justify-between items-center bg-white/5 p-2 rounded-lg">
+                                              <span className="text-[9px] uppercase">Fonte Comissão</span>
+                                              <Badge variant="outline" className="h-4 text-[8px] border-none bg-deep-void uppercase">{product.factual.commissionSource || 'N/A'}</Badge>
+                                            </div>
+                                            
+                                            <div className="h-px bg-white/5 my-1" />
+                                            
+                                            <div className="flex justify-between items-baseline pt-1">
+                                              <span className="text-[9px] uppercase text-white/20 font-black">Preço API</span>
+                                              <span className="text-white/80">{product.factual.priceFormatted}</span>
+                                            </div>
+                                            
+                                            {product.factual.estimatedPixPrice && (
+                                              <div className="flex justify-between items-baseline">
+                                                <span className="text-[9px] uppercase text-kinetic-orange/40 font-black">Estimativa Pix</span>
+                                                <span className="text-kinetic-orange/80">{product.factual.estimatedPixPriceFormatted}</span>
                                               </div>
                                             )}
 
-                                            {product.hasPixDiscount && (
-                                              <div className="flex justify-between items-center text-sky-400">
-                                                <span>DESCONTO PIX</span>
-                                                <span>-R$ {((product.promoPrice || product.currentPrice) - product.currentPrice).toFixed(2)}</span>
-                                              </div>
-                                            )}
-
-                                            <div className="flex justify-between items-center text-kinetic-orange pt-2 border-t border-white/5 text-[12px]">
-                                              <span>VALOR FINAL</span>
-                                              <span className="font-black">R$ {product.currentPrice.toFixed(2)}</span>
+                                            <div className="flex justify-between items-baseline pt-2 border-t border-white/5 text-kinetic-orange text-[12px] font-black">
+                                              <span>COMISSÃO FINAL</span>
+                                              <span>{product.factual.commissionValueFormatted || 'R$ 0,00'}</span>
                                             </div>
                                         </div>
                                         
-                                        <p className="text-[9px] text-white/20 font-bold uppercase tracking-tight text-center pt-1">
-                                          {product.hasPixDiscount ? '💡 Economia máxima via Pix aplicada' : '💡 Preço promocional ativo'}
+                                        <p className="text-[8px] text-white/10 font-black uppercase tracking-tight text-center pt-2 italic">
+                                          Telemetry ID: {product.factual.itemId} • {new Date(product.factual.fetchedAt).toLocaleString('pt-BR')}
                                         </p>
                                       </div>
                                     </PopoverContent>
@@ -513,12 +496,12 @@ export default function EnvioRapidoPage() {
                                   Tracking Oficial Ativo
                                 </Badge>
 
-                                {product.commissionRate != null && product.commissionRate > 0 && (
+                                {product.factual.commissionValueFactual && product.factual.commissionValueFactual > 0 && (
                                   <Badge
                                     variant="outline"
                                     className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 h-5 text-[8px] font-black uppercase tracking-widest"
                                   >
-                                    💰 {(product.commissionRate * 100).toFixed(1)}% comissão
+                                    💰 {product.factual.commissionValueFormatted} comissão
                                   </Badge>
                                 )}
                               </div>
@@ -536,10 +519,15 @@ export default function EnvioRapidoPage() {
 
                           <div className="relative">
                             <Textarea
-                              value={generatedTexts[product.id] || ''}
+                              value={product.copy.messageText || ''}
                               disabled={editingId !== product.id}
                               onChange={e =>
-                                setGeneratedTexts(prev => ({ ...prev, [product.id]: e.target.value }))
+                                setProcessedProducts(prev => 
+                                  prev.map(p => p.id === product.id 
+                                    ? { ...p, copy: { ...p.copy, messageText: e.target.value } } 
+                                    : p
+                                  )
+                                )
                               }
                               className={cn(
                                 'min-h-[120px] text-[11px] font-mono leading-relaxed p-4 rounded-xl border-none transition-all resize-none',

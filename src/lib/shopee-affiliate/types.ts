@@ -25,6 +25,13 @@ export interface ProductNode {
   commissionRate?: string | number;
   productLink?: string;
   offerLink?: string;
+  // Campos validados adicionais
+  itemId?: string | number;
+  shopId?: string | number;
+  shopName?: string;
+  productCatIds?: number[];
+  sellerCommissionRate?: string | number;
+  shopeeCommissionRate?: string | number;
 }
 
 export interface ProductListResponse {

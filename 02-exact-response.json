@@ -1,0 +1,22 @@
+{
+  "data": {
+    "productOfferV2": {
+      "nodes": [
+        {
+          "itemId": 18699308396,
+          "shopId": 855489892,
+          "shopName": "MadeiraMadeira",
+          "price": "858.33",
+          "commissionRate": "0.03",
+          "productName": "Quarto Infantil Completo Guarda Roupa 4 Portas 2 Gavetas com Cômoda Liz Espresso Móveis Branco Fosco/Nature",
+          "imageUrl": "https://cf.shopee.com.br/file/sg-11134201-8259s-mg80vpgfbabx37",
+          "productCatIds": [
+            100632,
+            100679,
+            100982
+          ]
+        }
+      ]
+    }
+  }
+}

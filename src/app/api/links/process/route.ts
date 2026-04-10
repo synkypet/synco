@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const links = body.links || [];
+    const { links = [], tone = 'auto' } = body;
 
     if (!Array.isArray(links) || links.length === 0) {
       return NextResponse.json({ error: 'No links provided' }, { status: 400 });
@@ -58,17 +58,20 @@ export async function POST(request: Request) {
       return {
         ...conn,
         marketplace_name: conn.marketplaces?.name || '',
-        shopee_app_id: conn.shopee_app_id, // Garantir explicitamente
+        shopee_app_id: conn.shopee_app_id, 
         affiliate_id: conn.affiliate_id,
         affiliate_code: conn.affiliate_code,
         shopee_app_secret: appSecret
       };
     }));
 
-    // Server-side processing with safely fetched user context
-    const results = await processLinks(links, enrichedConnections);
+    // Server-side processing with tone support
+    const snapshots = await processLinks(links, enrichedConnections, tone);
 
-    return NextResponse.json({ results });
+    return NextResponse.json({ 
+      status: 'SUCCESS',
+      results: snapshots 
+    });
   } catch (error: any) {
     console.error('Error processing links via API:', error);
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
