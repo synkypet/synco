@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
+import { useChat } from '@ai-sdk/react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,7 @@ const SUGGESTIONS = [
 
 const INITIAL_MESSAGES = [
     {
+        id: '1',
         role: 'assistant',
         content: `Olá! Sou o Assistente IA do SYNCO 🤖✨
 
@@ -46,46 +48,18 @@ O que você precisa hoje?`,
 ];
 
 export default function AssistenteIAPage() {
-    const [messages, setMessages] = useState(INITIAL_MESSAGES);
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
+    // @ts-ignore - Bypass para falha local de tipagem nas re-exportações do Vercel AI SDK
+    const { messages, input, handleInputChange, handleSubmit, isLoading, append, setMessages } = useChat({
+        // @ts-ignore
+        api: '/api/ai/chat',
+        initialMessages: INITIAL_MESSAGES as any,
+    }) as any;
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
-
-    const simulateAIResponse = async (userText: string) => {
-        setLoading(true);
-        // Simulando delay de processamento da IA
-        await new Promise(r => setTimeout(r, 1500));
-        
-        let response = "";
-        const text = userText.toLowerCase();
-
-        if (text.includes("shopee") || text.includes("afiliado")) {
-            response = "Para configurar seu código de afiliado, vá em **Configurações > Programas de Afiliado**. Lá você pode inserir seu ID de Associado da Amazon, ID de Afiliado Shopee e outros. O SYNCO converterá automaticamente os links para você! 🚀";
-        } else if (text.includes("horário") || text.includes("horario")) {
-            response = "Segundo nossos dados, o melhor horário para conversões é entre **18:00 e 21:00**. Temos um pico de engajamento nesse período. Você pode agendar seus envios em **Envio Rápido** para esses horários! ⏰";
-        } else if (text.includes("melhorar") || text.includes("texto")) {
-            response = "Aqui está uma sugestão de texto melhorado:\n\n🔥 **OFERTA IMPERDÍVEL!**\n\nAcabamos de encontrar o menor preço histórico para este produto! 😱\n\n✅ Qualidade Premium\n✅ Entrega Grátis (Prime)\n✅ Menor preço do ano\n\n🛒 **Garanta o seu aqui:** [LINK]\n\n*Estoque limitado, aproveite agora!*";
-        } else {
-            response = "Entendi! Como estamos em modo de demonstração (Fase 3D), minhas respostas reais virão após a integração completa com os modelos de linguagem. Posso te ajudar com a estrutura visual ou lógica de alguma funcionalidade agora? 😊";
-        }
-
-        setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-        setLoading(false);
-    };
-
-    const sendMessage = async (text?: string) => {
-        const userText = text || input.trim();
-        if (!userText || loading) return;
-
-        setInput('');
-        setMessages(prev => [...prev, { role: 'user', content: userText }]);
-        
-        await simulateAIResponse(userText);
-    };
 
     const copyMessage = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -119,7 +93,7 @@ export default function AssistenteIAPage() {
                                         size="sm"
                                         className="w-full justify-start text-xs h-10 border-primary/10 hover:border-primary/30 hover:bg-primary/5 bg-card"
                                         onClick={() => {
-                                            setInput(action.prompt);
+                                            append({ role: 'user', content: action.prompt });
                                         }}
                                     >
                                         <Icon className="w-3.5 h-3.5 mr-2 text-primary" />
@@ -138,10 +112,10 @@ export default function AssistenteIAPage() {
                             <h3 className="font-bold text-sm">Dúvidas Comuns</h3>
                         </div>
                         <div className="space-y-1.5">
-                            {SUGGESTIONS.map((s, i) => (
+                            {SUGGESTIONS.map((s: string, i: number) => (
                                 <button
                                     key={i}
-                                    onClick={() => sendMessage(s)}
+                                    onClick={() => append({ role: 'user', content: s })}
                                     className="w-full text-left text-xs p-2.5 rounded-xl hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-all duration-200 border border-transparent hover:border-border"
                                 >
                                     {s}
@@ -174,7 +148,7 @@ export default function AssistenteIAPage() {
                                 variant="ghost" 
                                 size="sm" 
                                 className="h-8 w-8 p-0 rounded-full hover:bg-destructive/10 hover:text-destructive"
-                                onClick={() => setMessages(INITIAL_MESSAGES)}
+                                onClick={() => setMessages(INITIAL_MESSAGES as any)}
                             >
                                 <RefreshCw className="w-4 h-4" />
                             </Button>
@@ -182,7 +156,7 @@ export default function AssistenteIAPage() {
 
                         {/* Área de Mensagens */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-dots-pattern">
-                            {messages.map((msg, i) => (
+                            {messages.map((msg: any, i: number) => (
                                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                                     {msg.role === 'assistant' && (
                                         <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-1 mr-3">
@@ -220,7 +194,7 @@ export default function AssistenteIAPage() {
                                     )}
                                 </div>
                             ))}
-                            {loading && (
+                            {isLoading && (
                                 <div className="flex justify-start animate-in fade-in duration-300">
                                     <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-1 mr-3">
                                         <Bot className="w-4 h-4 text-primary" />
@@ -237,38 +211,38 @@ export default function AssistenteIAPage() {
 
                         {/* Input de Mensagem */}
                         <div className="p-6 border-t bg-card/50 backdrop-blur-sm">
-                            <div className="relative flex items-center">
+                            <form onSubmit={handleSubmit} className="relative flex items-center">
                                 <Input
                                     value={input}
-                                    onChange={e => setInput(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                                    onChange={handleInputChange}
                                     placeholder="Escreva sua dúvida ou peça para criar uma oferta..."
                                     className="pr-24 py-7 rounded-2xl border-primary/20 focus-visible:ring-primary/20 shadow-inner bg-background/50 text-base"
-                                    disabled={loading}
+                                    disabled={isLoading}
                                 />
                                 <div className="absolute right-2 flex items-center gap-1">
                                     <Button
+                                        type="button"
                                         size="icon"
                                         variant="ghost"
                                         className="h-10 w-10 text-muted-foreground hover:text-primary rounded-xl"
-                                        disabled={loading}
+                                        disabled={isLoading}
                                     >
                                         <MessageSquare className="w-5 h-5" />
                                     </Button>
                                     <Button
+                                        type="submit"
                                         size="icon"
                                         className="h-11 w-11 bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl"
-                                        onClick={() => sendMessage()}
-                                        disabled={loading || !input.trim()}
+                                        disabled={isLoading || !input.trim()}
                                     >
                                         <Send className="w-5 h-5" />
                                     </Button>
                                 </div>
-                            </div>
+                            </form>
                             <div className="flex items-center justify-center gap-4 mt-4">
                                 <p className="text-[10px] text-muted-foreground font-bold tracking-widest uppercase opacity-60">SYNCO Intelligence Engine</p>
                                 <div className="h-1 w-1 rounded-full bg-muted-foreground/30" />
-                                <p className="text-[10px] text-muted-foreground font-bold tracking-widest uppercase opacity-60">Fase 3D Preview</p>
+                                <p className="text-[10px] text-primary font-bold tracking-widest uppercase opacity-80">Online</p>
                             </div>
                         </div>
                     </Card>
