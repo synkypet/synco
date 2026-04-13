@@ -233,7 +233,7 @@ export default function AssistenteIAPage() {
                                         type="submit"
                                         size="icon"
                                         className="h-11 w-11 bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl"
-                                        disabled={isLoading || !input.trim()}
+                                        disabled={isLoading || !(input || '').trim()}
                                     >
                                         <Send className="w-5 h-5" />
                                     </Button>
