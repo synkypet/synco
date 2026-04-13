@@ -25,7 +25,7 @@ export function useGroupDetail(groupId: string, userId: string | undefined) {
   const meshQuery = useQuery({
     queryKey: ['group-mesh', groupId],
     queryFn: () => groupService.getMeshDetails(groupId),
-    enabled: !!groupId && !!groupQuery.data?.has_valid_key,
+    enabled: !!groupId && !!groupQuery.data,
     staleTime: 5 * 60 * 1000, // TTL de 5 minutos
   });
 

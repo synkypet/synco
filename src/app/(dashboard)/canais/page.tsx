@@ -88,7 +88,7 @@ export default function CanaisPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <KineticButton variant="flat" size="icon" onClick={() => refetch()} className="shrink-0 h-12 w-12 rounded-xl bg-white/5 border-none shadow-skeuo-flat">
+        <KineticButton onClick={() => refetch()} className="shrink-0 h-12 w-12 rounded-xl bg-white/5 border-none shadow-skeuo-flat">
           <RefreshCw size={18} className={isLoading ? "animate-spin text-kinetic-orange" : "text-white/40"} />
         </KineticButton>
       </div>
@@ -103,7 +103,7 @@ export default function CanaisPage() {
         <div className="p-12 text-center bg-red-500/5 rounded-[40px] shadow-skeuo-pressed">
           <p className="text-red-500 font-black uppercase tracking-widest text-sm italic">Erro crítico de carregamento</p>
           <p className="text-white/20 text-xs mt-1">Não foi possível sincronizar os canais com o Supabase.</p>
-          <KineticButton variant="flat" onClick={() => refetch()} className="text-kinetic-orange mt-4 uppercase font-bold text-[10px] tracking-widest bg-transparent shadow-none">Tentar novamente</KineticButton>
+          <KineticButton onClick={() => refetch()} className="text-kinetic-orange mt-4 uppercase font-bold text-[10px] tracking-widest bg-transparent shadow-none">Tentar novamente</KineticButton>
         </div>
       ) : (
         <ChannelList 

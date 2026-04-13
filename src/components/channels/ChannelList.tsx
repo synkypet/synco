@@ -228,7 +228,6 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
                  </div>
 
                   <KineticButton 
-                    variant="flat"
                     className="h-11 px-8 rounded-2xl bg-white/5 border-none text-white/40 hover:text-kinetic-orange font-headline text-[10px] font-black uppercase tracking-widest italic transition-all gap-3 shadow-skeuo-flat"
                     onClick={() => isWhatsApp ? setConnectChannel(channel) : setConnectTelegramChannel(channel)}
                   >

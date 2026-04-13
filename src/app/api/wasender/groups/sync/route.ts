@@ -171,6 +171,11 @@ export async function POST(request: Request) {
         status: 'active',
         members_count: g.size || g.participants?.length || g.members_count || 0,
         avatar_url: g.avatar || g.profile_picture || g.image || g.imgUrl || null,
+        description: g.description || g.desc || null,
+        owner: g.owner?.jid || g.owner || g.creator || g.subjectOwner || null,
+        remote_created_at: (g.creation || g.createdAt) ? new Date((g.creation || g.createdAt) * 1000).toISOString() : null,
+        permissions: g.permissions || {},
+        invite_link: g.invite_link || g.link || null,
         is_active: true,
         last_seen_at: new Date().toISOString(),
         updated_at: new Date().toISOString()

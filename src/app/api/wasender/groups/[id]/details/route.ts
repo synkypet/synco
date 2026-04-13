@@ -33,12 +33,11 @@ export async function GET(
     }
 
     const { config } = group.channels as any;
-    if (!config?.sessionId) {
+    const sessionId = config?.wasender_session_id || config?.sessionId;
+    if (!sessionId) {
        console.error(`${logPrefix} Sessão não configurada para o canal do grupo: ${groupId}`);
        return NextResponse.json({ error: 'Channel session not found' }, { status: 404 });
     }
-
-    const sessionId = config.sessionId;
     const remoteId = group.remote_id;
 
     // 1.1 Buscar Session API Key nas secrets
@@ -170,6 +169,37 @@ export async function GET(
       };
     }).filter((p: any) => p.remote_id);
 
+    // 5. Determinar session_role e capacidades operacionais
+    const sessionPhone = config.phoneNumber?.replace(/\D/g, '') || '';
+    
+    function matchJid(jid: string, phone: string) {
+      if (!jid || !phone) return false;
+      const n = jid.split('@')[0];
+      return n === phone || n === `55${phone}` || phone.endsWith(n) || n.endsWith(phone);
+    }
+
+    let session_role = 'member';
+    const sessionParticipant = participants.find((p: any) => matchJid(p.jid || p.id || p.remote_id || '', sessionPhone));
+    
+    if (sessionParticipant) {
+      const r = (sessionParticipant.role || '').toLowerCase();
+      if (r === 'superadmin' || sessionParticipant.isSuperAdmin) session_role = 'superadmin';
+      else if (sessionParticipant.admin || sessionParticipant.isAdmin || r === 'admin') session_role = 'admin';
+    }
+
+    if (groupOwnerFormatted && matchJid(groupOwnerFormatted, sessionPhone)) {
+      session_role = 'creator';
+    }
+
+    const isAdmin = ['admin', 'superadmin', 'creator'].includes(session_role);
+    const isAnnouncementGroup = !!metadata?.permissions?.announcement;
+    const capabilities = {
+      can_send_message: isAdmin || !isAnnouncementGroup,
+      can_manage_members: isAdmin,
+      can_edit_settings: isAdmin,
+      can_get_invite_link: isAdmin,
+    };
+
     return NextResponse.json({ 
       success: true, 
       metadata: {
@@ -180,7 +210,9 @@ export async function GET(
         permissions: metadata?.permissions || {},
         avatar_url: pictureData?.url || pictureData?.image || metadata?.avatar || metadata?.profile_picture || null,
       },
-      participants: formattedParticipants
+      participants: formattedParticipants,
+      session_role,
+      capabilities
     });
 
   } catch (error: any) {

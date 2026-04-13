@@ -74,7 +74,7 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
         <h2 className="text-xl font-bold text-white/90">Grupo não encontrado ou inacessível</h2>
         <p className="text-white/40 text-sm mt-1">Verifique as permissões ou se o grupo ainda existe no WhatsApp.</p>
         <Link href="/grupos" className="mt-8">
-          <KineticButton variant="flat" className="bg-white/5 shadow-skeuo-flat hover:bg-white/10 text-white/60">Voltar para listagem</KineticButton>
+          <KineticButton className="bg-white/5 shadow-skeuo-flat hover:bg-white/10 text-white/60">Voltar para listagem</KineticButton>
         </Link>
       </div>
     );
@@ -108,15 +108,27 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
               <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-500/60" /> {group.admin_count || 0} admins</span>
               <span className="w-1 h-1 rounded-full bg-white/20" />
               <span className="text-kinetic-orange/60 font-bold">{group.channel_name}</span>
+              
+              {meshData?.session_role && (
+                <>
+                  <span className="w-1 h-1 rounded-full bg-white/20" />
+                  <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest ${
+                    ['superadmin', 'creator'].includes(meshData.session_role) ? 'bg-kinetic-orange/20 text-kinetic-orange' :
+                    meshData.session_role === 'admin' ? 'bg-emerald-500/20 text-emerald-500' :
+                    'bg-white/10 text-white/50'
+                  }`}>
+                    Sessão: {meshData.session_role}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <KineticButton 
-            variant="flat"
             onClick={() => sync()} 
-            disabled={isSyncing || !(group as any).has_valid_key}
+            disabled={isSyncing}
             className="bg-white/5 border-none h-12 px-6 shadow-skeuo-flat hover:bg-white/10"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin text-kinetic-orange' : 'text-white/40'}`} />
@@ -297,6 +309,38 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
               ))}
             </div>
           </TactileCard>
+
+          {meshData?.capabilities && (
+          <TactileCard className="p-6 space-y-6 bg-kinetic-orange/[0.02]">
+            <h3 className="text-sm font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4" /> Capacidades da Sessão
+            </h3>
+            <div className="space-y-3">
+              {[
+                { label: 'Pode Enviar Mensagem', active: meshData.capabilities.can_send_message },
+                { label: 'Pode Gerenciar Membros', active: meshData.capabilities.can_manage_members },
+                { label: 'Pode Editar Configurações', active: meshData.capabilities.can_edit_settings },
+                { label: 'Pode Gerar Link Convite', active: meshData.capabilities.can_get_invite_link }
+              ].map((cap, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-deep-void/40 shadow-skeuo-pressed">
+                  <span className="text-xs font-medium text-white/60">{cap.label}</span>
+                  {cap.active ? (
+                    <div className="flex items-center gap-1.5 text-kinetic-orange">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-black uppercase">Sim</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-white/20">
+                      <Unlock className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-black uppercase">Não</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </TactileCard>
+          )}
+
         </div>
       </div>
     </div>

@@ -55,17 +55,28 @@ export class WasenderClient {
       read_incoming_messages: false,
     };
 
-    // Só incluir webhook se tiver URL pública
-    if (params.webhookUrl) {
-      body.webhook_url = params.webhookUrl;
-      body.webhook_enabled = true;
-      body.webhook_events = [
-        'messages.received',
-        'session.status',
-        'messages.update',
-        'qrcode.updated'
-      ];
-    }
+    // URL base do app local/remota
+    const rawUrl = params.webhookUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://synco-mocha.vercel.app';
+    const baseUrl = rawUrl.endsWith('/') ? rawUrl.slice(0, -1) : rawUrl;
+    const finalWebhookUrl = baseUrl.includes('/api/wasender/webhook') 
+      ? baseUrl 
+      : `${baseUrl}/api/wasender/webhook`;
+
+    // Regras obrigatórias do webhook
+    body.webhook_url = finalWebhookUrl;
+    body.webhook_enabled = true;
+    body.webhook_events = [
+      'session.status',
+      'qrcode.updated',
+      'groups.upsert',
+      'groups.update',
+      'group-participants.update',
+      'messages.received',
+      'messages.update'
+    ];
+    body.ignore_groups = false;
+    body.ignore_broadcasts = true;
+    body.ignore_channels = true;
 
     const res = await fetch(`${this.baseURL}/whatsapp-sessions`, {
       method: 'POST',
@@ -89,6 +100,43 @@ export class WasenderClient {
     if (!res.ok) {
         const err = await res.text();
         throw new Error(`Failed to connect session: ${err}`);
+    }
+    return res.json();
+  }
+
+  static async updateSessionWebhook(sessionId: string, apiKey?: string) {
+    const rawUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://synco-mocha.vercel.app';
+    const baseUrl = rawUrl.endsWith('/') ? rawUrl.slice(0, -1) : rawUrl;
+    const finalWebhookUrl = baseUrl.includes('/api/wasender/webhook') 
+      ? baseUrl 
+      : `${baseUrl}/api/wasender/webhook`;
+
+    const body = {
+      webhook_url: finalWebhookUrl,
+      webhook_enabled: true,
+      webhook_events: [
+        'session.status',
+        'qrcode.updated',
+        'groups.upsert',
+        'groups.update',
+        'group-participants.update',
+        'messages.received',
+        'messages.update'
+      ],
+      ignore_groups: false,
+      ignore_broadcasts: true,
+      ignore_channels: true
+    };
+    
+    const res = await fetch(`${this.baseURL}/whatsapp-sessions/${sessionId}`, {
+      method: 'PUT',
+      headers: this.getHeaders(apiKey),
+      body: JSON.stringify(body)
+    });
+    
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Failed to update session webhook: ${err}`);
     }
     return res.json();
   }

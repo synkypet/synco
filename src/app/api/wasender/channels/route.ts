@@ -146,12 +146,15 @@ export async function POST(request: Request) {
         }
     }
 
-    // 5. Trigger Inicial de Conexão (Opcional mas recomendado)
+    // 5. Garantir Configuração do Webhook & Trigger de Conexão
     try {
+      console.log(`${logPrefix} Forçando aplicação do webhook canônico...`);
+      await WasenderClient.updateSessionWebhook(wasenderNumericId, sessionApiKey);
+      
+      console.log(`${logPrefix} Disparando connect imediato da sessão ${wasenderNumericId}...`);
       await WasenderClient.connectSession(wasenderNumericId);
-      console.log(`${logPrefix} Sessão ${wasenderNumericId} inicializada (Connect triggered).`);
     } catch (e: any) {
-      console.warn(`${logPrefix} Alerta: Connect imediato falhou, mas a sessão foi criada.`);
+      console.warn(`${logPrefix} Alerta: Configurações extras falharam, mas a sessão foi criada.`, e.message);
     }
 
     console.log(`${logPrefix} ✅ Canal ${channel.id} criado com sucesso.`);

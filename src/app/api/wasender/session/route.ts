@@ -77,6 +77,13 @@ export async function POST(request: Request) {
             await supabase.from('channels').update({ config: configUpdate }).eq('id', channel_id);
             wasenderId = newNumericId;
 
+            // Garantir que o webhook canônico foi fixado
+            try {
+                await WasenderClient.updateSessionWebhook(newNumericId, sessionApiKey);
+            } catch (whErr: any) {
+                console.warn(`[SESSION-SHIM] Alerta ao aplicar webhook canônico no reparo:`, whErr.message);
+            }
+
             console.log(`[SESSION-SHIM] Canal ${channel_id} reparado com sucesso. ID Wasender: ${wasenderId}`);
         } catch (createErr: any) {
             console.error('[SESSION-SHIM] Falha ao criar sessão de reparo:', createErr.message);

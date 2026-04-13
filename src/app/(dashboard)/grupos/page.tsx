@@ -21,6 +21,7 @@ export default function GruposPage() {
   
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'admin' | 'owner' | 'operable' | 'readonly'>('all');
 
   const handleSyncAll = async () => {
     if (!channels || channels.length === 0) {
@@ -56,10 +57,34 @@ export default function GruposPage() {
     );
   };
 
-  const filteredGroups = groups?.filter(group => 
-    group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    group.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredGroups = groups?.filter(group => {
+    const matchesSearch = group.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          group.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (!matchesSearch) return false;
+
+    const channelPhone = group.channel_config?.phoneNumber?.replace(/\D/g, '') || '';
+    const groupOwner = group.owner?.split('@')[0] || '';
+    const isOwner = !!(channelPhone && groupOwner && (channelPhone === groupOwner || channelPhone.endsWith(groupOwner) || groupOwner.endsWith(channelPhone)));
+    
+    // Fallback de aproximação já que a malha não é toda persistida
+    const isAnnouncement = group.permissions?.announcement === true;
+
+    switch (activeFilter) {
+        case 'admin':
+            // Aproximação: Considerar admin se for owner ou no futuro salvar essa flag
+            return isOwner; // Temporário até persistirmos isAdmin bool localmente para a lista
+        case 'owner':
+            return isOwner;
+        case 'operable':
+            return isOwner || !isAnnouncement;
+        case 'readonly':
+            return !isOwner && isAnnouncement;
+        case 'all':
+        default:
+            return true;
+    }
+  });
 
   const isLoading = isLoadingGroups || isLoadingChannels;
 
@@ -92,13 +117,34 @@ export default function GruposPage() {
           />
         </div>
         <KineticButton 
-          variant="flat" 
-          size="icon" 
           onClick={() => refetchGroups()} 
           className="shrink-0 h-12 w-12 rounded-xl bg-white/5 border-none shadow-skeuo-flat"
         >
           <RefreshCw size={18} className={isLoading ? "animate-spin text-kinetic-orange" : "text-white/40"} />
         </KineticButton>
+      </div>
+      
+      {/* Filtros Operacionais */}
+      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 custom-scrollbar">
+        {[
+          { id: 'all', label: 'Todos os Grupos' },
+          { id: 'admin', label: 'Sou Admin (Aprox)' },
+          { id: 'owner', label: 'Sou Owner' },
+          { id: 'operable', label: 'Operáveis' },
+          { id: 'readonly', label: 'Somente Leitura' }
+        ].map((filter) => (
+          <button
+            key={filter.id}
+            onClick={() => setActiveFilter(filter.id as any)}
+            className={`whitespace-nowrap px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all duration-200 ${
+              activeFilter === filter.id 
+                ? 'bg-kinetic-orange text-white shadow-glow-orange' 
+                : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/80'
+            }`}
+          >
+            {filter.label}
+          </button>
+        ))}
       </div>
 
       {isLoading ? (
@@ -111,7 +157,7 @@ export default function GruposPage() {
         <div className="p-12 text-center bg-red-500/5 rounded-[40px] shadow-skeuo-pressed">
           <p className="text-red-500 font-black uppercase tracking-widest text-sm italic">Erro de Sincronização</p>
           <p className="text-white/20 text-xs mt-1">Não foi possível carregar os dados operacionais dos grupos.</p>
-          <KineticButton variant="flat" onClick={() => refetchGroups()} className="text-kinetic-orange mt-4 uppercase font-bold text-[10px] tracking-widest bg-transparent shadow-none">Tentar novamente</KineticButton>
+          <KineticButton onClick={() => refetchGroups()} className="text-kinetic-orange mt-4 uppercase font-bold text-[10px] tracking-widest bg-transparent shadow-none">Tentar novamente</KineticButton>
         </div>
       ) : (
         <GroupList 
