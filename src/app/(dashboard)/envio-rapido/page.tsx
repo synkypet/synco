@@ -127,7 +127,7 @@ export default function EnvioRapidoPage() {
         apiUrl = '/api/telegram/send-test';
         body = { channelId: testChannelId, chatId: testPhone, message: testMessage };
       } else {
-        apiUrl = '/api/wa/send-test';
+        apiUrl = '/api/wasender/test-send';
         body = { channelId: testChannelId, phone: testPhone, message: testMessage };
       }
 
