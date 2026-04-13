@@ -31,7 +31,9 @@ REGRAS:
       messages: coreMessages,
     });
 
-    if ((result as any).toDataStreamResponse) {
+    if ((result as any).toUIMessageStreamResponse) {
+      return (result as any).toUIMessageStreamResponse();
+    } else if ((result as any).toDataStreamResponse) {
       return (result as any).toDataStreamResponse();
     } else if ((result as any).toTextStreamResponse) {
       return (result as any).toTextStreamResponse();
