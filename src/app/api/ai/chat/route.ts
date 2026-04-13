@@ -12,11 +12,16 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
 
     // O Gemini é extremamente restrito com os campos extras injetados nativamente pelo useChat (como "id").
-    // Precisamos limpar o array para conter apenas os papéis fundamentais.
+    // Além disso, a API do Gemini rejeita o payload inteiro (400 Bad Request) se a primeira mensagem histórica não for do "user".
     const coreMessages = messages.map((m: any) => ({
       role: m.role,
       content: m.content,
     }));
+
+    // Remove a primeira mensagem se for um assistant, para evitar conflito com a engine do google.
+    while (coreMessages.length > 0 && coreMessages[0].role === 'assistant') {
+      coreMessages.shift();
+    }
 
     const result = await streamText({
       model: google('gemini-1.5-pro-latest'),
