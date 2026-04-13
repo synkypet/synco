@@ -95,14 +95,22 @@ export default function GruposPage() {
         description="Espelho operacional da malha de grupos sincronizada via WasenderAPI."
         icon={<Users size={24} />}
         actions={
-          <KineticButton 
-            onClick={handleSyncAll} 
-            disabled={isSyncingAll || isLoadingChannels}
-            className="gap-2 px-6 h-12"
-          >
-            <RefreshCw size={18} className={isSyncingAll ? "animate-spin" : ""} />
-            Sincronizar Canais
-          </KineticButton>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full shadow-skeuo-pressed border-none">
+              <Users size={14} className="text-kinetic-orange" />
+              <span className="text-[10px] font-black text-white/90 uppercase tracking-widest">
+                {groups?.length || 0} Total
+              </span>
+            </div>
+            <KineticButton 
+              onClick={handleSyncAll} 
+              disabled={isSyncingAll || isLoadingChannels}
+              className="gap-2 px-6 h-12"
+            >
+              <RefreshCw size={18} className={isSyncingAll ? "animate-spin" : ""} />
+              Sincronizar Canais
+            </KineticButton>
+          </div>
         }
       />
 
@@ -127,22 +135,49 @@ export default function GruposPage() {
       {/* Filtros Operacionais */}
       <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 custom-scrollbar">
         {[
-          { id: 'all', label: 'Todos os Grupos' },
-          { id: 'admin', label: 'Sou Admin (Aprox)' },
-          { id: 'owner', label: 'Sou Owner' },
-          { id: 'operable', label: 'Operáveis' },
-          { id: 'readonly', label: 'Somente Leitura' }
+          { id: 'all', label: 'Todos', count: groups?.length || 0 },
+          { id: 'admin', label: 'Sou Admin', count: groups?.filter(g => {
+              const channelPhone = g.channel_config?.phoneNumber?.replace(/\D/g, '') || '';
+              const groupOwner = g.owner?.split('@')[0] || '';
+              return !!(channelPhone && groupOwner && (channelPhone === groupOwner || channelPhone.endsWith(groupOwner) || groupOwner.endsWith(channelPhone)));
+            }).length || 0 
+          },
+          { id: 'owner', label: 'Sou Owner', count: groups?.filter(g => {
+              const channelPhone = g.channel_config?.phoneNumber?.replace(/\D/g, '') || '';
+              const groupOwner = g.owner?.split('@')[0] || '';
+              return !!(channelPhone && groupOwner && (channelPhone === groupOwner || channelPhone.endsWith(groupOwner) || groupOwner.endsWith(channelPhone)));
+            }).length || 0
+          },
+          { id: 'operable', label: 'Operáveis', count: groups?.filter(g => {
+              const channelPhone = g.channel_config?.phoneNumber?.replace(/\D/g, '') || '';
+              const groupOwner = g.owner?.split('@')[0] || '';
+              const isOwner = !!(channelPhone && groupOwner && (channelPhone === groupOwner || channelPhone.endsWith(groupOwner) || groupOwner.endsWith(channelPhone)));
+              return isOwner || !g.permissions?.announcement;
+            }).length || 0
+          },
+          { id: 'readonly', label: 'Leitura', count: groups?.filter(g => {
+              const channelPhone = g.channel_config?.phoneNumber?.replace(/\D/g, '') || '';
+              const groupOwner = g.owner?.split('@')[0] || '';
+              const isOwner = !!(channelPhone && groupOwner && (channelPhone === groupOwner || channelPhone.endsWith(groupOwner) || groupOwner.endsWith(channelPhone)));
+              return !isOwner && g.permissions?.announcement;
+            }).length || 0
+          }
         ].map((filter) => (
           <button
             key={filter.id}
             onClick={() => setActiveFilter(filter.id as any)}
-            className={`whitespace-nowrap px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all duration-200 ${
+            className={`flex items-center gap-2 whitespace-nowrap px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
               activeFilter === filter.id 
                 ? 'bg-kinetic-orange text-white shadow-glow-orange' 
-                : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/80'
+                : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/80 shadow-skeuo-flat'
             }`}
           >
             {filter.label}
+            <span className={`px-1.5 py-0.5 rounded-md text-[9px] ${
+              activeFilter === filter.id ? 'bg-white/20 text-white' : 'bg-white/5 text-white/30'
+            }`}>
+              {filter.count}
+            </span>
           </button>
         ))}
       </div>
