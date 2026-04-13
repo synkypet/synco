@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
 
     const result = await streamText({
-      model: google('models/gemini-1.5-pro-latest'),
+      model: google('gemini-1.5-pro-latest'),
       system: `Você é o SYNCO Intelligence, um assistente especializado em marketing de afiliados, copy persuasiva e geração de ofertas curtas e de alto impacto para WhatsApp. 
       
 REGRAS:
@@ -24,7 +24,13 @@ REGRAS:
       messages,
     });
 
-    return (result as any).toDataStreamResponse ? (result as any).toDataStreamResponse() : (result as any).toTextStreamResponse();
+    if ((result as any).toDataStreamResponse) {
+      return (result as any).toDataStreamResponse();
+    } else if ((result as any).toTextStreamResponse) {
+      return (result as any).toTextStreamResponse();
+    }
+    
+    throw new Error("No valid stream response method found on result");
   } catch (error: any) {
     console.error("Erro no Gemini:", error);
     return new Response(JSON.stringify({ error: error.message }), {

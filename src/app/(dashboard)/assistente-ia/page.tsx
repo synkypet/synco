@@ -53,6 +53,7 @@ export default function AssistenteIAPage() {
         // @ts-ignore
         api: '/api/ai/chat',
         initialMessages: INITIAL_MESSAGES as any,
+        onError: (e: any) => toast.error('Erro no assistente: ' + e.message),
     }) as any;
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
