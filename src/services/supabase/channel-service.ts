@@ -42,7 +42,7 @@ export const channelService = {
       .eq('user_id', userId);
     
     if (error) {
-      console.error('Error deleting channel:', error);
+      console.error('Error hard-deleting channel:', error);
       throw error;
     }
   }

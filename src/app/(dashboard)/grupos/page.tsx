@@ -91,14 +91,14 @@ export default function GruposPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <Button 
-          variant="ghost" 
+        <KineticButton 
+          variant="flat" 
           size="icon" 
           onClick={() => refetchGroups()} 
-          className="shrink-0 h-12 w-12 rounded-xl bg-white/5 border border-white/5"
+          className="shrink-0 h-12 w-12 rounded-xl bg-white/5 border-none shadow-skeuo-flat"
         >
           <RefreshCw size={18} className={isLoading ? "animate-spin text-kinetic-orange" : "text-white/40"} />
-        </Button>
+        </KineticButton>
       </div>
 
       {isLoading ? (
@@ -108,10 +108,10 @@ export default function GruposPage() {
           <Skeleton className="h-[80px] w-full rounded-2xl bg-white/5" />
         </div>
       ) : isErrorGroups ? (
-        <div className="p-12 text-center bg-red-500/5 rounded-[40px] border border-red-500/10">
+        <div className="p-12 text-center bg-red-500/5 rounded-[40px] shadow-skeuo-pressed">
           <p className="text-red-500 font-black uppercase tracking-widest text-sm italic">Erro de Sincronização</p>
           <p className="text-white/20 text-xs mt-1">Não foi possível carregar os dados operacionais dos grupos.</p>
-          <Button variant="link" onClick={() => refetchGroups()} className="text-kinetic-orange mt-4 uppercase font-bold text-[10px] tracking-widest">Tentar novamente</Button>
+          <KineticButton variant="flat" onClick={() => refetchGroups()} className="text-kinetic-orange mt-4 uppercase font-bold text-[10px] tracking-widest bg-transparent shadow-none">Tentar novamente</KineticButton>
         </div>
       ) : (
         <GroupList 

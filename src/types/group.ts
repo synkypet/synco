@@ -34,13 +34,8 @@ export interface Group {
     marketplace_id?: string | null;
     remote_id?: string | null;
     name: string;
-    description?: string;
     avatar_url?: string | null;
-    invite_link?: string | null;
     admin_count?: number;
-    permissions?: any;
-    owner?: string | null;
-    remote_created_at?: string;
     status: GroupStatus;
     is_source: boolean;
     is_destination: boolean;
@@ -48,6 +43,7 @@ export interface Group {
     members_count: number;
     tags: string[];
     is_active: boolean;
+    last_seen_at?: string;
     created_at?: string;
     updated_at?: string;
     // UI fields (joined)

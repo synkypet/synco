@@ -14,41 +14,36 @@ export function useGroups(userId: string | undefined) {
 export function useGroupDetail(groupId: string, userId: string | undefined) {
   const queryClient = useQueryClient();
 
-  // 1. Query para os metadados do grupo
+  // 1. Query para os metadados Mínimos do grupo (Cache Rápido)
   const groupQuery = useQuery({
     queryKey: ['group', groupId],
     queryFn: () => userId ? groupService.getById(groupId, userId) : Promise.resolve(null),
     enabled: !!userId && !!groupId,
   });
 
-  // 2. Query para os participantes
-  const participantsQuery = useQuery({
-    queryKey: ['group-participants', groupId],
-    queryFn: () => groupService.getParticipants(groupId),
-    enabled: !!groupId,
+  // 2. Query para a Malha Profunda (On-Demand Fetch Direto na Wasender)
+  const meshQuery = useQuery({
+    queryKey: ['group-mesh', groupId],
+    queryFn: () => groupService.getMeshDetails(groupId),
+    enabled: !!groupId && !!groupQuery.data?.has_valid_key,
+    staleTime: 5 * 60 * 1000, // TTL de 5 minutos
   });
 
-  // 3. Mutação para disparar o Deep Sync
-  const syncMutation = useMutation({
-    mutationFn: () => groupService.triggerDeepSync(groupId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['group', groupId] });
-      queryClient.invalidateQueries({ queryKey: ['group-participants', groupId] });
-      queryClient.invalidateQueries({ queryKey: ['groups', userId] });
-      toast.success('Malha do grupo sincronizada com sucesso!');
-    },
-    onError: (error: any) => {
-      console.error('Error syncing group mesh:', error);
-      toast.error(`Falha ao sincronizar malha: ${error.message}`);
-    }
-  });
+  // 3. Função para forçar o Refresh manual
+  const sync = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['group-mesh', groupId] });
+    await queryClient.invalidateQueries({ queryKey: ['group', groupId] });
+    await queryClient.invalidateQueries({ queryKey: ['groups', userId] });
+    toast.success('Malha do grupo reconciliada com sucesso!');
+  };
 
   return {
     group: groupQuery.data,
-    participants: participantsQuery.data || [],
-    isLoading: groupQuery.isLoading || participantsQuery.isLoading,
-    isSyncing: syncMutation.isPending,
-    sync: syncMutation.mutate,
-    isError: groupQuery.isError || participantsQuery.isError
+    meshData: meshQuery.data,
+    participants: meshQuery.data?.participants || [],
+    isLoading: groupQuery.isLoading || meshQuery.isLoading,
+    isSyncing: meshQuery.isFetching,
+    sync,
+    isError: groupQuery.isError || meshQuery.isError
   };
 }

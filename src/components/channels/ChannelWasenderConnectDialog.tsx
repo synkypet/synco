@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, RefreshCw, CheckCircle2, XCircle, Phone } from 'lucide-react';
+import { KineticButton } from '@/components/ui/KineticButton';
 import { Channel } from '@/types/group';
 import QRCode from 'react-qr-code';
 
@@ -182,12 +183,12 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
                     Este canal foi criado em uma versão antiga e não possui um vínculo operacional válido com a Wasender.
                  </p>
                </div>
-               <Button 
+               <KineticButton 
                  onClick={() => setStep('phone_input')}
-                 className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold shadow-glow-orange"
+                 className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-white font-bold shadow-glow-orange"
                >
                  Recriar sessão
-               </Button>
+               </KineticButton>
             </div>
           )}
 
@@ -205,16 +206,16 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
                  placeholder="+5511999999999"
                  value={phoneNumber}
                  onChange={(e) => setPhoneNumber(e.target.value)}
-                 className="bg-deep-void border-white/10 text-white text-center text-lg tracking-wider placeholder:text-white/20"
+                 className="bg-deep-void border-none shadow-skeuo-pressed text-white text-center text-lg h-14 tracking-wider placeholder:text-white/10"
                  onKeyDown={(e) => e.key === 'Enter' && handlePhoneSubmit()}
                />
-               <Button 
+               <KineticButton 
                  onClick={handlePhoneSubmit}
                  disabled={!phoneNumber.trim()}
-                 className="w-full bg-kinetic-orange hover:bg-kinetic-orange/90 text-white font-bold shadow-glow-orange"
+                 className="w-full h-14 bg-kinetic-orange hover:bg-kinetic-orange/90 text-white font-bold shadow-glow-orange"
                >
                  Conectar
-               </Button>
+               </KineticButton>
             </div>
           )}
 
@@ -227,7 +228,7 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
 
           {step === 'qrcode' && qrString && (
             <div className="flex flex-col items-center gap-6 animate-in fade-in zoom-in duration-500">
-               <div className="p-4 bg-white rounded-2xl shadow-skeuo-flat border border-white/10">
+               <div className="p-4 bg-white rounded-2xl shadow-skeuo-elevated border-none">
                  <QRCode value={qrString} size={220} className="rounded-lg mix-blend-multiply" />
                </div>
                <div className="text-center space-y-2">
@@ -256,9 +257,9 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
                 <XCircle className="w-12 h-12" />
                 <p className="font-bold">Ocorreu um erro</p>
                 <p className="text-sm text-red-500/70">{errorMsg}</p>
-                <Button variant="outline" className="mt-4 border-red-500/20 hover:bg-red-500/10 text-red-500" onClick={() => setStep('phone_input')}>
-                  <RefreshCw className="w-4 h-4 mr-2" /> Tentar Novamente
-                </Button>
+                 <KineticButton className="mt-4 bg-white/5 shadow-skeuo-flat hover:bg-white/10 text-red-500 font-bold" onClick={() => setStep('phone_input')}>
+                   <RefreshCw className="w-4 h-4 mr-2" /> Tentar Novamente
+                 </KineticButton>
              </div>
           )}
         </div>

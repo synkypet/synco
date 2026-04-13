@@ -58,7 +58,10 @@ export function useDeleteChannel() {
         method: 'DELETE'
       }).then(res => res.json().then(data => res.ok ? data : Promise.reject(data))),
     onSuccess: (_, variables) => {
+      console.log(`[useDeleteChannel] Invalidação disparada para user: ${variables.user_id}`);
       queryClient.invalidateQueries({ queryKey: ['channels', variables.user_id] });
+      // Fallback: invalidar prefixo também para garantir
+      queryClient.invalidateQueries({ queryKey: ['channels'] });
       toast.success('Canal e sessão excluídos com sucesso!');
     },
     onError: (error: any) => {

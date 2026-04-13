@@ -36,20 +36,60 @@ export async function GET(request: Request, { params }: { params: { id: string }
        }, { status: 422 });
     }
 
-    // Buscar API key nas secrets
-    const { data: secrets } = await supabase.from('channel_secrets').select('session_api_key').eq('channel_id', channel_id).single();
-    if (!secrets?.session_api_key) {
-        console.warn(`${logPrefix} Session API Key ausente para canal: ${channel_id}`);
+    // 1.4 BUSCAR SECRETOS ATUAIS
+    const { data: secrets } = await supabase
+      .from('channel_secrets')
+      .select('session_api_key')
+      .eq('channel_id', channel_id)
+      .single();
+
+    // 1.5 PONTE DE AUTENTICAÇÃO SE CHAVE AUSENTE
+    // Isso garante que usaremos o endpoint /status preferencialmente
+    let sessionApiKey = secrets?.session_api_key;
+    if (!sessionApiKey || sessionApiKey.length < 10) {
+      console.log(`${logPrefix} Chave operacional ausente. Iniciando ponte para ID ${wasenderId}...`);
+      try {
+        const sessionData = await WasenderClient.getSession(wasenderId);
+        const fetchedKey = sessionData.api_key || sessionData.data?.api_key || sessionData.session_api_key;
+        
+        if (fetchedKey) {
+          await supabase.from('channel_secrets').upsert({
+            channel_id, user_id: user.id, session_api_key: fetchedKey, updated_at: new Date().toISOString()
+          }, { onConflict: 'channel_id' });
+          sessionApiKey = fetchedKey;
+        }
+      } catch (e: any) {
+        console.warn(`${logPrefix} Falha na ponte de auth:`, e.message);
+      }
     }
 
     console.log(`${logPrefix} Refrescando status (Wasender ID: ${wasenderId})...`);
-    const statusData = await WasenderClient.getStatus(wasenderId, secrets?.session_api_key);
+    
+    let statusData;
+    try {
+      statusData = await WasenderClient.getStatus(wasenderId, sessionApiKey);
+    } catch (apiErr: any) {
+      console.error(`${logPrefix} Erro na consulta de status:`, apiErr.message);
+      
+      // Se a sessão não existe (404), tratamos como desincronização crítica
+      if (apiErr.message.includes('SESSION_NOT_FOUND')) {
+        return NextResponse.json({
+          success: false,
+          error: 'Sessão não encontrada na Wasender',
+          reason: 'SESSION_NOT_FOUND',
+          message: 'A instância vinculada a este canal foi removida ou não existe mais na Wasender API.'
+        }, { status: 404 });
+      }
+
+      throw apiErr; // Outros erros caem no catch geral
+    }
+
     const wasenderStatus = (statusData.status || statusData.data?.status || 'unknown').toLowerCase();
 
     // Mapeamento de Status
-    let localStatus = channel.config?.wasender_status || 'unknown';
+    let localStatus = 'unknown';
     if (wasenderStatus.includes('connected')) localStatus = 'connected';
-    else if (wasenderStatus.includes('qrcode') || wasenderStatus.includes('need_scan')) localStatus = 'need_scan';
+    else if (wasenderStatus.includes('qrcode') || wasenderStatus.includes('need_scan') || wasenderStatus.includes('waiting')) localStatus = 'need_scan';
     else if (wasenderStatus.includes('disconnected')) localStatus = 'disconnected';
     else if (wasenderStatus.includes('logged_out') || wasenderStatus.includes('expired')) localStatus = 'logged_out';
 
@@ -70,10 +110,12 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
   } catch (error: any) {
     console.error(`${logPrefix} Erro no status check:`, error.message);
+    
+    // Tratamento de erro 502/Integração
     return NextResponse.json({ 
       success: false, 
-      error: 'Falha ao consultar Wasender', 
-      details: error.message 
+      error: 'Erro de integração com WasenderAPI', 
+      message: error.message 
     }, { status: 502 });
   }
 }
@@ -130,18 +172,15 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     // 3. Exclusão de Segredos (Opcional mas boa prática)
     await supabase.from('channel_secrets').delete().eq('channel_id', channel_id);
 
-    // 4. Soft Delete local
+    // 4. Hard Delete local
     const { error: dbError } = await supabase
       .from('channels')
-      .update({ 
-          is_active: false, 
-          updated_at: new Date().toISOString()
-      })
+      .delete()
       .eq('id', channel_id);
 
     if (dbError) throw dbError;
 
-    console.log(`${logPrefix} ✅ Soft-delete local ${channel_id} concluído.`);
+    console.log(`${logPrefix} ✅ Hard-delete local ${channel_id} concluído.`);
     return NextResponse.json({ success: true, message: 'Canal desativado e sessão remota removida.' });
 
   } catch (error: any) {
@@ -173,8 +212,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const wasenderId = channel.config?.wasender_session_id;
 
     if (wasenderId) {
-       console.log(`${logPrefix} Executando logout remoto para ID ${wasenderId}...`);
-       await WasenderClient.logoutSession(wasenderId);
+       console.log(`${logPrefix} Executando disconnect remoto para ID ${wasenderId}...`);
+       await WasenderClient.disconnectSession(wasenderId);
     }
 
     const updatedConfig = { ...channel.config, wasender_status: 'disconnected' };

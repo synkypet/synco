@@ -98,16 +98,33 @@ export class WasenderClient {
       ? `${this.baseURL}/status` 
       : `${this.baseURL}/whatsapp-sessions/${sessionId}`;
 
+    const headers = this.getHeaders(apiKey);
+    
     const res = await fetch(url, {
       method: 'GET',
-      headers: this.getHeaders(apiKey)
+      headers
     });
     
     if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Failed to get status: ${err}`);
+        const contentType = res.headers.get('content-type');
+        const errText = await res.text();
+        
+        if (res.status === 404) {
+          throw new Error(`SESSION_NOT_FOUND: Sessão ${sessionId} não existe na Wasender API (404).`);
+        }
+
+        if (contentType?.includes('text/html')) {
+          throw new Error(`WASENDER_API_OFFLINE: A Wasender retornou uma página HTML inesperada (Pode estar fora do ar ou URL incorreta). Status: ${res.status}`);
+        }
+
+        throw new Error(`Failed to get status: ${errText || res.statusText}`);
     }
-    return res.json();
+
+    try {
+      return await res.json();
+    } catch (e) {
+      throw new Error(`INVALID_JSON_RESPONSE: A Wasender não retornou um JSON válido.`);
+    }
   }
 
   static async getQrCode(sessionId: string) {
@@ -149,30 +166,54 @@ export class WasenderClient {
     return res.json();
   }
 
-  static async logoutSession(sessionId: string) {
-    const res = await fetch(`${this.baseURL}/whatsapp-sessions/${sessionId}/logout`, {
+  static async disconnectSession(sessionId: string) {
+    console.log(`[WASENDER-CLIENT] Chamando disconnect para sessão ${sessionId}`);
+    const res = await fetch(`${this.baseURL}/whatsapp-sessions/${sessionId}/disconnect`, {
       method: 'POST',
       headers: this.getHeaders()
     });
     
     if (!res.ok) {
         const err = await res.text();
-        throw new Error(`Failed to disconnect/logout session: ${err}`);
+        throw new Error(`Failed to disconnect session: ${err}`);
     }
     return res.json();
   }
 
   static async deleteSession(sessionId: string) {
+    console.log(`[WASENDER-CLIENT] Chamando DELETE para sessão ${sessionId}`);
     const res = await fetch(`${this.baseURL}/whatsapp-sessions/${sessionId}`, {
       method: 'DELETE',
       headers: this.getHeaders()
     });
     
+    // Ler o corpo primeiro
+    const text = await res.text();
+    const contentType = res.headers.get('content-type') || '';
+    
+    console.log(`[WASENDER-CLIENT] Resposta DELETE: status=${res.status}, contentType=${contentType}, bodyLength=${text.length}`);
+
     if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Failed to delete session: ${err}`);
+        throw new Error(`Failed to delete session: ${text}`);
     }
-    return res.json();
+
+    // Se vier vazio (ex: 204 No Content ou 200 com body vazio)
+    if (!text || text.trim() === '') {
+        return { success: true };
+    }
+
+    // Tentar parsear JSON apenas se houver conteúdo e for JSON
+    if (contentType.includes('application/json')) {
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            console.warn('[WASENDER-CLIENT] Erro ao fazer parse do corpo JSON no DELETE, tratando como sucesso.');
+            return { success: true };
+        }
+    }
+
+    // Para outros content types que deram sucesso, apenas retornar sucesso
+    return { success: true };
   }
 
   static getGroupsUrl(sessionId: string) {
