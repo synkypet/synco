@@ -24,7 +24,7 @@ export function GroupList({ groups, isLoading }: GroupListProps) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="h-44 rounded-[32px] bg-anthracite-surface/50 border border-white/5 animate-pulse" />
+          <div key={i} className="h-44 rounded-[32px] bg-anthracite-surface/50 shadow-skeuo-flat animate-pulse" />
         ))}
       </div>
     );
@@ -32,7 +32,7 @@ export function GroupList({ groups, isLoading }: GroupListProps) {
 
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 bg-white/5 rounded-[40px] border-2 border-dashed border-white/5">
+      <div className="flex flex-col items-center justify-center p-12 bg-white/5 rounded-[40px] shadow-skeuo-pressed">
         <Users className="w-12 h-12 text-white/10 mb-4" />
         <p className="text-white/40 font-medium">Nenhum grupo encontrado na malha.</p>
       </div>
@@ -45,7 +45,7 @@ export function GroupList({ groups, isLoading }: GroupListProps) {
         <TactileCard key={group.id} className="p-5 group hover:scale-[1.01] transition-all duration-300">
           <div className="flex items-start gap-4 mb-4">
             {/* Avatar do Grupo */}
-            <Avatar className="w-14 h-14 rounded-2xl shadow-skeuo-flat border border-white/5 flex-shrink-0">
+            <Avatar className="w-14 h-14 rounded-2xl shadow-skeuo-flat border-none flex-shrink-0">
               <AvatarImage src={group.avatar_url || ''} alt={group.name} className="object-cover" />
               <AvatarFallback className="bg-deep-void text-white/30 text-lg font-black italic">
                 {group.name.substring(0, 2).toUpperCase()}
@@ -67,11 +67,11 @@ export function GroupList({ groups, isLoading }: GroupListProps) {
 
               {/* Badges de Malha */}
               <div className="flex items-center gap-2.5 mt-2.5">
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-deep-void/50 border border-white/5 shadow-skeuo-pressed">
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-deep-void/50 shadow-skeuo-pressed">
                   <Users className="w-3 h-3 text-kinetic-orange" />
                   <span className="text-[10px] font-black text-white/70">{group.members_count}</span>
                 </div>
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-deep-void/50 border border-white/5 shadow-skeuo-pressed">
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-deep-void/50 shadow-skeuo-pressed">
                   <ShieldCheck className="w-3 h-3 text-emerald-500" />
                   <span className="text-[10px] font-black text-white/70">{group.admin_count || 0}</span>
                 </div>
@@ -80,16 +80,16 @@ export function GroupList({ groups, isLoading }: GroupListProps) {
           </div>
 
           {/* Footer de Ações Táteis */}
-          <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+          <div className="mt-4 pt-4 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
                {group.is_source && (
-                 <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-kinetic-orange/10 border border-kinetic-orange/20">
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-kinetic-orange/10 shadow-skeuo-flat">
                    <div className="w-1 h-1 rounded-full bg-kinetic-orange animate-pulse" />
                    <span className="text-[9px] font-black uppercase tracking-wider text-kinetic-orange">Fonte</span>
                  </div>
                )}
                {group.is_destination && (
-                 <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 shadow-skeuo-flat">
                    <div className="w-1 h-1 rounded-full bg-emerald-500" />
                    <span className="text-[9px] font-black uppercase tracking-wider text-emerald-500">Destino</span>
                  </div>

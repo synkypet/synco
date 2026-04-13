@@ -137,25 +137,58 @@ export async function POST(request: Request) {
     const externalGroups = wasenderGroups.data || wasenderGroups.groups || (Array.isArray(wasenderGroups) ? wasenderGroups : []);
     const fetchedCount = Array.isArray(externalGroups) ? externalGroups.length : 0;
     
-    console.log(`${logPrefix} Grupos recebidos: ${fetchedCount}`);
+    console.log(`${logPrefix} Grupos recebidos da Wasender: ${fetchedCount}`);
+
+    // Map dos IDs existentes no banco para detectar novos
+    const { data: existingGroups } = await supabase
+      .from('groups')
+      .select('remote_id')
+      .eq('channel_id', channel_id);
+    
+    const existingRemoteIds = new Set((existingGroups || []).map(g => g.remote_id));
 
     // 3. Executar Upsert dos grupos
+    const detectedNewIds: string[] = [];
+    const ignoredGroups: any[] = [];
+    
     const upsertPayload = Array.isArray(externalGroups) ? externalGroups.map((g: any) => {
       const remoteId = g.id || g.jid || g.remote_id;
-      if (!remoteId) return null;
+      
+      if (!remoteId) {
+        ignoredGroups.push({ name: g.name || 'Sem nome', reason: 'MISSING_REMOTE_ID', raw: g });
+        return null;
+      }
+
+      if (!existingRemoteIds.has(remoteId)) {
+        detectedNewIds.push(remoteId);
+      }
 
       return {
         user_id: user.id,
         channel_id: channel_id,
         remote_id: remoteId, 
-        name: g.name || g.subject || g.pushName || 'Grupo sem nome',
+        name: (g.name || g.subject || g.pushName || 'Grupo sem nome').trim(),
         status: 'active',
         members_count: g.size || g.participants?.length || g.members_count || 0,
         avatar_url: g.avatar || g.profile_picture || g.image || g.imgUrl || null,
+        description: g.description || g.desc || null,
+        owner: g.owner?.jid || g.owner || g.creator || g.subjectOwner || null,
+        remote_created_at: (g.creation || g.createdAt) ? new Date((g.creation || g.createdAt) * 1000).toISOString() : null,
+        permissions: g.permissions || {},
+        invite_link: g.invite_link || g.link || null,
         is_active: true,
+        last_seen_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
     }).filter(Boolean) : [];
+
+    console.log(`${logPrefix} Total Mapeado para Upsert: ${upsertPayload.length}`);
+    if (ignoredGroups.length > 0) {
+      console.warn(`${logPrefix} Grupos Ignorados (${ignoredGroups.length}):`, ignoredGroups.map(i => i.name));
+    }
+    if (detectedNewIds.length > 0) {
+      console.log(`${logPrefix} Novos Remote IDs detectados (${detectedNewIds.length}):`, detectedNewIds);
+    }
 
     // Contagem antes para estatística
     const { count: oldCount } = await supabase
@@ -177,7 +210,21 @@ export async function POST(request: Request) {
     const previousCount = oldCount || 0;
     const newGroupsCount = Math.max(0, currentCount - previousCount);
 
-    // 4. Update lastSyncAt
+    console.log(`${logPrefix} Persistência concluída. Total no banco para este canal: ${currentCount} (Recém-criados/Novos detectados: ${newGroupsCount})`);
+
+    // 4. Reconciliação (Janela segura de 24h)
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { error: deleteError, count: deletedCount } = await supabase
+      .from('groups')
+      .delete({ count: 'exact' })
+      .eq('channel_id', channel_id)
+      .lt('last_seen_at', twentyFourHoursAgo);
+
+    if (!deleteError && deletedCount && deletedCount > 0) {
+      console.log(`${logPrefix} GC Executado: Removidos ${deletedCount} grupos ausentes há mais de 24h.`);
+    }
+
+    // 5. Update lastSyncAt
     await supabase.from('channels').update({ 
       config: { 
         ...channel!.config, 

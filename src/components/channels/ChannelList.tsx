@@ -124,11 +124,11 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
           const isBusy = disconnectChannel.isPending || refreshStatus.isPending || isSyncingId === channel.id;
 
           return (
-            <TactileCard key={channel.id} className="group overflow-hidden border-white/5 hover:border-kinetic-orange/20 transition-all duration-500 flex flex-col">
+            <TactileCard key={channel.id} className="group overflow-hidden hover:scale-[1.005] transition-all duration-500 flex flex-col shadow-skeuo-flat hover:shadow-skeuo-elevated">
               <div className="p-8 pb-0">
                 <div className="flex justify-between items-start mb-8">
                   <div className="flex items-center gap-4">
-                    <div className={`w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center shadow-skeuo-flat border border-white/10 ${isWhatsApp ? 'group-hover:border-emerald-500/20' : 'group-hover:border-blue-500/20'} transition-all`}>
+                    <div className={`w-14 h-14 rounded-2xl bg-deep-void/40 flex items-center justify-center shadow-skeuo-pressed ${isWhatsApp ? 'group-hover:shadow-glow-orange' : ''} transition-all`}>
                       {isWhatsApp ? (
                         <MessageCircle size={28} className={isConnected ? "text-emerald-500" : "text-white/20"} />
                       ) : (
@@ -140,7 +140,7 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
                         {channel.name}
                       </h3>
                       <div className="flex items-center gap-2 mt-2">
-                         <Badge variant="outline" className="text-[9px] font-black uppercase border-white/10 text-white/30 h-4 tracking-widest leading-none">
+                          <Badge variant="outline" className="text-[9px] font-black uppercase bg-white/5 border-none text-white/30 h-4 tracking-widest leading-none shadow-skeuo-flat">
                            {isWhatsApp ? 'Módulo WhatsApp' : 'Protocolo Telegram'}
                          </Badge>
                       </div>
@@ -152,11 +152,11 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
                     
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl bg-white/5 border border-white/5 opacity-40 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl bg-white/5 border-none shadow-skeuo-flat opacity-40 group-hover:opacity-100 transition-opacity">
                           <MoreVertical size={16} />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-[230px] bg-anthracite-surface border-white/5 shadow-skeuo-elevated">
+                      <DropdownMenuContent align="end" className="w-[230px] bg-anthracite-surface border-none shadow-skeuo-elevated p-2">
                         <DropdownMenuItem onClick={() => onEdit(channel)} className="gap-2 cursor-pointer text-[10px] font-bold uppercase tracking-widest text-white/60 focus:text-kinetic-orange">
                           <Edit size={14} /> CONFIGURAÇÕES GERAIS
                         </DropdownMenuItem>
@@ -198,7 +198,7 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
                   </div>
                 </div>
 
-                <div className="bg-white/5 rounded-3xl p-6 border border-white/[0.02] shadow-skeuo-pressed space-y-4">
+                <div className="bg-deep-void/30 rounded-3xl p-6 border-none shadow-skeuo-pressed space-y-4">
                    <div className="flex items-start gap-4">
                       <div className="w-1.5 h-1.5 rounded-full bg-white/10 mt-1.5 shrink-0" />
                       <p className="text-[11px] font-medium text-white/40 leading-relaxed italic uppercase tracking-tight">
@@ -227,14 +227,13 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
                     )}
                  </div>
 
-                 <Button 
-                   variant="ghost" 
-                   className="h-11 px-8 rounded-2xl bg-white/5 border border-white/10 text-white/40 hover:text-kinetic-orange hover:bg-kinetic-orange/10 hover:border-kinetic-orange/20 font-headline text-[10px] font-black uppercase tracking-widest italic transition-all gap-3"
-                   onClick={() => isWhatsApp ? setConnectChannel(channel) : setConnectTelegramChannel(channel)}
-                 >
-                    <QrCode size={14} /> 
-                    {isConnected ? 'RECONFIGURAR' : 'CONECTAR'}
-                 </Button>
+                  <KineticButton 
+                    className="h-11 px-8 rounded-2xl bg-white/5 border-none text-white/40 hover:text-kinetic-orange font-headline text-[10px] font-black uppercase tracking-widest italic transition-all gap-3 shadow-skeuo-flat"
+                    onClick={() => isWhatsApp ? setConnectChannel(channel) : setConnectTelegramChannel(channel)}
+                  >
+                     <QrCode size={14} /> 
+                     {isConnected ? 'RECONFIGURAR' : 'CONECTAR'}
+                  </KineticButton>
               </div>
             </TactileCard>
           );

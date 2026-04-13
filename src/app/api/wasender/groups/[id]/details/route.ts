@@ -33,12 +33,11 @@ export async function GET(
     }
 
     const { config } = group.channels as any;
-    if (!config?.sessionId) {
+    const sessionId = config?.wasender_session_id || config?.sessionId;
+    if (!sessionId) {
        console.error(`${logPrefix} Sessão não configurada para o canal do grupo: ${groupId}`);
        return NextResponse.json({ error: 'Channel session not found' }, { status: 404 });
     }
-
-    const sessionId = config.sessionId;
     const remoteId = group.remote_id;
 
     // 1.1 Buscar Session API Key nas secrets
@@ -116,141 +115,104 @@ export async function GET(
 
     console.log(`${logPrefix} Resumo Malha: Meta=${!!metadata}, Members=${participants.length}, Avatar=${!!pictureData}, Link=${!!inviteData}`);
 
-    // 3. Persistir Metadados no Grupo
+    // 3. Update minimal cache in groups table (last_seen_at, members_count, etc)
     if (metadata) {
       const groupOwner = metadata.owner?.jid || metadata.owner || metadata.creator || metadata.subjectOwner || null;
-      const createdAt = metadata.creation || metadata.createdAt;
       
       const updateData: any = {
-        description: metadata.description || metadata.desc || null,
-        invite_link: inviteData?.url || inviteData?.link || metadata.invite_link || metadata.link || null,
-        owner: groupOwner,
-        remote_created_at: createdAt ? new Date(createdAt * 1000).toISOString() : null,
-        permissions: metadata.permissions || {},
-        avatar_url: pictureData?.url || pictureData?.image || metadata.avatar || metadata.profile_picture || null,
+        members_count: participants.length,
+        admin_count: participants.filter((p: any) => p.admin || p.isAdmin || p.role?.toLowerCase() === 'admin' || p.role?.toLowerCase() === 'superadmin' || p.isSuperAdmin).length,
+        last_seen_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
       
-      console.log(`${logPrefix} Sincronizando metadados em public.groups...`);
-      const { error: groupUpdateErr } = await supabase.from('groups').update(updateData).eq('id', groupId);
-      if (groupUpdateErr) {
-        console.error(`${logPrefix} Erro ao atualizar metadados do grupo:`, JSON.stringify(groupUpdateErr, null, 2));
+      if (pictureData?.url || pictureData?.image || metadata.avatar || metadata.profile_picture) {
+         updateData.avatar_url = pictureData?.url || pictureData?.image || metadata.avatar || metadata.profile_picture;
       }
-
-      // 4. Persistir Contatos e Participantes
-      if (participants.length > 0) {
-        console.log(`${logPrefix} Sincronizando ${participants.length} integrantes da malha...`);
-        
-        // a. Preparar contatos para upsert (Prioridade JID > LID)
-        const contactsPayload = participants.map((p: any) => {
-          const pJid = p.jid; // Geralmente @s.whatsapp.net
-          const pLid = p.id || p.remote_id; // Geralmente @lid ou o ID bruto
-          const bestId = pJid || pLid;
-          
-          if (!bestId) return null;
-
-          return {
-            user_id: user.id,
-            channel_id: group.channel_id,
-            remote_id: bestId,
-            push_name: p.pushName || p.pushname || p.name || p.verifiedName || null,
-            name: p.name || p.pushName || p.pushname || null,
-            updated_at: new Date().toISOString()
-          };
-        }).filter(Boolean);
-
-        console.log(`${logPrefix} Executando upsert de ${contactsPayload.length} contatos em public.contacts...`);
-        const { data: syncedContacts, error: contactError } = await supabase
-          .from('contacts')
-          .upsert(contactsPayload, { onConflict: 'channel_id,remote_id' })
-          .select('id, remote_id');
-
-        if (contactError) {
-          console.error(`${logPrefix} Erro no upsert de contatos:`, JSON.stringify(contactError, null, 2));
-        } else if (syncedContacts) {
-          console.log(`${logPrefix} ${syncedContacts.length} contatos sincronizados no banco.`);
-          
-          // b. Mapear remote_id para o local contact_id
-          const contactMap = new Map(syncedContacts.map(c => [c.remote_id, c.id]));
-
-          // c. Preparar participantes com auditoria
-          const participantPayload = participants.map((p: any) => {
-            const pJid = p.jid;
-            const pLid = p.id || p.remote_id;
-            const bestId = pJid || pLid;
-            
-            // Tentar localizar no mapa por JID (preferencial) ou LID
-            const cId = contactMap.get(pJid) || contactMap.get(pLid);
-            if (!cId) {
-              console.warn(`${logPrefix} [AUDIT] Falha ao mapear ID para participante: JID=${pJid}, LID=${pLid}`);
-              return null;
-            }
-
-            // Normalização para comparação do criador
-            const normalize = (id: string) => id?.split('@')[0];
-            const isOwner = normalize(pJid) === normalize(groupOwner) || 
-                            normalize(pLid) === normalize(groupOwner) || 
-                            pJid === groupOwner || 
-                            pLid === groupOwner;
-
-            // Lógica de papéis: Creator > Superadmin > Admin > Member
-            const rawRole = (p.role || '').toLowerCase();
-            const isAdminFlag = p.admin || p.isAdmin || rawRole === 'admin' || rawRole === 'superadmin' || p.is_admin || p.isSuperAdmin;
-            
-            let role = 'member';
-            if (isOwner) {
-              role = 'creator';
-            } else if (rawRole === 'superadmin' || p.isSuperAdmin) {
-              role = 'superadmin';
-            } else if (isAdminFlag) {
-              role = 'admin';
-            }
-            
-            console.log(`${logPrefix} [AUDIT] Participante: ID=${bestId}, ROLE=${role}${isOwner ? ' (CREATOR)' : ''}`);
-            
-            return {
-              group_id: groupId,
-              contact_id: cId,
-              role: role,
-              last_synced_at: new Date().toISOString()
-            };
-          }).filter(Boolean);
-
-          // Upsert participantes em lote
-          if (participantPayload.length > 0) {
-            console.log(`${logPrefix} Executando upsert de ${participantPayload.length} em public.group_participants...`);
-            const { error: partErr } = await supabase
-              .from('group_participants')
-              .upsert(participantPayload, { onConflict: 'group_id,contact_id' });
-            
-            if (partErr) {
-              console.error(`${logPrefix} Erro no upsert de integrantes:`, JSON.stringify(partErr, null, 2));
-            } else {
-              // d. Recalcular contadores reais
-              const adminRoles = ['creator', 'admin', 'superadmin'];
-              const actualAdminCount = participantPayload.filter(p => p && adminRoles.includes(p.role)).length;
-              const actualMemberCount = participantPayload.length;
-
-              console.log(`${logPrefix} Sync finalizado: ${actualMemberCount} membros, ${actualAdminCount} admins.`);
-              await supabase.from('groups').update({
-                admin_count: actualAdminCount,
-                members_count: actualMemberCount,
-                updated_at: new Date().toISOString()
-              }).eq('id', groupId);
-            }
-          } else {
-            console.warn(`${logPrefix} Nenhum participante mapeado após processamento.`);
-          }
-        }
-      } else {
-        console.warn(`${logPrefix} Wasender retornou lista de participantes vazia.`);
+      if (metadata.subject || metadata.name) {
+         updateData.name = metadata.subject || metadata.name;
       }
+      
+      await supabase.from('groups').update(updateData).eq('id', groupId);
     }
+
+    // 4. Format participants for the frontend
+    const groupOwnerFormatted = metadata?.owner?.jid || metadata?.owner || metadata?.creator || metadata?.subjectOwner || null;
+    const formattedParticipants = participants.map((p: any) => {
+      const pJid = p.jid;
+      const pLid = p.id || p.remote_id;
+      const bestId = pJid || pLid;
+      
+      const normalize = (id: string) => id?.split('@')[0];
+      const isOwner = normalize(pJid) === normalize(groupOwnerFormatted) || 
+                      normalize(pLid) === normalize(groupOwnerFormatted) || 
+                      pJid === groupOwnerFormatted || 
+                      pLid === groupOwnerFormatted;
+
+      const rawRole = (p.role || '').toLowerCase();
+      const isAdminFlag = p.admin || p.isAdmin || rawRole === 'admin' || rawRole === 'superadmin' || p.is_admin || p.isSuperAdmin;
+      
+      let role = 'member';
+      if (isOwner) {
+        role = 'creator';
+      } else if (rawRole === 'superadmin' || p.isSuperAdmin) {
+        role = 'superadmin';
+      } else if (isAdminFlag) {
+        role = 'admin';
+      }
+      
+      return {
+        remote_id: bestId,
+        push_name: p.pushName || p.pushname || p.name || p.verifiedName || null,
+        avatar_url: p.avatar_url || null,
+        role: role
+      };
+    }).filter((p: any) => p.remote_id);
+
+    // 5. Determinar session_role e capacidades operacionais
+    const sessionPhone = config.phoneNumber?.replace(/\D/g, '') || '';
+    
+    function matchJid(jid: string, phone: string) {
+      if (!jid || !phone) return false;
+      const n = jid.split('@')[0];
+      return n === phone || n === `55${phone}` || phone.endsWith(n) || n.endsWith(phone);
+    }
+
+    let session_role = 'member';
+    const sessionParticipant = participants.find((p: any) => matchJid(p.jid || p.id || p.remote_id || '', sessionPhone));
+    
+    if (sessionParticipant) {
+      const r = (sessionParticipant.role || '').toLowerCase();
+      if (r === 'superadmin' || sessionParticipant.isSuperAdmin) session_role = 'superadmin';
+      else if (sessionParticipant.admin || sessionParticipant.isAdmin || r === 'admin') session_role = 'admin';
+    }
+
+    if (groupOwnerFormatted && matchJid(groupOwnerFormatted, sessionPhone)) {
+      session_role = 'creator';
+    }
+
+    const isAdmin = ['admin', 'superadmin', 'creator'].includes(session_role);
+    const isAnnouncementGroup = !!metadata?.permissions?.announcement;
+    const capabilities = {
+      can_send_message: isAdmin || !isAnnouncementGroup,
+      can_manage_members: isAdmin,
+      can_edit_settings: isAdmin,
+      can_get_invite_link: isAdmin,
+    };
 
     return NextResponse.json({ 
       success: true, 
-      metadata: metadata || {},
-      participants_count: participants.length
+      metadata: {
+        description: metadata?.description || metadata?.desc || null,
+        invite_link: inviteData?.url || inviteData?.link || metadata?.invite_link || metadata?.link || null,
+        owner: groupOwnerFormatted,
+        remote_created_at: (metadata?.creation || metadata?.createdAt) ? new Date((metadata.creation || metadata.createdAt) * 1000).toISOString() : null,
+        permissions: metadata?.permissions || {},
+        avatar_url: pictureData?.url || pictureData?.image || metadata?.avatar || metadata?.profile_picture || null,
+      },
+      participants: formattedParticipants,
+      session_role,
+      capabilities
     });
 
   } catch (error: any) {

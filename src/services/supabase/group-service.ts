@@ -65,34 +65,12 @@ export const groupService = {
   },
 
   /**
-   * Lista participantes de um grupo
+   * Busca os detalhes em tempo real na Malha (on-demand)
    */
-  async getParticipants(groupId: string) {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('group_participants')
-      .select(`
-        role,
-        last_synced_at,
-        contacts (*)
-      `)
-      .eq('group_id', groupId);
-    
-    if (error) throw error;
-    return data.map(p => ({
-       role: p.role,
-       last_synced_at: p.last_synced_at,
-       ...(p.contacts as any)
-    }));
-  },
-
-  /**
-   * Dispara a sincronização profunda via API
-   */
-  async triggerDeepSync(groupId: string) {
+  async getMeshDetails(groupId: string) {
     const res = await fetch(`/api/wasender/groups/${groupId}/details`);
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Falha na sincronização profunda');
+    if (!res.ok) throw new Error(data.error || 'Falha ao buscar a malha profunda do grupo');
     return data;
   }
 };
