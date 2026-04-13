@@ -19,6 +19,7 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
   const [phoneNumber, setPhoneNumber] = useState('');
   const [qrString, setQrString] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [wasReallyConnected, setWasReallyConnected] = useState(false);
 
   // Ao abrir, resetar tudo e buscar status fresco
   useEffect(() => {
@@ -44,16 +45,23 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
           const currentStatus = data.status || 'unknown';
           
           if (currentStatus === 'connected') {
+            // Status real da Wasender = connected. Mostramos estado "conectado"
+            // com opção de forçar reconexão caso o usuário queira reconfigurar
+            setWasReallyConnected(true);
             setStep('connected');
+            return;
+          }
+          
+          // Para qualquer outro status (disconnected, need_scan, unknown, logged_out)
+          // sempre passar pelo fluxo de conexão automático
+          setWasReallyConnected(false);
+          const savedPhone = channel.config?.phoneNumber || channel.config?.phone_number;
+          if (savedPhone) {
+            console.log(`[MODAL-CONNECT] Número salvo (${savedPhone}) + status '${currentStatus}'. Iniciando conexão automática...`);
+            setPhoneNumber(savedPhone);
+            handleInitiateConnection(savedPhone);
           } else {
-            const savedPhone = channel.config?.phoneNumber || channel.config?.phone_number;
-            if (savedPhone) {
-              console.log(`[MODAL-CONNECT] Número salvo encontrado (${savedPhone}). Iniciando auto-conexão...`);
-              setPhoneNumber(savedPhone);
-              handleInitiateConnection(savedPhone);
-            } else {
-              setStep('phone_input');
-            }
+            setStep('phone_input');
           }
         } catch (err: any) {
           setStep('error');
@@ -247,8 +255,25 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
                 <CheckCircle2 className="w-16 h-16" />
                 <p className="text-lg font-bold tracking-tight">WhatsApp Conectado!</p>
                 <p className="text-sm text-emerald-500/60 text-center px-4">
-                  A sessão de envios foi sincronizada com sucesso e está pronta para uso.
+                  A sessão de envios está sincronizada e pronta para uso.
                 </p>
+                {wasReallyConnected && (
+                  <KineticButton 
+                    className="mt-2 bg-white/5 shadow-skeuo-flat hover:bg-white/10 text-white/60 h-10 px-4 text-xs"
+                    onClick={() => {
+                      setWasReallyConnected(false);
+                      const savedPhone = channel?.config?.phoneNumber || channel?.config?.phone_number;
+                      if (savedPhone) {
+                        setPhoneNumber(savedPhone);
+                        handleInitiateConnection(savedPhone);
+                      } else {
+                        setStep('phone_input');
+                      }
+                    }}
+                  >
+                    <RefreshCw className="w-3 h-3 mr-2" /> Forçar Reconexão
+                  </KineticButton>
+                )}
              </div>
           )}
 

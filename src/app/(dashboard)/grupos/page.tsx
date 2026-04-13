@@ -22,6 +22,18 @@ export default function GruposPage() {
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'admin' | 'owner' | 'operable' | 'readonly'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    setCurrentPage(1);
+  };
+
+  const handleFilterChange = (filter: any) => {
+    setActiveFilter(filter);
+    setCurrentPage(1);
+  };
 
   const handleSyncAll = async () => {
     if (!channels || channels.length === 0) {
@@ -86,7 +98,19 @@ export default function GruposPage() {
     }
   });
 
+  const totalGroups = groups?.length || 0;
+  const operableGroups = groups?.filter(g => g.permissions?.announcement !== true).length || 0;
+  const readonlyGroups = groups?.filter(g => g.permissions?.announcement === true).length || 0;
+
   const isLoading = isLoadingGroups || isLoadingChannels;
+
+  // Lógica de Paginação Client-Side
+  const filteredLength = filteredGroups?.length || 0;
+  const totalPages = Math.ceil(filteredLength / ITEMS_PER_PAGE);
+  const paginatedGroups = filteredGroups?.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  ) || [];
 
   return (
     <LayoutContainer type="operational">
@@ -113,7 +137,7 @@ export default function GruposPage() {
             placeholder="Buscar por nome, ID ou descrição..." 
             className="pl-10 bg-white/5 border-none shadow-skeuo-pressed"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
         <KineticButton 
@@ -123,6 +147,27 @@ export default function GruposPage() {
           <RefreshCw size={18} className={isLoading ? "animate-spin text-kinetic-orange" : "text-white/40"} />
         </KineticButton>
       </div>
+
+      {/* Stats Bar */}
+      {!isLoading && totalGroups > 0 && (
+        <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 shadow-skeuo-pressed">
+            <Users className="w-3 h-3 text-white/30" />
+            <span className="text-[11px] font-black text-white/60">{totalGroups}</span>
+            <span className="text-[10px] text-white/20 uppercase tracking-wider font-bold">grupos</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/5 shadow-skeuo-pressed">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="text-[11px] font-black text-emerald-500/70">{operableGroups}</span>
+            <span className="text-[10px] text-white/20 uppercase tracking-wider font-bold">operáveis</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 shadow-skeuo-pressed">
+            <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+            <span className="text-[11px] font-black text-white/30">{readonlyGroups}</span>
+            <span className="text-[10px] text-white/20 uppercase tracking-wider font-bold">leitura</span>
+          </div>
+        </div>
+      )}
       
       {/* Filtros Operacionais */}
       <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 custom-scrollbar">
@@ -135,7 +180,7 @@ export default function GruposPage() {
         ].map((filter) => (
           <button
             key={filter.id}
-            onClick={() => setActiveFilter(filter.id as any)}
+            onClick={() => handleFilterChange(filter.id)}
             className={`whitespace-nowrap px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all duration-200 ${
               activeFilter === filter.id 
                 ? 'bg-kinetic-orange text-white shadow-glow-orange' 
@@ -160,10 +205,36 @@ export default function GruposPage() {
           <KineticButton onClick={() => refetchGroups()} className="text-kinetic-orange mt-4 uppercase font-bold text-[10px] tracking-widest bg-transparent shadow-none">Tentar novamente</KineticButton>
         </div>
       ) : (
-        <GroupList 
-          groups={filteredGroups || []} 
-          isLoading={isLoading}
-        />
+        <div className="space-y-6">
+          <GroupList 
+            groups={paginatedGroups} 
+            isLoading={isLoading}
+          />
+          
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between bg-white/5 p-4 rounded-2xl shadow-skeuo-flat">
+              <span className="text-[10px] text-white/40 uppercase tracking-widest font-black">
+                Página {currentPage} de {totalPages} ({filteredLength} grupos encontrados)
+              </span>
+              <div className="flex items-center gap-2">
+                <KineticButton 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="bg-deep-void shadow-skeuo-pressed h-8 px-4 border-none text-[10px] disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </KineticButton>
+                <KineticButton 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="bg-deep-void shadow-skeuo-pressed h-8 px-4 border-none text-[10px] disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Próximo
+                </KineticButton>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </LayoutContainer>
   );

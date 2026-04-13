@@ -139,13 +139,13 @@ export async function POST(request: Request) {
     
     console.log(`${logPrefix} Grupos recebidos da Wasender: ${fetchedCount}`);
 
-    // Map dos IDs existentes no banco para detectar novos
+    // Map dos IDs existentes no banco para detectar novos e preservar valores
     const { data: existingGroups } = await supabase
       .from('groups')
-      .select('remote_id')
+      .select('remote_id, members_count, admin_count')
       .eq('channel_id', channel_id);
     
-    const existingRemoteIds = new Set((existingGroups || []).map(g => g.remote_id));
+    const existingMap = new Map((existingGroups || []).map(g => [g.remote_id, g]));
 
     // 3. Executar Upsert dos grupos
     const detectedNewIds: string[] = [];
@@ -159,8 +159,24 @@ export async function POST(request: Request) {
         return null;
       }
 
-      if (!existingRemoteIds.has(remoteId)) {
+      if (!existingMap.has(remoteId)) {
         detectedNewIds.push(remoteId);
+      }
+
+      const existingData = existingMap.get(remoteId);
+      const incomingMembers = g.size || g.participants?.length || g.members_count || 0;
+      const incomingAdmins = g.admin_count || 0;
+
+      // Estratégia Segura: se veio 0 da malha superficial, preserva valor antigo (se houver)
+      const finalMembersCount = incomingMembers > 0 ? incomingMembers : (existingData?.members_count || 0);
+      const finalAdminCount = incomingAdmins > 0 ? incomingAdmins : (existingData?.admin_count || 0);
+
+      // Log para auditoria de persistência
+      if (incomingMembers === 0 && (existingData?.members_count || 0) > 0) {
+         console.warn(`${logPrefix} [PRESERVED] ${g.name || remoteId}: Members returned 0. Preservando = ${finalMembersCount}`);
+      }
+      if (incomingAdmins === 0 && (existingData?.admin_count || 0) > 0) {
+         console.warn(`${logPrefix} [PRESERVED] ${g.name || remoteId}: Admins returned 0. Preservando = ${finalAdminCount}`);
       }
 
       return {
@@ -169,7 +185,8 @@ export async function POST(request: Request) {
         remote_id: remoteId, 
         name: (g.name || g.subject || g.pushName || 'Grupo sem nome').trim(),
         status: 'active',
-        members_count: g.size || g.participants?.length || g.members_count || 0,
+        members_count: finalMembersCount,
+        admin_count: finalAdminCount,
         avatar_url: g.avatar || g.profile_picture || g.image || g.imgUrl || null,
         description: g.description || g.desc || null,
         owner: g.owner?.jid || g.owner || g.creator || g.subjectOwner || null,

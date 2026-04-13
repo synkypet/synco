@@ -11,7 +11,7 @@ import {
 import { Group } from '@/types/group';
 import { KineticButton } from '@/components/ui/KineticButton';
 import { TactileCard } from '@/components/ui/TactileCard';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
 
 interface GroupListProps {
@@ -20,6 +20,7 @@ interface GroupListProps {
 }
 
 export function GroupList({ groups, isLoading }: GroupListProps) {
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -41,13 +42,13 @@ export function GroupList({ groups, isLoading }: GroupListProps) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {groups.map((group) => (
+      {groups.map((group) => {
+        return (
         <TactileCard key={group.id} className="p-5 group hover:scale-[1.01] transition-all duration-300">
           <div className="flex items-start gap-4 mb-4">
             {/* Avatar do Grupo */}
-            <Avatar className="w-14 h-14 rounded-2xl shadow-skeuo-flat border-none flex-shrink-0">
-              <AvatarImage src={group.avatar_url || ''} alt={group.name} className="object-cover" />
-              <AvatarFallback className="bg-deep-void text-white/30 text-lg font-black italic">
+            <Avatar className="w-14 h-14 rounded-2xl shadow-skeuo-flat border-none flex-shrink-0 bg-deep-void">
+              <AvatarFallback className="bg-transparent text-white/30 text-lg font-black italic">
                 {group.name.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
@@ -65,16 +66,17 @@ export function GroupList({ groups, isLoading }: GroupListProps) {
                 {group.channel_name || 'Desconhecido'}
               </p>
 
-              {/* Badges de Malha */}
+              {/* Badges de Malha Leves */}
               <div className="flex items-center gap-2.5 mt-2.5">
                 <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-deep-void/50 shadow-skeuo-pressed">
-                  <Users className="w-3 h-3 text-kinetic-orange" />
-                  <span className="text-[10px] font-black text-white/70">{group.members_count}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-kinetic-orange animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Malha Ativa</span>
                 </div>
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-deep-void/50 shadow-skeuo-pressed">
-                  <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                  <span className="text-[10px] font-black text-white/70">{group.admin_count || 0}</span>
-                </div>
+                {group.permissions?.announcement && (
+                   <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-deep-void/50 shadow-skeuo-pressed">
+                     <span className="text-[10px] font-black uppercase tracking-widest text-white/30">Somente Leitura</span>
+                   </div>
+                )}
               </div>
             </div>
           </div>
@@ -104,7 +106,8 @@ export function GroupList({ groups, isLoading }: GroupListProps) {
             </Link>
           </div>
         </TactileCard>
-      ))}
+        );
+      })}
     </div>
   );
 }

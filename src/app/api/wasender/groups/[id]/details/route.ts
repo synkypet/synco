@@ -122,10 +122,17 @@ export async function GET(
       const updateData: any = {
         members_count: participants.length,
         admin_count: participants.filter((p: any) => p.admin || p.isAdmin || p.role?.toLowerCase() === 'admin' || p.role?.toLowerCase() === 'superadmin' || p.isSuperAdmin).length,
+        description: metadata.description || metadata.desc || null,
+        owner: groupOwner,
+        remote_created_at: (metadata.creation || metadata.createdAt) ? new Date((metadata.creation || metadata.createdAt) * 1000).toISOString() : null,
+        permissions: metadata.permissions || {},
         last_seen_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
       
+      if (inviteData?.url || inviteData?.link || metadata.invite_link || metadata.link) {
+         updateData.invite_link = inviteData?.url || inviteData?.link || metadata.invite_link || metadata.link;
+      }
       if (pictureData?.url || pictureData?.image || metadata.avatar || metadata.profile_picture) {
          updateData.avatar_url = pictureData?.url || pictureData?.image || metadata.avatar || metadata.profile_picture;
       }

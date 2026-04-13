@@ -5,6 +5,8 @@ import { processLinks, ProductSnapshot } from '@/lib/linkProcessor';
 import { campaignService } from '@/services/supabase/campaign-service';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fillTemplate } from './template-engine';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { Marketplace, UserMarketplaceConnection } from '@/types/marketplace';
 
 export interface InboundPayload {
   userId: string;
@@ -93,14 +95,15 @@ export async function processInboundAutomation(payload: InboundPayload) {
 
   if (isFromMe) return { skipped: 'self_sent' };
 
-  const source = await automationService.getSourceByExternalId(channelId, externalGroupId);
+  const supabase: SupabaseClient = createAdminClient();
+  const source = await automationService.getSourceByExternalId(userId, channelId, externalGroupId, supabase);
   if (!source) return { skipped: 'not_a_source' };
 
   const links = extractShopeeLinks(body);
   if (links.length === 0) return { skipped: 'no_shopee_links' };
 
-  const connections = await marketplaceService.getUserConnections(userId);
-  const routes = await automationService.getRoutesBySourceId(source.id);
+  const connections: UserMarketplaceConnection[] = await marketplaceService.getUserConnections(userId, supabase);
+  const routes = await automationService.getRoutesBySourceId(source.id, supabase);
   
   if (routes.length === 0) {
     await automationService.logEvent({
@@ -109,12 +112,13 @@ export async function processInboundAutomation(payload: InboundPayload) {
       status: 'filtered',
       event_type: 'no_routes',
       details: { channelId, externalGroupId }
-    });
+    }, supabase);
     return { skipped: 'no_routes_configured' };
   }
 
   const results = [];
-  const adminEntry = createAdminClient();
+  // adminEntry será substituído pelo supabase instanciado no topo
+  const adminEntry = supabase;
 
   // Buscar IDs remotos dos destinos para o Anti-loop
   const { data: routeDestinations } = await adminEntry
@@ -126,7 +130,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
     const normalized = normalizeShopeeUrl(rawUrl);
     
     // Camada 1: Dedupe de Ingestão
-    const isDuplicate = await automationService.checkAndMarkDedupe(userId, normalized, externalGroupId);
+    const isDuplicate = await automationService.checkAndMarkDedupe(userId, normalized, externalGroupId, supabase);
     if (isDuplicate) {
       await automationService.logEvent({
         source_id: source.id,
@@ -134,7 +138,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
         status: 'filtered',
         event_type: 'ingest_dedupe',
         details: { url: normalized }
-      });
+      }, supabase);
       continue;
     }
 
@@ -149,7 +153,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
           status: 'error',
           event_type: 'fetch_failed',
           details: { url: normalized }
-        });
+        }, supabase);
         continue;
       }
 
@@ -164,7 +168,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
             status: 'filtered',
             event_type: 'anti_loop',
             details: { url: normalized, targetId: route.target_id }
-          });
+          }, supabase);
           continue;
         }
 
@@ -176,12 +180,12 @@ export async function processInboundAutomation(payload: InboundPayload) {
             status: 'filtered',
             event_type: 'rule_rejected',
             details: { url: normalized, targetId: route.target_id, filters: route.filters }
-          });
+          }, supabase);
           continue;
         }
 
         // 3. Camada 2: Dedupe de Destino
-        const isDestDuplicate = await automationService.checkAndMarkDestinationDedupe(userId, normalized, route.target_id);
+        const isDestDuplicate = await automationService.checkAndMarkDestinationDedupe(userId, normalized, route.target_id, supabase);
         if (isDestDuplicate) {
           await automationService.logEvent({
             source_id: source.id,
@@ -189,7 +193,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
             status: 'filtered',
             event_type: 'dest_dedupe',
             details: { url: normalized, targetId: route.target_id }
-          });
+          }, supabase);
           continue;
         }
 
@@ -211,7 +215,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
             type: route.target_type,
             id: route.target_id
           }]
-        });
+        }, supabase);
 
         await automationService.logEvent({
           source_id: source.id,
@@ -219,7 +223,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
           status: 'processed',
           event_type: 'job_created',
           details: { url: normalized, targetId: route.target_id, campaignId: campaign.id }
-        });
+        }, supabase);
 
         results.push({ url: normalized, routeId: route.id, campaignId: campaign.id });
       }
@@ -232,7 +236,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
         status: 'error',
         event_type: 'exception',
         details: { url: normalized, error: err.message }
-      });
+      }, supabase);
     }
   }
 
