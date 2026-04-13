@@ -48,8 +48,10 @@ O que você precisa hoje?`,
 ];
 
 export default function AssistenteIAPage() {
+    const [inputValue, setInputValue] = React.useState('');
+
     // @ts-ignore - Bypass para falha local de tipagem nas re-exportações do Vercel AI SDK
-    const { messages, input, handleInputChange, handleSubmit, isLoading, append, setMessages } = useChat({
+    const { messages, isLoading, append, setMessages } = useChat({
         // @ts-ignore
         api: '/api/ai/chat',
         initialMessages: INITIAL_MESSAGES as any,
@@ -61,6 +63,17 @@ export default function AssistenteIAPage() {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    const handleFormSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const text = inputValue.trim();
+        if (!text || isLoading) return;
+
+        setInputValue(''); // Limpa o campo
+        append({ role: 'user', content: text }).catch((err: any) => {
+             toast.error('Erro de conexão com AI: ' + err.message);
+        });
+    };
 
     const copyMessage = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -212,10 +225,10 @@ export default function AssistenteIAPage() {
 
                         {/* Input de Mensagem */}
                         <div className="p-6 border-t bg-card/50 backdrop-blur-sm">
-                            <form onSubmit={handleSubmit} className="relative flex items-center">
+                            <form onSubmit={handleFormSubmit} className="relative flex items-center">
                                 <Input
-                                    value={input}
-                                    onChange={handleInputChange}
+                                    value={inputValue}
+                                    onChange={(e) => setInputValue(e.target.value)}
                                     placeholder="Escreva sua dúvida ou peça para criar uma oferta..."
                                     className="pr-24 py-7 rounded-2xl border-primary/20 focus-visible:ring-primary/20 shadow-inner bg-background/50 text-base"
                                     disabled={isLoading}
@@ -234,7 +247,7 @@ export default function AssistenteIAPage() {
                                         type="submit"
                                         size="icon"
                                         className="h-11 w-11 bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl"
-                                        disabled={isLoading || !(input || '').trim()}
+                                        disabled={isLoading || !inputValue.trim()}
                                     >
                                         <Send className="w-5 h-5" />
                                     </Button>
