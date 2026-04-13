@@ -11,6 +11,13 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
 
+    // O Gemini é extremamente restrito com os campos extras injetados nativamente pelo useChat (como "id").
+    // Precisamos limpar o array para conter apenas os papéis fundamentais.
+    const coreMessages = messages.map((m: any) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
     const result = await streamText({
       model: google('gemini-1.5-pro-latest'),
       system: `Você é o SYNCO Intelligence, um assistente especializado em marketing de afiliados, copy persuasiva e geração de ofertas curtas e de alto impacto para WhatsApp. 
@@ -21,7 +28,7 @@ REGRAS:
 3. Use gatilhos mentais de urgência, escassez e exclusividade.
 4. Utilize Emojis estrategicamente.
 5. Quando pedirem um texto, já devolva a cópia pronta, não fique "preparando" o usuário.`,
-      messages,
+      messages: coreMessages,
     });
 
     if ((result as any).toDataStreamResponse) {
