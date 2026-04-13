@@ -1,8 +1,9 @@
-// src/services/supabase/campaign-service.ts
 import { createClient } from '@/lib/supabase/client';
 import { Campaign, CreateCampaignDTO } from '@/types/campaign';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export const campaignService = {
+
   async list(userId: string): Promise<Campaign[]> {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -23,8 +24,8 @@ export const campaignService = {
     return data as Campaign[];
   },
 
-  async create(userId: string, dto: CreateCampaignDTO): Promise<Campaign> {
-    const supabase = createClient();
+  async create(userId: string, dto: CreateCampaignDTO, client?: SupabaseClient): Promise<Campaign> {
+    const supabase = client || createClient();
 
     // 1. Insert campaign
     const { data: campaign, error: campaignError } = await supabase

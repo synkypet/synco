@@ -19,7 +19,7 @@ import { useGroupDetail } from '@/hooks/use-groups';
 import { useAuth } from '@/contexts/AuthContext';
 import { KineticButton } from '@/components/ui/KineticButton';
 import { TactileCard } from '@/components/ui/TactileCard';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
@@ -83,15 +83,17 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
   const admins = participants.filter((p: any) => p.role === 'admin' || p.role === 'creator' || p.role === 'superadmin');
   const members = participants.filter((p: any) => !['admin', 'creator', 'superadmin'].includes(p.role));
 
+  const totalMembers = participants.length > 0 ? participants.length : (group.members_count || 0);
+  const totalAdmins = admins.length > 0 ? admins.length : (group.admin_count || 0);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {/* Header — Malha Operacional */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="flex items-center gap-6">
           <div className="relative group">
-            <Avatar className="w-24 h-24 rounded-[32px] shadow-skeuo-elevated border-none ring-4 ring-deep-void">
-              <AvatarImage src={metadata.avatar_url || group.avatar_url || ''} className="object-cover" />
-              <AvatarFallback className="bg-anthracite-surface text-3xl font-black text-white/20">
+            <Avatar className="w-24 h-24 rounded-[32px] shadow-skeuo-elevated border-none ring-4 ring-deep-void bg-anthracite-surface">
+              <AvatarFallback className="bg-transparent text-3xl font-black text-white/20">
                 {group.name.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
@@ -103,9 +105,9 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
           <div className="space-y-1">
             <h1 className="text-3xl font-black tracking-tighter text-white drop-shadow-sm">{group.name}</h1>
             <div className="flex items-center gap-3 text-white/40 text-sm font-medium">
-              <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> {group.members_count || 0} membros</span>
+              <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> {totalMembers} membros</span>
               <span className="w-1 h-1 rounded-full bg-white/20" />
-              <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-500/60" /> {group.admin_count || 0} admins</span>
+              <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-500/60" /> {totalAdmins} admins</span>
               <span className="w-1 h-1 rounded-full bg-white/20" />
               <span className="text-kinetic-orange/60 font-bold">{group.channel_name}</span>
               
@@ -198,18 +200,46 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
                   Nenhum detalhe de participante carregado. Clique em "Atualizar Malha".
                 </div>
               ) : (
-                participants.map((p: any) => (
+                participants.map((p: any) => {
+                  const jid = p.remote_id || p.id || p.jid || '';
+                  const rawNumber = jid.split('@')[0];
+                  
+                  let formattedNumber = rawNumber;
+                  if (rawNumber.startsWith('55') && rawNumber.length >= 12) {
+                    const ddd = rawNumber.substring(2, 4);
+                    // Handle 9-digit numbers correctly
+                    if (rawNumber.length === 13) {
+                       const firstPart = rawNumber.substring(4, 9);
+                       const secondPart = rawNumber.substring(9);
+                       formattedNumber = `+55 ${ddd} ${firstPart}-${secondPart}`;
+                    } else if (rawNumber.length === 12) {
+                       const firstPart = rawNumber.substring(4, 8);
+                       const secondPart = rawNumber.substring(8);
+                       formattedNumber = `+55 ${ddd} ${firstPart}-${secondPart}`;
+                    } else {
+                       formattedNumber = `+${rawNumber}`;
+                    }
+                  } else if (rawNumber) {
+                    formattedNumber = `+${rawNumber}`;
+                  }
+
+                  const name = p.push_name || p.name || p.notify || p.pushName;
+                  const displayTitle = name || formattedNumber || jid;
+                  const displaySubtitle = name ? formattedNumber : jid;
+
+                  return (
                   <div key={p.remote_id} className="p-4 flex items-center justify-between group hover:bg-white/[0.01] transition-colors">
                     <div className="flex items-center gap-4">
-                      <Avatar className="w-10 h-10 rounded-xl shadow-skeuo-flat border-none">
-                        <AvatarImage src={p.avatar_url} />
-                        <AvatarFallback className="bg-deep-void text-xs font-bold text-white/20">
-                          {p.push_name?.substring(0, 2).toUpperCase() || '??'}
+                      <Avatar className="w-10 h-10 rounded-xl shadow-skeuo-flat border-none bg-deep-void">
+                        <AvatarFallback className="bg-transparent text-xs font-bold text-white/20">
+                          {displayTitle.substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="text-sm font-bold text-white/90">{p.push_name || p.remote_id}</p>
-                        <p className="text-[10px] text-white/30 font-mono tracking-tight">{p.remote_id}</p>
+                        <p className="text-sm font-bold text-white/90">{displayTitle}</p>
+                        {displaySubtitle !== displayTitle && (
+                          <p className="text-[10px] text-white/30 font-mono tracking-tight">{displaySubtitle}</p>
+                        )}
                       </div>
                     </div>
                     
@@ -231,7 +261,8 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
                       )}
                     </div>
                   </div>
-                ))
+                );
+              })
               )}
             </div>
           </TactileCard>

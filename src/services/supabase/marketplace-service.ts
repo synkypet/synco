@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { Marketplace, UserMarketplaceConnection } from '@/types/marketplace';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export const marketplaceService = {
   /**
@@ -22,8 +23,8 @@ export const marketplaceService = {
   /**
    * Busca as conexões do usuário logado
    */
-  async getUserConnections(userId: string): Promise<UserMarketplaceConnection[]> {
-    const supabase = createClient();
+  async getUserConnections(userId: string, client?: SupabaseClient): Promise<UserMarketplaceConnection[]> {
+    const supabase = client || createClient();
     const { data, error } = await supabase
       .from('user_marketplaces')
       .select('*')

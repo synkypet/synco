@@ -1,6 +1,6 @@
-// src/services/supabase/automation-service.ts
 import { createClient } from '@/lib/supabase/client';
 import { AutomationSource, AutomationRoute } from '@/types/automation';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 const generateHash = (input: string) => {
   let hash = 0;
@@ -16,8 +16,8 @@ export const automationService = {
   /**
    * Lista todas as fontes de automação do usuário com suas rotas iniciais
    */
-  async listSources(userId: string): Promise<AutomationSource[]> {
-    const supabase = createClient();
+  async listSources(userId: string, client?: SupabaseClient): Promise<AutomationSource[]> {
+    const supabase = client || createClient();
     const { data, error } = await supabase
       .from('automation_sources')
       .select(`
@@ -42,8 +42,8 @@ export const automationService = {
   /**
    * Cria uma nova fonte de monitoramento
    */
-  async createSource(source: Partial<AutomationSource> & { user_id: string; source_type: 'group_monitor' | 'radar_offers' }): Promise<AutomationSource> {
-    const supabase = createClient();
+  async createSource(source: Partial<AutomationSource> & { user_id: string; source_type: 'group_monitor' | 'radar_offers' }, client?: SupabaseClient): Promise<AutomationSource> {
+    const supabase = client || createClient();
     const { data, error } = await supabase
       .from('automation_sources')
       .insert(source)
@@ -66,9 +66,10 @@ export const automationService = {
       external_group_id?: string;
       target_type: 'group' | 'list';
       target_id: string;
-    }
+    },
+    client?: any
   ): Promise<AutomationSource> {
-    const supabase = createClient();
+    const supabase = client || createClient();
     
     // 1. Criar a Fonte
     const { data: source, error: sourceError } = await supabase
@@ -106,11 +107,12 @@ export const automationService = {
   /**
    * Busca fontes de automação ativas por canal e ID externo do grupo
    */
-  async getSourceByExternalId(channelId: string, externalGroupId: string): Promise<AutomationSource | null> {
-    const supabase = createClient();
+  async getSourceByExternalId(userId: string, channelId: string, externalGroupId: string, client?: SupabaseClient): Promise<AutomationSource | null> {
+    const supabase = client || createClient();
     const { data, error } = await supabase
       .from('automation_sources')
       .select('*')
+      .eq('user_id', userId)
       .eq('channel_id', channelId)
       .eq('external_group_id', externalGroupId)
       .eq('is_active', true)
@@ -126,8 +128,8 @@ export const automationService = {
   /**
    * Busca todas as rotas de destino de uma fonte específica
    */
-  async getRoutesBySourceId(sourceId: string): Promise<AutomationRoute[]> {
-    const supabase = createClient();
+  async getRoutesBySourceId(sourceId: string, client?: SupabaseClient): Promise<AutomationRoute[]> {
+    const supabase = client || createClient();
     const { data, error } = await supabase
       .from('automation_routes')
       .select('*')
@@ -144,8 +146,8 @@ export const automationService = {
   /**
    * Lógica de Deduplicação Camada 1: Ingestão
    */
-  async checkAndMarkDedupe(userId: string, normalizedUrl: string, sourceGroupId: string): Promise<boolean> {
-    const supabase = createClient();
+  async checkAndMarkDedupe(userId: string, normalizedUrl: string, sourceGroupId: string, client?: SupabaseClient): Promise<boolean> {
+    const supabase = client || createClient();
     
     const hashKey = generateHash(`ingest:${userId}:${normalizedUrl}:${sourceGroupId}`);
 
@@ -165,8 +167,8 @@ export const automationService = {
   /**
    * Busca uma fonte específica por ID
    */
-  async getById(id: string): Promise<AutomationSource | null> {
-    const supabase = createClient();
+  async getById(id: string, client?: SupabaseClient): Promise<AutomationSource | null> {
+    const supabase = client || createClient();
     const { data, error } = await supabase
       .from('automation_sources')
       .select('*')
@@ -183,8 +185,8 @@ export const automationService = {
   /**
    * Atualiza uma fonte (nome, status)
    */
-  async updateSource(id: string, updates: Partial<AutomationSource>): Promise<void> {
-    const supabase = createClient();
+  async updateSource(id: string, updates: Partial<AutomationSource>, client?: SupabaseClient): Promise<void> {
+    const supabase = client || createClient();
     const { error } = await supabase
       .from('automation_sources')
       .update(updates)
@@ -196,8 +198,8 @@ export const automationService = {
   /**
    * Remove uma fonte e suas rotas
    */
-  async deleteSource(id: string): Promise<void> {
-    const supabase = createClient();
+  async deleteSource(id: string, client?: SupabaseClient): Promise<void> {
+    const supabase = client || createClient();
     const { error } = await supabase
       .from('automation_sources')
       .delete()
@@ -209,8 +211,8 @@ export const automationService = {
   /**
    * Cria ou atualiza uma rota de destino
    */
-  async upsertRoute(route: Partial<AutomationRoute> & { source_id: string; target_id: string }): Promise<AutomationRoute> {
-    const supabase = createClient();
+  async upsertRoute(route: Partial<AutomationRoute> & { source_id: string; target_id: string }, client?: SupabaseClient): Promise<AutomationRoute> {
+    const supabase = client || createClient();
     const { data, error } = await supabase
       .from('automation_routes')
       .upsert(route)
@@ -224,8 +226,8 @@ export const automationService = {
   /**
    * Remove uma rota de destino
    */
-  async deleteRoute(id: string): Promise<void> {
-    const supabase = createClient();
+  async deleteRoute(id: string, client?: SupabaseClient): Promise<void> {
+    const supabase = client || createClient();
     const { error } = await supabase
       .from('automation_routes')
       .delete()
@@ -237,8 +239,8 @@ export const automationService = {
   /**
    * Busca logs de execução de uma automação
    */
-  async getLogs(sourceId: string, limit: number = 50): Promise<any[]> {
-    const supabase = createClient();
+  async getLogs(sourceId: string, limit: number = 50, client?: SupabaseClient): Promise<any[]> {
+    const supabase = client || createClient();
     const { data, error } = await supabase
       .from('automation_logs')
       .select('*')
@@ -262,16 +264,16 @@ export const automationService = {
     status: 'captured' | 'filtered' | 'processed' | 'error';
     event_type: string;
     details: any;
-  }): Promise<void> {
-    const supabase = createClient();
+  }, client?: SupabaseClient): Promise<void> {
+    const supabase = client || createClient();
     await supabase.from('automation_logs').insert(log);
   },
 
   /**
    * Lógica de Deduplicação Camada 2: Destino
    */
-  async checkAndMarkDestinationDedupe(userId: string, normalizedUrl: string, targetId: string): Promise<boolean> {
-    const supabase = createClient();
+  async checkAndMarkDestinationDedupe(userId: string, normalizedUrl: string, targetId: string, client?: SupabaseClient): Promise<boolean> {
+    const supabase = client || createClient();
     
     const hashKey = generateHash(`dest:${userId}:${normalizedUrl}:${targetId}`);
 
