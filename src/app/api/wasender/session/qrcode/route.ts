@@ -28,15 +28,18 @@ export async function GET(request: Request) {
       .eq('user_id', user.id)
       .single();
 
-    if (channelError || !channel || !channel.config || !channel.config.sessionId) {
-       return NextResponse.json({ error: 'Session not initialized for this channel' }, { status: 404 });
+    const wasenderId = channel?.config?.wasender_session_id;
+    if (!wasenderId) {
+       return NextResponse.json({ 
+         success: false,
+         error: 'Canal legado detectado. Reconfiguração necessária.', 
+         reason: 'LEGACY_CHANNEL_RECONFIG_NEEDED'
+       }, { status: 422 });
     }
-
-    const sessionId = channel.config.sessionId;
 
     // 2. Tentar buscar QR Code do endpoint dedicado
     try {
-      const qrData = await WasenderClient.getQrCode(sessionId);
+      const qrData = await WasenderClient.getQrCode(wasenderId);
       const responseData = qrData.data || qrData;
       
       // A API pode retornar em diferentes formatos: qrCode, qrcode, qr, base64
@@ -51,7 +54,7 @@ export async function GET(request: Request) {
 
     // 3. Fallback: chamar connect que também retorna o QR Code
     try {
-      const connectData = await WasenderClient.connectSession(sessionId);
+      const connectData = await WasenderClient.connectSession(wasenderId);
       const connectResponse = connectData.data || connectData;
       const qrFromConnect = connectResponse.qrCode || connectResponse.qrcode || connectResponse.qr || null;
 

@@ -16,14 +16,18 @@ export function useCreateChannel() {
 
   return useMutation({
     mutationFn: (channel: Omit<Channel, 'id' | 'created_at' | 'updated_at'>) => 
-      channelService.upsert(channel),
+      fetch('/api/wasender/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(channel)
+      }).then(res => res.json().then(data => res.ok ? data : Promise.reject(data))),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['channels', variables.user_id] });
-      toast.success('Canal criado com sucesso!');
+      toast.success('Canal e sessão criados com sucesso!');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Error creating channel:', error);
-      toast.error('Erro ao criar canal.');
+      toast.error(error.message || 'Erro ao criar canal e sessão na Wasender.');
     }
   });
 }
@@ -36,11 +40,11 @@ export function useUpdateChannel() {
       channelService.upsert({ id, ...channel }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['channels', variables.user_id] });
-      toast.success('Canal atualizado com sucesso!');
+      toast.success('Metadados do canal atualizados!');
     },
     onError: (error) => {
       console.error('Error updating channel:', error);
-      toast.error('Erro ao atualizar canal.');
+      toast.error('Erro ao editar canal.');
     }
   });
 }
@@ -50,14 +54,54 @@ export function useDeleteChannel() {
 
   return useMutation({
     mutationFn: ({ id, user_id }: { id: string, user_id: string }) => 
-      channelService.delete(id, user_id),
+      fetch(`/api/wasender/channels/${id}`, {
+        method: 'DELETE'
+      }).then(res => res.json().then(data => res.ok ? data : Promise.reject(data))),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['channels', variables.user_id] });
-      toast.success('Canal excluído com sucesso!');
+      toast.success('Canal e sessão excluídos com sucesso!');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Error deleting channel:', error);
-      toast.error('Erro ao excluir canal.');
+      toast.error(error.message || 'Erro ao excluir canal.');
     }
   });
+}
+
+export function useDisconnectChannel() {
+    const queryClient = useQueryClient();
+  
+    return useMutation({
+      mutationFn: ({ id, user_id }: { id: string, user_id: string }) => 
+        fetch(`/api/wasender/channels/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'disconnect' })
+        }).then(res => res.json().then(data => res.ok ? data : Promise.reject(data))),
+      onSuccess: (_, variables) => {
+        queryClient.invalidateQueries({ queryKey: ['channels', variables.user_id] });
+        toast.info('Sessão desconectada. Reutilize o QR para reconectar.');
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Falha ao desconectar.');
+      }
+    });
+}
+
+export function useRefreshChannelStatus() {
+    const queryClient = useQueryClient();
+  
+    return useMutation({
+      mutationFn: ({ id, user_id }: { id: string, user_id: string }) => 
+        fetch(`/api/wasender/channels/${id}`, {
+          method: 'GET'
+        }).then(res => res.json().then(data => res.ok ? data : Promise.reject(data))),
+      onSuccess: (data, variables) => {
+        queryClient.invalidateQueries({ queryKey: ['channels', variables.user_id] });
+        toast.success(`Status atualizado: ${data.status}`);
+      },
+      onError: (error: any) => {
+        toast.error('Falha ao atualizar status remoto.');
+      }
+    });
 }

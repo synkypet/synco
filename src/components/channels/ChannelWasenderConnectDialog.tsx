@@ -14,44 +14,72 @@ interface ChannelWasenderConnectDialogProps {
 }
 
 export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConnected }: ChannelWasenderConnectDialogProps) {
-  const [step, setStep] = useState<'phone_input' | 'init' | 'qrcode' | 'connected' | 'error'>('phone_input');
+  const [step, setStep] = useState<'verifying' | 'legacy_detected' | 'phone_input' | 'init' | 'qrcode' | 'connected' | 'error'>('verifying');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [qrString, setQrString] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Ao abrir, verificar se já está conectado
+  // Ao abrir, resetar tudo e buscar status fresco
   useEffect(() => {
     if (isOpen && channel) {
-      if (channel.config?.status === 'connected') {
-         setStep('connected');
-         return;
-      }
-      // Se já tem telefone no config, pular para init
-      if (channel.config?.phoneNumber) {
-        setPhoneNumber(channel.config.phoneNumber);
-        handleInitiateConnection(channel.config.phoneNumber);
-      } else {
-        setStep('phone_input');
-      }
-    }
-  }, [isOpen, channel]);
+      const initModal = async () => {
+        setStep('verifying');
+        setQrString(null);
+        setErrorMsg('');
+        
+        try {
+          console.log(`[MODAL-CONNECT] Verificando status fresco para canal ${channel.id}...`);
+          const res = await fetch(`/api/wasender/channels/${channel.id}`);
+          const data = await res.json();
+          
+          if (!res.ok) {
+            if (data.reason === 'LEGACY_CHANNEL_RECONFIG_NEEDED') {
+                setStep('legacy_detected');
+                return;
+            }
+            throw new Error(data.error || 'Falha ao validar status atual');
+          }
 
-  // Polling de Status
+          const currentStatus = data.status || 'unknown';
+          
+          if (currentStatus === 'connected') {
+            setStep('connected');
+          } else {
+            const savedPhone = channel.config?.phoneNumber || channel.config?.phone_number;
+            if (savedPhone) {
+              console.log(`[MODAL-CONNECT] Número salvo encontrado (${savedPhone}). Iniciando auto-conexão...`);
+              setPhoneNumber(savedPhone);
+              handleInitiateConnection(savedPhone);
+            } else {
+              setStep('phone_input');
+            }
+          }
+        } catch (err: any) {
+          setStep('error');
+          setErrorMsg(err.message);
+        }
+      };
+
+      initModal();
+    }
+  }, [isOpen, channel?.id]);
+
+  // Polling de Status (Corrigido para usar a nova rota de canal)
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
     if (isOpen && step === 'qrcode' && channel?.id) {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`/api/wasender/session?channel_id=${channel.id}`);
+          const res = await fetch(`/api/wasender/channels/${channel.id}`);
           const data = await res.json();
 
           if (data.status === 'connected') {
             setStep('connected');
             onConnected();
-          } else if (data.status === 'disconnected' || data.status === 'session_lost') {
+          } else if (data.status === 'logged_out' || data.status === 'expired') {
             setStep('error');
-            setErrorMsg('A sessão foi desconectada.');
+            setErrorMsg('A sessão foi encerrada ou expirou.');
           }
         } catch (err) {
             console.error("Polling error", err);
@@ -85,8 +113,25 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
 
       if (!res.ok) throw new Error(data.error || 'Falha ao iniciar sessão');
 
-      // Se entrou em modo pendente, busca a QR String
-      if (data.status === 'qrcode_pending' || data.status === 'AWAITING_SCAN') {
+      // 1. Sucesso Imediato: Se já conectou agora
+      if (data.status === 'connected') {
+        setStep('connected');
+        onConnected();
+        return;
+      }
+
+      // 2. Estado Esperado: Precisa de Scan
+      if (data.status === 'need_scan' || data.status === 'qrcode_pending' || data.status === 'AWAITING_SCAN') {
+        // Se o QR CODE já veio no payload do connect (performance)
+        if (data.qrcode) {
+           console.log("[MODAL-CONNECT] QR Code recebido diretamente no connect.");
+           setQrString(data.qrcode);
+           setStep('qrcode');
+           return;
+        }
+
+        // 3. Fallback: Se não veio QR, buscar no endpoint dedicado
+        console.log("[MODAL-CONNECT] Buscando QR Code no endpoint de fallback...");
         const qrRes = await fetch(`/api/wasender/session/qrcode?channel_id=${channel?.id}`);
         const qrData = await qrRes.json();
         
@@ -95,14 +140,11 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
            setQrString(qrData.qrcode);
            setStep('qrcode');
         } else {
-           throw new Error('Nenhum QR retornado');
+           throw new Error('QR Code ainda não disponível. Tente novamente em alguns segundos.');
         }
-      } else if (data.status === 'connected') {
-        setStep('connected');
-        onConnected();
       } else {
         setStep('error');
-        setErrorMsg(`Status inesperado: ${data.status}`);
+        setErrorMsg(`Status operacional inesperado: ${data.status}`);
       }
 
     } catch (error: any) {
@@ -122,6 +164,33 @@ export function ChannelWasenderConnectDialog({ isOpen, onClose, channel, onConne
         </DialogHeader>
 
         <div className="flex flex-col items-center justify-center min-h-[300px] py-6">
+          {step === 'verifying' && (
+            <div className="flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-300">
+               <Loader2 className="w-12 h-12 animate-spin text-kinetic-orange opacity-40" />
+               <p className="text-xs font-bold tracking-widest uppercase text-white/30">Validando Sincronia...</p>
+            </div>
+          )}
+
+          {step === 'legacy_detected' && (
+            <div className="flex flex-col items-center gap-5 w-full px-4 animate-in fade-in zoom-in duration-300">
+               <div className="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center">
+                 <RefreshCw className="w-7 h-7 text-amber-500" />
+               </div>
+               <div className="text-center space-y-2">
+                 <p className="text-sm font-semibold text-white/80">Canal Legado Detectado</p>
+                 <p className="text-xs text-white/40 px-4">
+                    Este canal foi criado em uma versão antiga e não possui um vínculo operacional válido com a Wasender.
+                 </p>
+               </div>
+               <Button 
+                 onClick={() => setStep('phone_input')}
+                 className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold shadow-glow-orange"
+               >
+                 Recriar sessão
+               </Button>
+            </div>
+          )}
+
           {step === 'phone_input' && (
             <div className="flex flex-col items-center gap-5 w-full px-4 animate-in fade-in zoom-in duration-300">
                <div className="w-14 h-14 rounded-full bg-kinetic-orange/10 flex items-center justify-center">

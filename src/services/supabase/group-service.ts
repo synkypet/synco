@@ -14,6 +14,7 @@ export const groupService = {
         channels (name, config)
       `)
       .eq('user_id', userId)
+      .eq('is_active', true)
       .order('name');
     
     if (error) {

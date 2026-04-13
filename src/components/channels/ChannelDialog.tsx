@@ -36,6 +36,18 @@ const formSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   type: z.enum(['whatsapp', 'telegram']),
   description: z.string().optional(),
+  phoneNumber: z.string().optional().refine((val) => {
+    // Se for whatsapp, o telefone é obrigatório
+    return true; // A validação real será feita no superRefine ou condicionalmente
+  }),
+}).superRefine((data, ctx) => {
+  if (data.type === 'whatsapp' && (!data.phoneNumber || data.phoneNumber.trim().length < 8)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Telefone é obrigatório para WhatsApp',
+      path: ['phoneNumber'],
+    });
+  }
 });
 
 interface ChannelDialogProps {
@@ -55,30 +67,33 @@ export function ChannelDialog({
 }: ChannelDialogProps) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: initialData?.name || '',
-      type: (initialData?.type as 'whatsapp' | 'telegram') || 'whatsapp',
-      description: initialData?.description || '',
-    },
-  });
-
-  React.useEffect(() => {
-    if (isOpen) {
-      if (initialData) {
-        form.reset({
-          name: initialData.name,
-          type: initialData.type as 'whatsapp' | 'telegram',
-          description: initialData.description || '',
-        });
-      } else {
-        form.reset({
-          name: '',
-          type: 'whatsapp',
-          description: '',
-        });
+      defaultValues: {
+        name: initialData?.name || '',
+        type: (initialData?.type as 'whatsapp' | 'telegram') || 'whatsapp',
+        description: initialData?.description || '',
+        phoneNumber: initialData?.config?.phoneNumber || '',
+      },
+    });
+  
+    React.useEffect(() => {
+      if (isOpen) {
+        if (initialData) {
+          form.reset({
+            name: initialData.name,
+            type: initialData.type as 'whatsapp' | 'telegram',
+            description: initialData.description || '',
+            phoneNumber: initialData.config?.phoneNumber || '',
+          });
+        } else {
+          form.reset({
+            name: '',
+            type: 'whatsapp',
+            description: '',
+            phoneNumber: '',
+          });
+        }
       }
-    }
-  }, [initialData, form, isOpen]);
+    }, [initialData, form, isOpen]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -109,7 +124,7 @@ export function ChannelDialog({
               name="type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tipo</FormLabel>
+                  <FormLabel>Tipo de Protocolo</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger className="w-full">
@@ -117,22 +132,42 @@ export function ChannelDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                      <SelectItem value="telegram">Telegram</SelectItem>
+                      <SelectItem value="whatsapp">WhatsApp (Wasender)</SelectItem>
+                      <SelectItem value="telegram">Telegram (Bot / User)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            {form.watch('type') === 'whatsapp' && (
+              <FormField
+                control={form.control}
+                name="phoneNumber"
+                render={({ field }) => (
+                  <FormItem className="animate-in fade-in slide-in-from-top-2">
+                    <FormLabel>Número do WhatsApp</FormLabel>
+                    <FormControl>
+                      <Input placeholder="+5511999999999" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      Número completo com DDI (Ex: +55).
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             <FormField
               control={form.control}
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Descrição (Opcional)</FormLabel>
+                  <FormLabel>Descrição Operacional (Opcional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Breve resumo sobre o canal" {...field} />
+                    <Input placeholder="Ex: Canal principal de promoções da tarde" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -23,22 +23,38 @@ export async function POST(request: Request) {
 
     console.log(`${logPrefix} Iniciando sync rápido para canal: ${channel_id} (Force: ${force_restart})`);
 
-    // ... (Validação de canal e sessão permanece igual até a obtenção do sessionId/apiKey)
     // 1. Validar autorização e extrair sessionId
     const { data: channel, error: channelError } = await supabase
       .from('channels')
-      .select('config')
+      .select('config, user_id, name')
       .eq('id', channel_id)
-      .eq('user_id', user.id)
       .single();
 
-    if (channelError || !channel || !channel.config || !channel.config.sessionId) {
-       return NextResponse.json({ error: 'Session not initialized for this channel' }, { status: 404 });
+    if (channelError || !channel) {
+       console.error(`${logPrefix} Canal não encontrado ou sem acesso: ${channel_id}`);
+       return NextResponse.json({ 
+         success: false, 
+         error: 'Channel not found', 
+         reason: 'CHANNEL_NOT_FOUND' 
+       }, { status: 404 });
     }
 
-    const sessionId = channel.config.sessionId;
+    const wasenderId = channel.config?.wasender_session_id || channel.config?.sessionId;
 
-    // 1.1 Buscar Session API Key nas secrets
+    if (!wasenderId) {
+       console.warn(`${logPrefix} Canal sem ID de sessão Wasender configurado: ${channel_id}`);
+       return NextResponse.json({ 
+         success: false, 
+         error: 'Wasender session not initialized', 
+         reason: 'MISSING_WASENDER_ID' 
+       }, { status: 422 });
+    }
+
+    if (channel.user_id !== user.id) {
+       return NextResponse.json({ error: 'Unauthorized channel access' }, { status: 403 });
+    }
+
+    // 1.4 Buscar Session API Key nas secrets
     const { data: secrets } = await supabase
       .from('channel_secrets')
       .select('session_api_key')
@@ -47,45 +63,84 @@ export async function POST(request: Request) {
 
     let sessionApiKey = secrets?.session_api_key;
     
-    // 1.2 PONTE DE AUTENTICAÇÃO E RESTART
+    // 1.5 RESTART SE FORÇADO
     if (force_restart) {
-       console.log(`${logPrefix} Comando FORÇAR RESTART recebido. Reinicializando sessão...`);
-       await WasenderClient.restartSession(sessionId);
-       console.log(`${logPrefix} Restart enviado. Aguardando 5 segundos para estabilização da malha...`);
+       console.log(`${logPrefix} Comando FORÇAR RESTART recebido para ID ${wasenderId}...`);
+       await WasenderClient.restartSession(wasenderId);
+       console.log(`${logPrefix} Restart enviado. Aguardando 5 segundos...`);
        await new Promise(resolve => setTimeout(resolve, 5000));
     }
 
-    if (!sessionApiKey || sessionApiKey.includes(':')) {
-      console.log(`${logPrefix} Chave operacional ausente ou inválida. Iniciando ponte de autenticação...`);
-      const sessionData = await WasenderClient.getSession(sessionId);
-      const fetchedKey = sessionData.api_key || sessionData.data?.api_key;
-      
-      if (fetchedKey) {
-        await supabase.from('channel_secrets').upsert({
-          channel_id, user_id: user.id, session_api_key: fetchedKey, updated_at: new Date().toISOString()
-        }, { onConflict: 'channel_id' });
-        sessionApiKey = fetchedKey;
+    // 1.6 PONTE DE AUTENTICAÇÃO SE CHAVE AUSENTE
+    if (!sessionApiKey || sessionApiKey.length < 10) {
+      console.log(`${logPrefix} Chave operacional ausente. Iniciando ponte para ID ${wasenderId}...`);
+      try {
+        const sessionData = await WasenderClient.getSession(wasenderId);
+        const fetchedKey = sessionData.api_key || sessionData.data?.api_key || sessionData.session_api_key;
+        
+        if (fetchedKey) {
+          await supabase.from('channel_secrets').upsert({
+            channel_id, user_id: user.id, session_api_key: fetchedKey, updated_at: new Date().toISOString()
+          }, { onConflict: 'channel_id' });
+          sessionApiKey = fetchedKey;
+        }
+      } catch (e: any) {
+        console.warn(`${logPrefix} Falha na ponte de auth:`, e.message);
       }
     }
 
+    // 1.7 PRÉ-CHECK DE STATUS
+    console.log(`${logPrefix} Verificando status da sessão ${wasenderId}...`);
+    let sessionStatus = 'unknown';
+    
+    try {
+      const statusRes = await WasenderClient.getStatus(wasenderId, sessionApiKey);
+      sessionStatus = (statusRes.status || statusRes.data?.status || 'unknown').toLowerCase();
+      
+      console.log(`${logPrefix} Status Real Wasender: ${sessionStatus}`);
+
+      // Atualizar status no banco
+      await supabase.from('channels').update({
+        config: { ...channel.config, wasender_status: sessionStatus }
+      }).eq('id', channel_id);
+
+      if (!sessionStatus.includes('connected')) {
+        console.warn(`${logPrefix} Abortando sync: Sessão desconectada (${sessionStatus})`);
+        return NextResponse.json({
+          success: false,
+          reason: 'SESSION_NOT_CONNECTED',
+          sessionStatus,
+          wasenderId,
+          message: `Sessão no estado: ${sessionStatus}`
+        }, { status: 412 });
+      }
+    } catch (err: any) {
+      console.error(`${logPrefix} Erro ao verificar status:`, err.message);
+      // Continuamos se já temos a apikey, pode ser erro temporário do status endpoint
+    }
+
     // 2. Buscar grupos na API externa
-    console.log(`${logPrefix} Buscando grupos na WasenderAPI...`);
+    console.log(`${logPrefix} Buscando grupos na Wasender para ID ${wasenderId}...`);
+
     let wasenderGroups;
     try {
-      wasenderGroups = await WasenderClient.getGroups(sessionId, sessionApiKey);
+      wasenderGroups = await WasenderClient.getGroups(wasenderId, sessionApiKey);
     } catch (apiErr: any) {
-      console.error(`${logPrefix} Falha na WasenderAPI:`, apiErr.message);
-      throw apiErr;
+      console.error(`${logPrefix} Falha ao buscar grupos:`, apiErr.message);
+      return NextResponse.json({
+        success: false,
+        error: 'Wasender API Error',
+        message: apiErr.message
+      }, { status: 502 });
     }
 
     const externalGroups = wasenderGroups.data || wasenderGroups.groups || (Array.isArray(wasenderGroups) ? wasenderGroups : []);
+    const fetchedCount = Array.isArray(externalGroups) ? externalGroups.length : 0;
     
-    if (!Array.isArray(externalGroups)) {
-       throw new Error('Invalid format returned from Wasender API');
-    }
+    console.log(`${logPrefix} Grupos recebidos: ${fetchedCount}`);
 
     // 3. Executar Upsert dos grupos
-    const upsertPayload = externalGroups.map((g: any) => {
+    const upsertPayload = Array.isArray(externalGroups) ? externalGroups.map((g: any) => {
       const remoteId = g.id || g.jid || g.remote_id;
       if (!remoteId) return null;
 
@@ -100,9 +155,9 @@ export async function POST(request: Request) {
         is_active: true,
         updated_at: new Date().toISOString()
       };
-    }).filter(Boolean);
+    }).filter(Boolean) : [];
 
-    // Contagem antes do upsert para detectar novidades
+    // Contagem antes para estatística
     const { count: oldCount } = await supabase
       .from('groups')
       .select('*', { count: 'exact', head: true })
@@ -113,45 +168,36 @@ export async function POST(request: Request) {
       .upsert(upsertPayload, { onConflict: 'channel_id,remote_id' })
       .select('id');
 
-    if (upsertError) throw upsertError;
+    if (upsertError) {
+      console.error(`${logPrefix} Erro no Upsert Supabase:`, upsertError);
+      return NextResponse.json({ success: false, error: 'Database Persistence Error' }, { status: 500 });
+    }
 
     const currentCount = syncedData?.length || 0;
     const previousCount = oldCount || 0;
-    const newGroupsCount = currentCount > previousCount ? currentCount - previousCount : 0;
-
-    // LOG DIAGNÓSTICO: Trace de Auditoria (Safe Write)
-    try {
-      const tracePath = path.join('C:\\Users\\esaur_4zg16wg\\.gemini\\antigravity\\brain\\834affe6-c3e1-4e78-a81c-5d3acf8586f5', 'sync_trace.json');
-      fs.writeFileSync(tracePath, JSON.stringify({
-        timestamp: new Date().toISOString(),
-        channel_id, 
-        sessionId, 
-        did_restart: force_restart,
-        received_count: externalGroups.length,
-        persisted_count: currentCount,
-        new_groups: newGroupsCount
-      }, null, 2));
-    } catch (e: any) {
-      console.warn(`${logPrefix} Falha ao salvar trace:`, e.message);
-    }
+    const newGroupsCount = Math.max(0, currentCount - previousCount);
 
     // 4. Update lastSyncAt
     await supabase.from('channels').update({ 
-      config: { ...channel.config, lastSyncAt: new Date().toISOString() } 
+      config: { 
+        ...channel!.config, 
+        wasender_status: sessionStatus,
+        lastSyncAt: new Date().toISOString() 
+      } 
     }).eq('id', channel_id);
 
     return NextResponse.json({ 
         success: true, 
-        synced: currentCount,
-        new_groups: newGroupsCount,
-        did_restart: force_restart,
-        message: newGroupsCount > 0 
-          ? `${newGroupsCount} novos grupos detectados.` 
-          : (force_restart ? 'Sessão reinicializada. Malha atualizada.' : 'Malha sincronizada. Nenhum grupo novo encontrado.')
+        fetchedCount,
+        persistedCount: currentCount,
+        newGroupsCount,
+        wasenderId,
+        sessionStatus,
+        message: `Sincronização concluída com ${fetchedCount} grupos.`
     });
 
   } catch (error: any) {
-    console.error(`[MESH-SYNC] ERRO:`, error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error(`[MESH-SYNC] CRITICAL ERROR:`, error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

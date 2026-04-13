@@ -8,6 +8,7 @@ export const channelService = {
       .from('channels')
       .select('*')
       .eq('user_id', userId)
+      .eq('is_active', true)
       .order('name');
     
     if (error) {

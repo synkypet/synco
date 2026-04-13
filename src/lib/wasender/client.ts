@@ -93,10 +93,14 @@ export class WasenderClient {
     return res.json();
   }
 
-  static async getStatus(sessionId: string) {
-    const res = await fetch(`${this.baseURL}/whatsapp-sessions/${sessionId}`, {
+  static async getStatus(sessionId: string, apiKey?: string) {
+    const url = apiKey 
+      ? `${this.baseURL}/status` 
+      : `${this.baseURL}/whatsapp-sessions/${sessionId}`;
+
+    const res = await fetch(url, {
       method: 'GET',
-      headers: this.getHeaders()
+      headers: this.getHeaders(apiKey)
     });
     
     if (!res.ok) {
@@ -143,6 +147,36 @@ export class WasenderClient {
         throw new Error(`Failed to restart session: ${err}`);
     }
     return res.json();
+  }
+
+  static async logoutSession(sessionId: string) {
+    const res = await fetch(`${this.baseURL}/whatsapp-sessions/${sessionId}/logout`, {
+      method: 'POST',
+      headers: this.getHeaders()
+    });
+    
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Failed to disconnect/logout session: ${err}`);
+    }
+    return res.json();
+  }
+
+  static async deleteSession(sessionId: string) {
+    const res = await fetch(`${this.baseURL}/whatsapp-sessions/${sessionId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    });
+    
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Failed to delete session: ${err}`);
+    }
+    return res.json();
+  }
+
+  static getGroupsUrl(sessionId: string) {
+    return `${this.baseURL}/groups?session_id=${sessionId}`;
   }
 
   // ─── Groups ─────────────────────────────────────────────────────────────

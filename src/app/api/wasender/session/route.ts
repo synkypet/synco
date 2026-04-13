@@ -37,74 +37,111 @@ export async function POST(request: Request) {
     }
 
     // 2. Verificar se já existe uma sessão para este canal
-    const existingSessionId = channel.config?.sessionId;
+    let wasenderId = channel.config?.wasender_session_id;
     
-    if (existingSessionId) {
-      // Sessão já existe — reconectar em vez de criar nova
-      try {
-        await WasenderClient.connectSession(existingSessionId);
+    // Se não tem ID mas recebemos um número de telefone, tentamos CRIAR (Reparação de canal legado)
+    if (!wasenderId && phone_number) {
+        console.log(`[SESSION-SHIM] Reparando canal legado ${channel_id}. Criando nova sessão na Wasender...`);
         
-        await supabase
-          .from('channels')
-          .update({ config: { ...channel.config, status: 'qrcode_pending' } })
-          .eq('id', channel_id);
+        const finalPhone = phone_number.replace(/\D/g, '');
+        const e164Phone = `+${finalPhone}`;
 
-        return NextResponse.json({ success: true, sessionId: existingSessionId, status: 'qrcode_pending' });
-      } catch (connectError: any) {
-        console.log('Reconnect failed, will create new session:', connectError.message);
-        // Se falhar (sessão deletada no Wasender), continuar e criar nova
+        try {
+            const wasenderSession = await WasenderClient.createSession({
+                name: `SYNCO - ${channel.name}`,
+                phoneNumber: e164Phone,
+                webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://synco-mocha.vercel.app'}/api/wasender/webhook`
+            });
+            
+            const sessionData = wasenderSession.data || wasenderSession;
+            const newNumericId = String(sessionData.id); 
+            const sessionApiKey = sessionData.api_key || '';
+            const webhookSecret = sessionData.webhook_secret || '';
+
+            // Salvar segredos
+            await supabase.from('channel_secrets').upsert({
+                channel_id,
+                user_id: user.id,
+                session_api_key: sessionApiKey,
+                webhook_secret: webhookSecret
+            }, { onConflict: 'channel_id' });
+
+            // Atualizar canal
+            const configUpdate = {
+                ...channel.config,
+                wasender_session_id: newNumericId,
+                wasender_status: 'need_scan',
+                phoneNumber: e164Phone,
+            };
+
+            await supabase.from('channels').update({ config: configUpdate }).eq('id', channel_id);
+            wasenderId = newNumericId;
+
+            console.log(`[SESSION-SHIM] Canal ${channel_id} reparado com sucesso. ID Wasender: ${wasenderId}`);
+        } catch (createErr: any) {
+            console.error('[SESSION-SHIM] Falha ao criar sessão de reparo:', createErr.message);
+            
+            // Tratar conflito de número
+            if (createErr.message.includes('already been taken') || createErr.message.includes('422')) {
+                return NextResponse.json({ 
+                    success: false, 
+                    error: 'Este número já possui uma sessão ativa na Wasender.', 
+                    reason: 'PHONE_CONFLICT' 
+                }, { status: 409 });
+            }
+
+            return NextResponse.json({ 
+                success: false, 
+                error: 'Falha ao criar sessão na Wasender durante reparo.', 
+                details: createErr.message 
+            }, { status: 502 });
+        }
+    } else if (!wasenderId) {
+      console.warn(`[SESSION-SHIM] Canal legado detectado (ID ausente): ${channel_id}`);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Este canal é legado e precisa ser recriado.', 
+        reason: 'LEGACY_CHANNEL_RECONFIG_NEEDED' 
+      }, { status: 422 });
+    }
+
+    // 3. Tentar conectar a sessão REAL (ID Numérico)
+    try {
+      console.log(`[SESSION-SHIM] Conectando sessão real ${wasenderId}...`);
+      const connectRes = await WasenderClient.connectSession(wasenderId);
+      const connectData = connectRes.data || connectRes;
+      
+      const remoteStatus = (connectData.status || '').toUpperCase();
+      let localStatus = 'unknown';
+
+      if (remoteStatus.includes('CONNECTED')) {
+        localStatus = 'connected';
+      } else if (remoteStatus.includes('QR') || remoteStatus.includes('SCAN') || remoteStatus.includes('PENDING') || remoteStatus === 'NEED_SCAN') {
+        localStatus = 'need_scan';
+      } else {
+        localStatus = 'disconnected';
       }
-    }
 
-    // 3. Construir webhook URL — só envia se for uma URL pública (não localhost)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
-    const isPublicUrl = appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1');
-    const webhookUrl = isPublicUrl ? `${appUrl}/api/webhooks/wasender` : undefined;
+      // Extrair QR se veio no connect
+      const qrCode = connectData.qrCode || connectData.qrcode || connectData.qr || null;
 
-    // 4. Criar sessão na Wasender com todos os campos obrigatórios
-    const sessionName = `synco_${user.id}_${channel.id}`;
-    const wasenderSession = await WasenderClient.createSession({
-      name: sessionName,
-      phoneNumber: phone_number,
-      webhookUrl: webhookUrl
-    });
-    
-    // A API retorna: { success: true, data: { id, api_key, webhook_secret, ... } }
-    const sessionData = wasenderSession.data || wasenderSession;
-    const sessionId = String(sessionData.id || sessionData.session_id || sessionName); 
-    const sessionApiKey = sessionData.api_key || sessionData.session_api_key || '';
-    const webhookSecret = sessionData.webhook_secret || '';
+      const newConfig = { ...channel.config, wasender_status: localStatus };
+      await supabase.from('channels').update({ config: newConfig }).eq('id', channel_id);
 
-    // 5. Salvar os segredos rigidamente em channel_secrets
-    const { error: secretsError } = await supabase
-      .from('channel_secrets')
-      .upsert({
-         channel_id,
-         user_id: user.id,
-         session_api_key: sessionApiKey,
-         webhook_secret: webhookSecret
+      return NextResponse.json({ 
+        success: true, 
+        sessionId: wasenderId, 
+        status: localStatus,
+        qrcode: qrCode 
       });
-
-    if (secretsError) {
-      throw new Error(`Failed to save secrets: ${secretsError.message}`);
+    } catch (connectError: any) {
+      console.error('[SESSION-SHIM] Falha no connect real:', connectError.message);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Erro ao conectar à sessão remota. A sessão pode ter sido excluída externamente.', 
+        details: connectError.message 
+      }, { status: 502 });
     }
-
-    // 6. Salvar metadados no config JSONB (channels) — SEM segredos
-    const configUpdate: WasenderConfig = {
-       sessionId,
-       status: 'qrcode_pending',
-       phoneNumber: phone_number,
-    };
-
-    await supabase
-      .from('channels')
-      .update({ config: configUpdate })
-      .eq('id', channel_id);
-
-    // 7. Acionar o endpoint de "connect" para a sessão criada
-    await WasenderClient.connectSession(sessionId);
-
-    return NextResponse.json({ success: true, sessionId, status: 'qrcode_pending' });
   } catch (error: any) {
     console.error('Wasender Session POST Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -116,54 +153,47 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const channel_id = searchParams.get('channel_id');
 
-    if (!channel_id) {
-      return NextResponse.json({ error: 'channel_id is required' }, { status: 400 });
-    }
+    if (!channel_id) return NextResponse.json({ error: 'channel_id required' }, { status: 400 });
 
     const supabase = createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // 1. Pegar a config do canal
-    const { data: channel, error: channelError } = await supabase
+    const { data: channel } = await supabase
       .from('channels')
       .select('config')
       .eq('id', channel_id)
       .eq('user_id', user.id)
       .single();
 
-    if (channelError || !channel || !channel.config || !channel.config.sessionId) {
-       return NextResponse.json({ error: 'Session not initialized for this channel' }, { status: 404 });
+    if (!channel?.config?.wasender_session_id && !channel?.config?.sessionId) {
+       return NextResponse.json({ error: 'Session not initialized' }, { status: 404 });
     }
 
-    const sessionId = channel.config.sessionId;
+    const wasenderId = channel.config.wasender_session_id || channel.config.sessionId;
 
-    // 2. Checar status realtime na Wasender
-    let realStatus;
+    // 2. Checar status realtime (GET Status usa API Key)
+    const { data: secrets } = await supabase.from('channel_secrets').select('session_api_key').eq('channel_id', channel_id).single();
+    
+    let realStatus = 'unknown';
     try {
-        const wasenderResponse = await WasenderClient.getStatus(sessionId);
+        const wasenderResponse = await WasenderClient.getStatus(wasenderId, secrets?.session_api_key);
         const sessionData = wasenderResponse.data || wasenderResponse;
         const remoteStatus = (sessionData.status || '').toUpperCase();
         
         if (remoteStatus.includes('CONNECTED')) realStatus = 'connected';
-        else if (remoteStatus.includes('QR') || remoteStatus.includes('SCAN') || remoteStatus.includes('PENDING')) realStatus = 'qrcode_pending';
+        else if (remoteStatus.includes('QR') || remoteStatus.includes('SCAN') || remoteStatus.includes('PENDING')) realStatus = 'need_scan';
         else if (remoteStatus.includes('DISCONNECTED')) realStatus = 'disconnected';
-        else realStatus = 'session_lost';
+        else realStatus = 'logged_out';
 
     } catch (e) {
         realStatus = 'sync_failed';
     }
 
     // 3. Atualizar o banco de dados se o status mudou
-    if (channel.config.status !== realStatus) {
-        const newConfig = { ...channel.config, status: realStatus };
-        await supabase
-          .from('channels')
-          .update({ config: newConfig })
-          .eq('id', channel_id);
+    if (channel.config.wasender_status !== realStatus) {
+        const newConfig = { ...channel.config, wasender_status: realStatus };
+        await supabase.from('channels').update({ config: newConfig }).eq('id', channel_id);
     }
 
     return NextResponse.json({ status: realStatus });
