@@ -165,6 +165,29 @@ export const automationService = {
   },
 
   /**
+   * Lógica de Deduplicação Nível de Mensagem: Evita processar a mesma mensagem duas vezes (ex: eventos duplicados do provedor)
+   */
+  async checkAndMarkMessageDedupe(channelId: string, messageId: string, client?: SupabaseClient): Promise<boolean> {
+    if (!messageId || !channelId) return false;
+    const supabase = client || createClient();
+    
+    // Chave única composta pelo canal e ID da mensagem
+    const hashKey = generateHash(`msg:${channelId}:${messageId}`);
+
+    const { error } = await supabase
+      .from('automation_dedupe')
+      .insert({ hash_key: hashKey });
+
+    if (error) {
+      if (error.code === '23505') return true; 
+      console.error('Error checking message dedupe:', error);
+      return false;
+    }
+
+    return false;
+  },
+
+  /**
    * Busca uma fonte específica por ID
    */
   async getById(id: string, client?: SupabaseClient): Promise<AutomationSource | null> {

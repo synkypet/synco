@@ -92,16 +92,25 @@ function normalizeShopeeUrl(url: string): string {
 
 export async function processInboundAutomation(payload: InboundPayload) {
   const { userId, channelId, externalGroupId, body, isFromMe, messageId } = payload;
-  const logPrefix = `[PROCESSOR] [MSG:${messageId || 'RAW'}] [GRP:${externalGroupId}]`;
+  const logPrefix = `[PROCESSOR] [MSG:${messageId?.substring(0, 6)}] [GRP:${externalGroupId?.substring(0, 6)}]`;
 
-  console.log(`${logPrefix} >>> INICIANDO PROCESSAMENTO E2E`);
+  console.log(`${logPrefix} >>> INICIANDO PROCESSAMENTO E2E...`);
+
+  const supabase: SupabaseClient = createAdminClient();
+
+  // Camada 0: Dedupe de Mensagem (Evita duplo processamento de eventos do provedor)
+  const isMessageDuplicate = await automationService.checkAndMarkMessageDedupe(channelId, messageId, supabase);
+  if (isMessageDuplicate) {
+    console.log(`${logPrefix} [SKIP] Motivo: Mensagem já processada (Message-Level Dedupe).`);
+    return { skipped: 'msg_dedupe', details: { channelId, messageId } };
+  }
+
   console.log(`${logPrefix} Data:`, { userId, channelId, externalGroupId, isFromMe, bodyPreview: body?.substring(0, 50) });
 
   if (isFromMe) {
     console.log(`${logPrefix} [SKIP] Motivo: Mensagem enviada pelo próprio número (Self-sent).`);
     return { skipped: 'self_sent', reason: 'isFromMe is true' };
   }
-
   const supabase: SupabaseClient = createAdminClient();
   
   console.log(`${logPrefix} [STEP] Buscando fonte em 'automation_sources'...`, { userId, channelId, externalGroupId });
