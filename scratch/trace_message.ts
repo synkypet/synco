@@ -25,13 +25,11 @@ async function traceMessage() {
 
   // 2. Buscar nos logs de automação
   console.log('\n--- 2. LOGS DE AUTOMAÇÃO NO BANCO ---');
-  // Como messageId está dentro de details (JSONB), vamos usar @> para buscar ou 'ilike' se necessário
   const { data: logs, error: logsError } = await supabase
     .from('automation_logs')
     .select('*')
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false });
   
-  // Filtrar manualmente se a query do Supabase for complexa demais para campos aninhados sem index
   const filteredLogs = logs?.filter(log => 
     JSON.stringify(log.details).includes(TARGET_MESSAGE_ID)
   ) || [];
@@ -52,7 +50,7 @@ async function traceMessage() {
        .from('automation_logs')
        .select('*')
        .eq('source_id', sourceId)
-       .order('created_at', { descending: true })
+       .order('created_at', { ascending: false })
        .limit(10);
        
     console.table(sourceLogs?.reverse().map(l => ({ 
@@ -68,7 +66,7 @@ async function traceMessage() {
   const { data: campaigns } = await supabase
     .from('campaigns')
     .select('id, name, status, created_at')
-    .order('created_at', { descending: true })
+    .order('created_at', { ascending: false })
     .limit(5);
 
   console.table(campaigns);
