@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { extractWebhookMessageContext } from '@/lib/wasender/parser';
 
 export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
@@ -188,44 +189,31 @@ export async function POST(request: Request) {
         // ─── Automação de Entrada ──────────────────────────────────────────
         const eventSource = eventType;
         
-        // Log estruturado da data para diagnóstico se a extração falhar
-        console.log(`[WEBHOOK-DATA] [${requestId}] Estrutura data:`, JSON.stringify(body.data || {}, null, 2));
+        // Log estruturado do payload para diagnóstico profundo
+        console.log(`[WEBHOOK-PARSER-INPUT] [${requestId}] Body.data:`, JSON.stringify(body.data || {}, null, 2));
 
-        // Extração inteligente do externalGroupId (Suporte a Wasender/Baileys/Multi-V)
-        // Tentamos vários campos e priorizamos strings que pareçam JIDs (contendo @)
-        const remoteIdCandidates = [
-          body.data?.from,
-          body.data?.chatId,
-          body.data?.key?.remoteJid,
-          body.data?.remoteJid,
-          body.from,
-          body.chatId,
-          body.data?.jid
-        ];
+        // Utilizar o novo utilitário de parsing centralizado e defensivo
+        const context = extractWebhookMessageContext(body);
         
-        const extractedGroupId = remoteIdCandidates.find(id => typeof id === 'string' && id.includes('@')) || '';
+        console.log(`[WEBHOOK-PARSER-OUTPUT] [${requestId}] Contexto extraído:`, JSON.stringify(context, null, 2));
 
         const automPayload = {
           userId: channel.user_id,
           channelId: channel.id,
-          externalGroupId: extractedGroupId,
-          messageId: body.data?.id || body.id || '',
-          body: body.data?.body || body.data?.content || body.body || '',
-          isFromMe: body.data?.isFromMe ?? body.isFromMe ?? false,
+          externalGroupId: context.externalGroupId,
+          messageId: context.messageId,
+          body: context.body,
+          isFromMe: context.isFromMe,
         };
 
-        console.log(`[WEBHOOK] [${eventSource}] [${requestId}] Processando potencial automação:`, {
-          userId: automPayload.userId,
-          channelId: automPayload.channelId,
-          externalGroupId: automPayload.externalGroupId,
-          messageId: automPayload.messageId,
-          isFromMe: automPayload.isFromMe,
-          fieldFound: remoteIdCandidates.find(id => typeof id === 'string' && id.includes('@')) ? 'candidate_match' : 'none'
-        });
-
         if (automPayload.isFromMe) {
-          console.log(`[WEBHOOK] [${eventSource}] Ignorando: mensagem enviada pelo próprio número.`);
+          console.log(`[WEBHOOK] [${eventSource}] [${requestId}] Ignorando: mensagem enviada pelo próprio número.`);
           break;
+        }
+
+        // Se group ID ou body persistirem vazios, logar alerta crítico
+        if (!automPayload.externalGroupId || !automPayload.body) {
+           console.warn(`[WEBHOOK-WARNING] [${requestId}] Contexto incompleto capturado:`, automPayload);
         }
 
         // Disparar o processamento de forma assíncrona para responder rápido ao webhook
@@ -233,7 +221,14 @@ export async function POST(request: Request) {
         const host = request.headers.get('host');
         const baseUrl = `${protocol}://${host}`;
 
-        console.log(`[WEBHOOK] [${eventSource}] Disparando POST /api/automations/process...`);
+        console.log(`[WEBHOOK] [${eventSource}] [${requestId}] Disparando Processamento E2E...`, {
+          target: `${baseUrl}/api/automations/process`,
+          payload: {
+            externalGroupId: automPayload.externalGroupId,
+            messageId: automPayload.messageId,
+            bodyLength: automPayload.body?.length
+          }
+        });
 
         // Fire and forget
         fetch(`${baseUrl}/api/automations/process`, {
