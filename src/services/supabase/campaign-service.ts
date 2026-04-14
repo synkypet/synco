@@ -52,8 +52,7 @@ export const campaignService = {
         product_id: item.product_id,
         product_name: item.product_name,
         custom_text: item.custom_text,
-        affiliate_url: item.affiliate_url,
-        image_url: item.image_url // Garantir que image_url possa passar se adicionado ao DTO
+        affiliate_url: item.affiliate_url
       }));
 
       const { data: items, error: itemsError } = await supabase
@@ -136,8 +135,7 @@ export const campaignService = {
                 destination: group.remote_id,
                 destination_name: group.name,
                 message_body: item.custom_text || item.product_name,
-                message_type: item.image_url ? 'image' : 'text',
-                image_url: item.image_url,
+                message_type: 'text',
                 status: 'pending',
                 try_count: 0,
                 fallback_channel_id: fallbackChannel?.id || null,

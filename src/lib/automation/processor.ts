@@ -251,8 +251,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
             product_id: (snapshot.factual.itemId || snapshot.id).toString(),
             product_name: snapshot.factual.title,
             custom_text: finalMessage,
-            affiliate_url: snapshot.factual.finalLinkToSend,
-            image_url: snapshot.factual.image || undefined
+            affiliate_url: snapshot.factual.finalLinkToSend
           }],
           destinations: [{
             type: route.target_type,

@@ -29,7 +29,7 @@ export interface CampaignItem {
   product_name: string;
   custom_text?: string | null;
   affiliate_url?: string | null;
-  image_url?: string | null;
+  // image_url?: string | null; // Coluna não existe no momento
   created_at?: string;
 }
 
@@ -49,7 +49,7 @@ export interface CreateCampaignDTO {
     product_name: string;
     custom_text?: string;
     affiliate_url?: string;
-    image_url?: string;
+    // image_url?: string; // Coluna não existe no momento
   }[];
   destinations: {
     type: 'list' | 'group';
