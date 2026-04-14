@@ -187,22 +187,40 @@ export async function POST(request: Request) {
       case 'chat.message_received': {
         // ─── Automação de Entrada ──────────────────────────────────────────
         const eventSource = eventType;
+        
+        // Log estruturado da data para diagnóstico se a extração falhar
+        console.log(`[WEBHOOK-DATA] [${requestId}] Estrutura data:`, JSON.stringify(body.data || {}, null, 2));
+
+        // Extração inteligente do externalGroupId (Suporte a Wasender/Baileys/Multi-V)
+        // Tentamos vários campos e priorizamos strings que pareçam JIDs (contendo @)
+        const remoteIdCandidates = [
+          body.data?.from,
+          body.data?.chatId,
+          body.data?.key?.remoteJid,
+          body.data?.remoteJid,
+          body.from,
+          body.chatId,
+          body.data?.jid
+        ];
+        
+        const extractedGroupId = remoteIdCandidates.find(id => typeof id === 'string' && id.includes('@')) || '';
+
         const automPayload = {
           userId: channel.user_id,
           channelId: channel.id,
-          externalGroupId: body.data?.from || body.data?.chatId || body.from || '',
+          externalGroupId: extractedGroupId,
           messageId: body.data?.id || body.id || '',
           body: body.data?.body || body.data?.content || body.body || '',
           isFromMe: body.data?.isFromMe ?? body.isFromMe ?? false,
         };
 
-        console.log(`[WEBHOOK] [${eventSource}] Processando potencial automação:`, {
+        console.log(`[WEBHOOK] [${eventSource}] [${requestId}] Processando potencial automação:`, {
           userId: automPayload.userId,
           channelId: automPayload.channelId,
           externalGroupId: automPayload.externalGroupId,
           messageId: automPayload.messageId,
-          bodyPreview: automPayload.body?.substring(0, 50),
-          isFromMe: automPayload.isFromMe
+          isFromMe: automPayload.isFromMe,
+          fieldFound: remoteIdCandidates.find(id => typeof id === 'string' && id.includes('@')) ? 'candidate_match' : 'none'
         });
 
         if (automPayload.isFromMe) {
