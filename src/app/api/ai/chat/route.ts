@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     }
 
     const result = await streamText({
-      model: google('gemini-2.0-flash'),
+      model: google('gemini-flash-latest'),
       system: `Você é o SYNCO Intelligence, um assistente especializado em marketing de afiliados, copy persuasiva e geração de ofertas curtas e de alto impacto para WhatsApp. 
       
 REGRAS:
