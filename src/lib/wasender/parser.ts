@@ -20,41 +20,36 @@ export function extractWebhookMessageContext(payloadBody: any): WebhookMessageCo
   // Garantir que estamos olhando para o objeto de dados
   const data = payloadBody.data || payloadBody;
   
-  // 1. Localizar o objeto real da mensagem
-  // Wasender Deep envia as mensagens dentro de um array 'messages'
-  let m = data;
-  if (Array.isArray(data.messages) && data.messages.length > 0) {
-    m = data.messages[0];
-  } else if (Array.isArray(data) && data.length > 0) {
-    m = data[0];
+  // 1. Localizar o objeto real da mensagem (Wasender Deep pode ser Array ou Objeto Único)
+  let m = data.messages || data;
+  if (Array.isArray(m)) {
+    m = m[0] || {};
   }
 
-  // Se o objeto for uma string (raro), tentamos retornar algo mínimo
+  // Fallback: se o objeto for string (raro), tratamos como corpo
   if (typeof m === 'string') {
-    return {
-      externalGroupId: "",
-      messageId: "",
-      body: m,
-      isFromMe: false
-    };
+    return { externalGroupId: "", messageId: "", body: m, isFromMe: false };
   }
 
-  // 2. Extração do Identificador do Chat (Grupo ou Individual JID)
-  // Prioridade para o remoteJid aninhado que é o padrão mais estável
-  const rawGroupId = 
-    m.key?.remoteJid || 
-    m.chatId || 
-    m.from || 
-    m.remote_id || 
-    m.jid || 
-    m.remoteJid ||
-    "";
+  // 2. Extração do Identificador do Chat (Apenas Grupos @g.us)
+  // Prioridades: m.key.remoteJid -> data.remoteJid
+  const groupCandidates = [
+    m.key?.remoteJid,
+    data.remoteJid,
+    m.chatId,
+    m.from,
+    m.jid
+  ];
+  
+  // Regra de segurança: Deve terminar com @g.us para ser considerado grupo de origem
+  const externalGroupId = groupCandidates.find(id => typeof id === 'string' && id.endsWith('@g.us')) || "";
 
   // 3. Extração do ID da Mensagem
-  const rawMessageId = 
+  // Prioridades: m.key.id -> data.id
+  const messageId = 
     m.key?.id || 
+    data.id || 
     m.id || 
-    m.messageId || 
     "";
 
   // 4. Extração da Origem (FromMe)
@@ -63,24 +58,26 @@ export function extractWebhookMessageContext(payloadBody: any): WebhookMessageCo
     m.isFromMe ?? 
     false;
 
-  // 5. Extração do Conteúdo (Texto/Legenda) - Prioridade para o objeto 'message' aninhado
-  const c = m.message || m;
+  // 5. Extração do Conteúdo (Texto/Legenda) - Prioridade total para o objeto 'message' aninhado
+  const msgObj = m.message || {};
   
-  const rawBody = 
-    c.conversation || 
-    c.extendedTextMessage?.text || 
-    c.imageMessage?.caption || 
-    c.videoMessage?.caption || 
-    c.documentWithCaptionMessage?.message?.documentMessage?.caption ||
-    c.body || 
-    c.content || 
-    c.text || 
-    "";
+  const bodyCandidates = [
+    msgObj.extendedTextMessage?.text,
+    data.messageBody,
+    msgObj.conversation,
+    msgObj.imageMessage?.caption,
+    msgObj.videoMessage?.caption,
+    m.body,
+    m.content,
+    m.text
+  ];
+
+  const body = bodyCandidates.find(b => typeof b === 'string' && b.length > 0) || "";
 
   return {
-    externalGroupId: typeof rawGroupId === 'string' ? rawGroupId : "",
-    messageId: typeof rawMessageId === 'string' ? rawMessageId : "",
-    body: typeof rawBody === 'string' ? rawBody : "",
+    externalGroupId: typeof externalGroupId === 'string' ? externalGroupId : "",
+    messageId: typeof messageId === 'string' ? messageId : "",
+    body: typeof body === 'string' ? body : "",
     isFromMe: !!isFromMe,
     participant: m.key?.participant || m.participant || undefined
   };
