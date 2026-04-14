@@ -179,7 +179,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
         user_id: userId,
         status: 'filtered',
         event_type: 'ingest_dedupe',
-        details: { url: normalized }
+        details: { url: normalized, messageId }
       }, supabase);
       continue;
     }
@@ -197,7 +197,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
           user_id: userId,
           status: 'error',
           event_type: 'fetch_failed',
-          details: { url: normalized }
+          details: { url: normalized, messageId }
         }, supabase);
         continue;
       }
@@ -217,7 +217,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
             user_id: userId,
             status: 'filtered',
             event_type: 'anti_loop',
-            details: { url: normalized, targetId: route.target_id }
+            details: { url: normalized, targetId: route.target_id, messageId }
           }, supabase);
           continue;
         }
@@ -230,12 +230,13 @@ export async function processInboundAutomation(payload: InboundPayload) {
             user_id: userId,
             status: 'filtered',
             event_type: 'rule_rejected',
-            details: { url: normalized, targetId: route.target_id, filters: route.filters }
+            details: { url: normalized, targetId: route.target_id, filters: route.filters, messageId }
           }, supabase);
           continue;
         }
 
-        // 3. Camada 2: Dedupe de Destino
+        /*
+        // 3. Camada 2: Dedupe de Destino (DESATIVADO TEMPORARIAMENTE)
         const isDestDuplicate = await automationService.checkAndMarkDestinationDedupe(userId, normalized, route.target_id, supabase);
         if (isDestDuplicate) {
           console.log(`${logPrefix} [ITEM] [DEDUPE-DEST] Ignorado: URL já enviada recentemente para este destino.`);
@@ -244,10 +245,11 @@ export async function processInboundAutomation(payload: InboundPayload) {
             user_id: userId,
             status: 'filtered',
             event_type: 'dest_dedupe',
-            details: { url: normalized, targetId: route.target_id }
+            details: { url: normalized, targetId: route.target_id, messageId }
           }, supabase);
           continue;
         }
+        */
 
         // 4. Composição e Geração de Job
         console.log(`${logPrefix} [ITEM] [CAMPAIGN] Gerando campanha e disparos...`);
