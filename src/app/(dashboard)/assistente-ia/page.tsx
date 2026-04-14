@@ -78,7 +78,7 @@ export default function AssistenteIAPage() {
 
     const { messages, status, sendMessage, setMessages } = useChat({
         transport: chatTransport,
-        initialMessages: INITIAL_MESSAGES as any,
+        messages: INITIAL_MESSAGES as any,
         onError: (e: any) => toast.error('Erro no assistente: ' + e.message),
     });
 
