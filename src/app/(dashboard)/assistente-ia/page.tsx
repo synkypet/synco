@@ -85,9 +85,15 @@ export default function AssistenteIAPage() {
     const isLoading = status === 'submitted' || status === 'streaming';
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTo({
+                top: scrollContainerRef.current.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
     }, [messages]);
 
     const handleFormSubmit = (e: React.FormEvent) => {
@@ -193,7 +199,10 @@ export default function AssistenteIAPage() {
                         </div>
 
                         {/* Área de Mensagens */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-dots-pattern">
+                        <div 
+                            ref={scrollContainerRef}
+                            className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-dots-pattern"
+                        >
                             {messages.map((msg: any, i: number) => {
                                 const text = getMessageText(msg);
                                 if (!text && msg.role !== 'user') return null;
