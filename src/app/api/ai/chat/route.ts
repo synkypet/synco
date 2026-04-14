@@ -11,16 +11,39 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
 
-    // O Gemini é extremamente restrito com os campos extras injetados nativamente pelo useChat (como "id").
-    // Além disso, a API do Gemini rejeita o payload inteiro (400 Bad Request) se a primeira mensagem histórica não for do "user".
-    const coreMessages = messages.map((m: any) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // SDK v6 envia mensagens no formato UIMessage com `parts` array.
+    // O Gemini espera `role` + `content` (string).
+    // Precisamos converter de parts → content string.
+    const coreMessages = messages.map((m: any) => {
+      let content = '';
 
-    // Remove a primeira mensagem se for um assistant, para evitar conflito com a engine do google.
+      // v6: extrair texto de parts
+      if (m.parts && Array.isArray(m.parts)) {
+        content = m.parts
+          .filter((p: any) => p.type === 'text')
+          .map((p: any) => p.text)
+          .join('');
+      }
+      // Fallback: usar content diretamente (mensagens legadas)
+      else if (typeof m.content === 'string') {
+        content = m.content;
+      }
+
+      return { role: m.role, content };
+    });
+
+    // O Gemini rejeita o payload se a primeira mensagem não for do "user".
     while (coreMessages.length > 0 && coreMessages[0].role === 'assistant') {
       coreMessages.shift();
+    }
+
+    // Filtrar mensagens vazias que possam ter passado
+    const validMessages = coreMessages.filter((m: any) => m.content.trim().length > 0);
+
+    if (validMessages.length === 0) {
+      return new Response(JSON.stringify({ error: 'Nenhuma mensagem válida recebida' }), {
+        status: 400,
+      });
     }
 
     const result = await streamText({
@@ -33,7 +56,7 @@ REGRAS:
 3. Use gatilhos mentais de urgência, escassez e exclusividade.
 4. Utilize Emojis estrategicamente.
 5. Quando pedirem um texto, já devolva a cópia pronta, não fique "preparando" o usuário.`,
-      messages: coreMessages,
+      messages: validMessages,
     });
 
     return result.toUIMessageStreamResponse();

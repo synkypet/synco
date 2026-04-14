@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,11 +31,15 @@ const SUGGESTIONS = [
     "Melhores práticas de envio em massa?",
 ];
 
+// Mensagem de boas-vindas no formato v6 (com parts)
 const INITIAL_MESSAGES = [
     {
-        id: '1',
-        role: 'assistant',
-        content: `Olá! Sou o Assistente IA do SYNCO 🤖✨
+        id: 'welcome-1',
+        role: 'assistant' as const,
+        parts: [
+            {
+                type: 'text' as const,
+                text: `Olá! Sou o Assistente IA do SYNCO 🤖✨
 
 Posso te ajudar com:
 - **Criar e melhorar textos** de ofertas
@@ -44,19 +49,40 @@ Posso te ajudar com:
 - **Qualquer dúvida** sobre a plataforma
 
 O que você precisa hoje?`,
+            }
+        ],
     }
 ];
+
+// Helper: extrai texto legível de uma UIMessage (v6 usa parts, não content)
+function getMessageText(msg: any): string {
+    // v6: msg.parts é um array de objetos com type e text/content
+    if (msg.parts && Array.isArray(msg.parts)) {
+        return msg.parts
+            .filter((p: any) => p.type === 'text')
+            .map((p: any) => p.text)
+            .join('');
+    }
+    // Fallback para o campo content legado (mensagens iniciais antigas, etc.)
+    if (typeof msg.content === 'string') return msg.content;
+    return '';
+}
+
+// Transporte explícito: garante que o useChat envie ao endpoint correto
+const chatTransport = new DefaultChatTransport({
+    api: '/api/ai/chat',
+});
 
 export default function AssistenteIAPage() {
     const [inputValue, setInputValue] = React.useState('');
 
-    // @ts-ignore - Bypass para falha local de tipagem nas re-exportações do Vercel AI SDK
-    const { messages, isLoading, append, setMessages } = useChat({
-        // @ts-ignore
-        api: '/api/ai/chat',
+    const { messages, status, sendMessage, setMessages } = useChat({
+        transport: chatTransport,
         initialMessages: INITIAL_MESSAGES as any,
         onError: (e: any) => toast.error('Erro no assistente: ' + e.message),
-    }) as any;
+    });
+
+    const isLoading = status === 'submitted' || status === 'streaming';
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -69,10 +95,8 @@ export default function AssistenteIAPage() {
         const text = inputValue.trim();
         if (!text || isLoading) return;
 
-        setInputValue(''); // Limpa o campo
-        append({ role: 'user', content: text }).catch((err: any) => {
-             toast.error('Erro de conexão com AI: ' + err.message);
-        });
+        setInputValue('');
+        sendMessage({ text });
     };
 
     const copyMessage = (text: string) => {
@@ -107,7 +131,7 @@ export default function AssistenteIAPage() {
                                         size="sm"
                                         className="w-full justify-start text-xs h-10 border-primary/10 hover:border-primary/30 hover:bg-primary/5 bg-card"
                                         onClick={() => {
-                                            append({ role: 'user', content: action.prompt });
+                                            sendMessage({ text: action.prompt });
                                         }}
                                     >
                                         <Icon className="w-3.5 h-3.5 mr-2 text-primary" />
@@ -129,7 +153,7 @@ export default function AssistenteIAPage() {
                             {SUGGESTIONS.map((s: string, i: number) => (
                                 <button
                                     key={i}
-                                    onClick={() => append({ role: 'user', content: s })}
+                                    onClick={() => sendMessage({ text: s })}
                                     className="w-full text-left text-xs p-2.5 rounded-xl hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-all duration-200 border border-transparent hover:border-border"
                                 >
                                     {s}
@@ -170,44 +194,48 @@ export default function AssistenteIAPage() {
 
                         {/* Área de Mensagens */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-dots-pattern">
-                            {messages.map((msg: any, i: number) => (
-                                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                                    {msg.role === 'assistant' && (
-                                        <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-1 mr-3">
-                                            <Bot className="w-4 h-4 text-primary" />
-                                        </div>
-                                    )}
-                                    <div className={`max-w-[85%] group ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
-                                        <div className={`rounded-2xl px-5 py-3.5 text-sm shadow-sm ${
-                                            msg.role === 'user'
-                                                ? 'bg-primary text-white rounded-br-none font-medium'
-                                                : 'bg-muted/80 backdrop-blur-sm border border-border/50 rounded-bl-none text-foreground'
-                                        }`}>
-                                            <div className="whitespace-pre-wrap leading-relaxed">
-                                                {msg.content}
-                                            </div>
-                                        </div>
+                            {messages.map((msg: any, i: number) => {
+                                const text = getMessageText(msg);
+                                if (!text && msg.role !== 'user') return null;
+                                return (
+                                    <div key={msg.id || i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                                         {msg.role === 'assistant' && (
-                                            <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-all transform translate-y-1 group-hover:translate-y-0">
-                                                <button 
-                                                    onClick={() => copyMessage(msg.content)}
-                                                    className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted text-[10px] font-bold text-muted-foreground transition-colors border border-transparent hover:border-border"
-                                                >
-                                                    <Copy className="w-3 h-3" /> COPIAR
-                                                </button>
-                                                <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted text-[10px] font-bold text-muted-foreground transition-colors border border-transparent hover:border-border">
-                                                    <ThumbsUp className="w-3 h-3" /> ÚTIL
-                                                </button>
+                                            <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-1 mr-3">
+                                                <Bot className="w-4 h-4 text-primary" />
+                                            </div>
+                                        )}
+                                        <div className={`max-w-[85%] group ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
+                                            <div className={`rounded-2xl px-5 py-3.5 text-sm shadow-sm ${
+                                                msg.role === 'user'
+                                                    ? 'bg-primary text-white rounded-br-none font-medium'
+                                                    : 'bg-muted/80 backdrop-blur-sm border border-border/50 rounded-bl-none text-foreground'
+                                            }`}>
+                                                <div className="whitespace-pre-wrap leading-relaxed">
+                                                    {text}
+                                                </div>
+                                            </div>
+                                            {msg.role === 'assistant' && text && (
+                                                <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-all transform translate-y-1 group-hover:translate-y-0">
+                                                    <button 
+                                                        onClick={() => copyMessage(text)}
+                                                        className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted text-[10px] font-bold text-muted-foreground transition-colors border border-transparent hover:border-border"
+                                                    >
+                                                        <Copy className="w-3 h-3" /> COPIAR
+                                                    </button>
+                                                    <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted text-[10px] font-bold text-muted-foreground transition-colors border border-transparent hover:border-border">
+                                                        <ThumbsUp className="w-3 h-3" /> ÚTIL
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {msg.role === 'user' && (
+                                            <div className="w-8 h-8 rounded-full bg-muted border border-border flex items-center justify-center flex-shrink-0 mt-1 ml-3 text-[10px] font-black">
+                                                EU
                                             </div>
                                         )}
                                     </div>
-                                    {msg.role === 'user' && (
-                                        <div className="w-8 h-8 rounded-full bg-muted border border-border flex items-center justify-center flex-shrink-0 mt-1 ml-3 text-[10px] font-black">
-                                            EU
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                );
+                            })}
                             {isLoading && (
                                 <div className="flex justify-start animate-in fade-in duration-300">
                                     <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-1 mr-3">
