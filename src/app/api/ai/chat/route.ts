@@ -36,7 +36,7 @@ REGRAS:
       messages: coreMessages,
     });
 
-    return result.toDataStreamResponse();
+    return result.toUIMessageStreamResponse();
   } catch (error: any) {
     console.error("Erro no Gemini:", error);
     return new Response(JSON.stringify({ error: error.message }), {
