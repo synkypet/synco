@@ -91,53 +91,60 @@ function normalizeShopeeUrl(url: string): string {
 }
 
 export async function processInboundAutomation(payload: InboundPayload) {
-  const { userId, channelId, externalGroupId, body, isFromMe } = payload;
-  const logPrefix = `[AUTOMATION] [${externalGroupId}]`;
+  const { userId, channelId, externalGroupId, body, isFromMe, messageId } = payload;
+  const logPrefix = `[PROCESSOR] [MSG:${messageId || 'RAW'}] [GRP:${externalGroupId}]`;
 
-  console.log(`${logPrefix} >>> Iniciando processamento de mensagem:`, { userId, messageId: payload.messageId, isFromMe });
+  console.log(`${logPrefix} >>> INICIANDO PROCESSAMENTO E2E`);
+  console.log(`${logPrefix} Data:`, { userId, channelId, externalGroupId, isFromMe, bodyPreview: body?.substring(0, 50) });
 
   if (isFromMe) {
-    console.log(`${logPrefix} Ignorando: Mensagem enviada pelo próprio número.`);
-    return { skipped: 'self_sent' };
+    console.log(`${logPrefix} [SKIP] Motivo: Mensagem enviada pelo próprio número (Self-sent).`);
+    return { skipped: 'self_sent', reason: 'isFromMe is true' };
   }
 
   const supabase: SupabaseClient = createAdminClient();
   
-  console.log(`${logPrefix} Buscando fonte de automação configurada...`);
+  console.log(`${logPrefix} [STEP] Buscando fonte em 'automation_sources'...`, { userId, channelId, externalGroupId });
   const source = await automationService.getSourceByExternalId(userId, channelId, externalGroupId, supabase);
   
   if (!source) {
-    console.warn(`${logPrefix} ⚠ Nenhuma fonte ativa encontrada para este grupo.`);
-    return { skipped: 'not_a_source' };
+    console.warn(`${logPrefix} [SKIP] Motivo: Nenhuma fonte ATIVA encontrada para este conjunto (User/Channel/Group).`);
+    console.warn(`${logPrefix} [DEBUG] Verifique se existe um registro em 'automation_sources' com:`, { 
+      user_id: userId, 
+      channel_id: channelId, 
+      external_group_id: externalGroupId, 
+      is_active: true 
+    });
+    return { skipped: 'not_a_source', details: { userId, channelId, externalGroupId } };
   }
 
-  console.log(`${logPrefix} ✓ Fonte encontrada: "${source.name}" (ID: ${source.id})`);
+  console.log(`${logPrefix} [STEP] ✓ Fonte ID: ${source.id} ("${source.name}")`);
 
   const links = extractShopeeLinks(body);
   if (links.length === 0) {
-    console.log(`${logPrefix} Ignorando: Nenhum link Shopee identificado no texto.`);
-    return { skipped: 'no_shopee_links' };
+    console.log(`${logPrefix} [SKIP] Motivo: Nenhum link Shopee identificado na mensagem.`);
+    return { skipped: 'no_shopee_links', bodyPreview: body?.substring(0, 50) };
   }
 
-  console.log(`${logPrefix} ✓ ${links.length} link(s) Shopee encontrado(s).`);
+  console.log(`${logPrefix} [STEP] ✓ Identificados ${links.length} links Shopee. Extraindo conexões...`);
 
   const connections: UserMarketplaceConnection[] = await marketplaceService.getUserConnections(userId, supabase);
-  console.log(`${logPrefix} Buscando rotas de destino...`);
+  console.log(`${logPrefix} [STEP] Buscando rotas de destino ativas para Source ${source.id}...`);
   const routes = await automationService.getRoutesBySourceId(source.id, supabase);
   
   if (routes.length === 0) {
-    console.warn(`${logPrefix} ⚠ Nenhuma rota de destino ativa configurada para esta fonte.`);
+    console.warn(`${logPrefix} [SKIP] Motivo: Fonte encontrada, mas não possui ROTAS DE DESTINO ativas.`);
     await automationService.logEvent({
       source_id: source.id,
       user_id: userId,
       status: 'filtered',
-      event_type: 'no_routes',
-      details: { channelId, externalGroupId }
+      event_type: 'no_routes_configured',
+      details: { channelId, externalGroupId, sourceId: source.id }
     }, supabase);
-    return { skipped: 'no_routes_configured' };
+    return { skipped: 'no_routes_configured', sourceId: source.id };
   }
 
-  console.log(`${logPrefix} ✓ ${routes.length} rota(s) de destino configurada(s).`);
+  console.log(`${logPrefix} [STEP] ✓ Encontradas ${routes.length} rotas de destino.`);
 
   const results = [];
   const adminEntry = supabase;
@@ -148,14 +155,16 @@ export async function processInboundAutomation(payload: InboundPayload) {
     .select('id, remote_id')
     .in('id', routes.map(r => r.target_id));
 
+  console.log(`${logPrefix} [STEP] Iniciando iteração sobre os links...`);
+
   for (const rawUrl of links) {
     const normalized = normalizeShopeeUrl(rawUrl);
-    console.log(`${logPrefix} Processando link: ${rawUrl}`);
+    console.log(`${logPrefix} [ITEM] Processando link: ${rawUrl}`);
     
     // Camada 1: Dedupe de Ingestão
     const isDuplicate = await automationService.checkAndMarkDedupe(userId, normalized, externalGroupId, supabase);
     if (isDuplicate) {
-      console.log(`${logPrefix} [DEDUPE] URL já processada recentemente para este grupo.`);
+      console.log(`${logPrefix} [ITEM] [DEDUPE] Ignorado: URL já processada neste grupo de origem.`);
       await automationService.logEvent({
         source_id: source.id,
         user_id: userId,
@@ -167,12 +176,12 @@ export async function processInboundAutomation(payload: InboundPayload) {
     }
 
     try {
-      console.log(`${logPrefix} Convertendo link para afiliado e buscando metadados...`);
+      console.log(`${logPrefix} [ITEM] Convertendo link e buscando metadados...`);
       const snapshots = await processLinks([rawUrl], connections, 'auto');
       const snapshot = snapshots[0];
 
       if (!snapshot) {
-        console.error(`${logPrefix} ✖ Falha ao capturar metadados do produto.`);
+        console.error(`${logPrefix} [ITEM] [ERROR] Falha ao capturar metadados do produto.`);
         await automationService.logEvent({
           source_id: source.id,
           user_id: userId,
@@ -183,16 +192,16 @@ export async function processInboundAutomation(payload: InboundPayload) {
         continue;
       }
 
-      console.log(`${logPrefix} ✓ Produto: "${snapshot.factual.title}" | Preço: ${snapshot.factual.currentPriceFactual}`);
+      console.log(`${logPrefix} [ITEM] ✓ Produto: "${snapshot.factual.title}" | Preço: ${snapshot.factual.currentPriceFactual}`);
 
       // Processar cada rota individualmente
       for (const route of routes) {
-        console.log(`${logPrefix} -> Verificando rota de destino: ${route.target_id}`);
+        console.log(`${logPrefix} [ITEM] -> Avaliando Rota: ${route.id} (Destino: ${route.target_id})`);
         
         // 1. Anti-loop
         const destInfo = routeDestinations?.find(d => d.id === route.target_id);
         if (destInfo?.remote_id === externalGroupId) {
-          console.log(`${logPrefix} [ANTI-LOOP] Ignorando: Destino é o próprio grupo de origem.`);
+          console.log(`${logPrefix} [ITEM] [ANTI-LOOP] Ignorado: Destino é o mesmo da Origem.`);
           await automationService.logEvent({
             source_id: source.id,
             user_id: userId,
@@ -205,7 +214,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
 
         // 2. Motor de Regras: Filtros
         if (!applyFilters(snapshot, body, route.filters)) {
-          console.log(`${logPrefix} [REGRAS] Link rejeitado pelos filtros da rota.`);
+          console.log(`${logPrefix} [ITEM] [FILTERED] Ignorado: Rejeitado pelas regras da rota.`);
           await automationService.logEvent({
             source_id: source.id,
             user_id: userId,
@@ -219,7 +228,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
         // 3. Camada 2: Dedupe de Destino
         const isDestDuplicate = await automationService.checkAndMarkDestinationDedupe(userId, normalized, route.target_id, supabase);
         if (isDestDuplicate) {
-          console.log(`${logPrefix} [DEDUPE-DEST] URL já enviada para este destino recentemente.`);
+          console.log(`${logPrefix} [ITEM] [DEDUPE-DEST] Ignorado: URL já enviada recentemente para este destino.`);
           await automationService.logEvent({
             source_id: source.id,
             user_id: userId,
@@ -231,7 +240,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
         }
 
         // 4. Composição e Geração de Job
-        console.log(`${logPrefix} Gerando campanha e jobs de envio...`);
+        console.log(`${logPrefix} [ITEM] [CAMPAIGN] Gerando campanha e disparos...`);
         const finalMessage = route.template_config?.body 
           ? fillTemplate(route.template_config.body, snapshot.factual, source.name)
           : snapshot.copy.messageText;
@@ -251,7 +260,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
           }]
         }, supabase);
 
-        console.log(`${logPrefix} ★ SUCESSO! Campanha #${campaign.id} criada para o destino.`);
+        console.log(`${logPrefix} [ITEM] [SUCCESS] ★ Campanha #${campaign.id} criada com sucesso.`);
 
         await automationService.logEvent({
           source_id: source.id,
@@ -265,7 +274,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
       }
 
     } catch (err: any) {
-      console.error(`${logPrefix} ✖ Erro crítico no processamento:`, err);
+      console.error(`${logPrefix} [ITEM] [EXCEPTION] Erro crítico:`, err);
       await automationService.logEvent({
         source_id: source.id,
         user_id: userId,
@@ -276,6 +285,6 @@ export async function processInboundAutomation(payload: InboundPayload) {
     }
   }
 
-  console.log(`${logPrefix} Finalizado: ${results.length} item(s) processado(s) com sucesso.`);
+  console.log(`${logPrefix} >>> FINALIZADO. Itens processados: ${results.length}`);
   return { processed: results.length, details: results };
 }
