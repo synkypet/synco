@@ -44,24 +44,48 @@ export async function POST(request: Request) {
     console.log(`[WEBHOOK-SESSION] [${requestId}] ID Identificado: ${sessionId} (Type: ${typeof sessionIdRaw})`);
 
     // ─── 1. Identificar o canal vinculado a essa sessão ────────────────────
-    console.log(`[WEBHOOK-CHANNEL] [${requestId}] Buscando canal por wasender_session_id ou sessionId: ${sessionId}`);
-    
-    // Busca robusta: Verifica tanto a chave nova (wasender_session_id) quanto a legada (sessionId)
+    let channel: any = null;
+
+    // TENTATIVA 1: Busca por ID Numérico (wasender_session_id ou sessionId legado)
+    console.log(`[WEBHOOK-LOOKUP] [${requestId}] Tentativa 1: Busca por ID numérico em channels...`);
     const { data: channels, error: channelError } = await supabase
       .from('channels')
       .select('id, user_id, config')
       .or(`config->>wasender_session_id.eq.${sessionId},config->>sessionId.eq.${sessionId}`);
 
-    if (channelError || !channels || channels.length === 0) {
-      console.error(`[WEBHOOK-ABORT] [${requestId}] Canal não encontrado para sessionId ${sessionId}.`, {
-        error: channelError,
-        count: channels?.length || 0
+    if (channels && channels.length > 0) {
+      channel = channels[0];
+      console.log(`[WEBHOOK-CHANNEL] [${requestId}] ✓ Canal encontrado via ID Numérico: ${channel.id}`);
+    } else {
+      // TENTATIVA 2: Fallback por Hash ID (session_api_key em channel_secrets)
+      console.log(`[WEBHOOK-LOOKUP] [${requestId}] Tentativa 2: Busca por Hash ID (session_api_key) em channel_secrets...`);
+      const { data: secretData } = await supabase
+        .from('channel_secrets')
+        .select('channel_id')
+        .eq('session_api_key', sessionId)
+        .single();
+
+      if (secretData) {
+        console.log(`[WEBHOOK-LOOKUP] [${requestId}] ✓ Hash ID localizado. Recuperando canal ${secretData.channel_id}...`);
+        const { data: channelData } = await supabase
+          .from('channels')
+          .select('id, user_id, config')
+          .eq('id', secretData.channel_id)
+          .single();
+        
+        if (channelData) {
+          channel = channelData;
+          console.log(`[WEBHOOK-CHANNEL] [${requestId}] ✓ Canal encontrado via Hash ID: ${channel.id}`);
+        }
+      }
+    }
+
+    if (!channel) {
+      console.error(`[WEBHOOK-ABORT] [${requestId}] Canal não encontrado para sessionId ${sessionId} (nem por ID numérico, nem por Hash).`, {
+        error: channelError
       });
       return NextResponse.json({ error: 'Channel not found for this session' }, { status: 404 });
     }
-
-    const channel = channels[0];
-    console.log(`[WEBHOOK-CHANNEL] [${requestId}] ✓ Canal encontrado: ${channel.id} (User: ${channel.user_id})`);
 
     // ─── 2. Validar Assinatura com webhook_secret do banco ─────────────────
     // Buscar o webhook_secret específico desse canal na tabela de segredos
