@@ -36,15 +36,7 @@ REGRAS:
       messages: coreMessages,
     });
 
-    if ((result as any).toUIMessageStreamResponse) {
-      return (result as any).toUIMessageStreamResponse();
-    } else if ((result as any).toDataStreamResponse) {
-      return (result as any).toDataStreamResponse();
-    } else if ((result as any).toTextStreamResponse) {
-      return (result as any).toTextStreamResponse();
-    }
-    
-    throw new Error("No valid stream response method found on result");
+    return result.toDataStreamResponse();
   } catch (error: any) {
     console.error("Erro no Gemini:", error);
     return new Response(JSON.stringify({ error: error.message }), {
