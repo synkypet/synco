@@ -111,7 +111,6 @@ export async function processInboundAutomation(payload: InboundPayload) {
     console.log(`${logPrefix} [SKIP] Motivo: Mensagem enviada pelo próprio número (Self-sent).`);
     return { skipped: 'self_sent', reason: 'isFromMe is true' };
   }
-  const supabase: SupabaseClient = createAdminClient();
   
   console.log(`${logPrefix} [STEP] Buscando fonte em 'automation_sources'...`, { userId, channelId, externalGroupId });
   const source = await automationService.getSourceByExternalId(userId, channelId, externalGroupId, supabase);
