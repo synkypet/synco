@@ -38,23 +38,29 @@ function markChannelSent(channelId: string) {
 }
 
 // ─── Structured Logger ──────────────────────────────────────────────────────
-function logJob(level: 'INFO' | 'ERROR' | 'WARN', jobId: string, data: Record<string, any>) {
+function logJob(level: 'INFO' | 'ERROR' | 'WARN', jobId: string, data: Record<string, any>, requestId?: string) {
   const entry = {
     ts: new Date().toISOString(),
     level,
     jobId,
+    reqId: requestId,
     ...data,
   };
   if (level === 'ERROR') {
-    console.error('[WORKER]', JSON.stringify(entry));
+    console.error(`[WORKER] [${requestId || 'SYSTEM'}]`, JSON.stringify(entry));
   } else if (level === 'WARN') {
-    console.warn('[WORKER]', JSON.stringify(entry));
+    console.warn(`[WORKER] [${requestId || 'SYSTEM'}]`, JSON.stringify(entry));
   } else {
-    console.log('[WORKER]', JSON.stringify(entry));
+    console.log(`[WORKER] [${requestId || 'SYSTEM'}]`, JSON.stringify(entry));
   }
 }
 
 export async function POST(request: Request) {
+  const incomingRequestId = request.headers.get('x-request-id');
+  const requestId = incomingRequestId || Math.random().toString(36).substring(7);
+  
+  console.log(`[WORKER-START] [${requestId}] ${incomingRequestId ? 'Acionamento via Fast-Trigger' : 'Acionamento via Cron/Manual'}. Iniciando processamento...`);
+
   try {
     const supabase = createAdminClient();
 
@@ -63,6 +69,7 @@ export async function POST(request: Request) {
     const expectedSecret = process.env.CRON_SECRET;
 
     if (expectedSecret && cronSecret !== expectedSecret) {
+      console.warn(`[WORKER-FAIL] [${requestId}] Falha de autenticação: Secret inválido.`);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -154,7 +161,7 @@ export async function POST(request: Request) {
             })
             .eq('id', job.id);
 
-          logJob('INFO', job.id, { action: 'skipped_duplicate', destination: job.destination });
+          logJob('INFO', job.id, { action: 'skipped_duplicate', destination: job.destination }, requestId);
           results.push({ jobId: job.id, status: 'skipped_duplicate' });
           continue;
         }
@@ -187,7 +194,7 @@ export async function POST(request: Request) {
             })
             .eq('id', job.id);
 
-          logJob('ERROR', job.id, { action: 'channel_unavailable', channelType, status: sessionStatus });
+          logJob('ERROR', job.id, { action: 'channel_unavailable', channelType, status: sessionStatus }, requestId);
           results.push({ jobId: job.id, status: 'failed', error: 'session_lost', errorType: 'PERMANENT' });
           continue;
         }
@@ -216,7 +223,7 @@ export async function POST(request: Request) {
           })
           .eq('id', job.id);
 
-        logJob('ERROR', job.id, { action: 'auth_failed', channelType, error: authErr.message });
+        logJob('ERROR', job.id, { action: 'auth_failed', channelType, error: authErr.message }, requestId);
         results.push({ jobId: job.id, status: 'failed', error: 'missing_auth', errorType: 'PERMANENT' });
         continue;
       }
@@ -229,7 +236,7 @@ export async function POST(request: Request) {
           .update({ status: 'pending', updated_at: new Date().toISOString() })
           .eq('id', job.id);
 
-        logJob('WARN', job.id, { action: 'rate_limited', destination: job.destination });
+        logJob('WARN', job.id, { action: 'rate_limited', destination: job.destination }, requestId);
         results.push({ jobId: job.id, status: 'rate_limited' });
         continue;
       }
@@ -244,7 +251,7 @@ export async function POST(request: Request) {
           .update({ status: 'pending', updated_at: new Date().toISOString() })
           .eq('id', job.id);
 
-        logJob('INFO', job.id, { action: 'channel_pacing', channelId: job.channel_id });
+        logJob('INFO', job.id, { action: 'channel_pacing', channelId: job.channel_id }, requestId);
         results.push({ jobId: job.id, status: 'pacing_skip' });
         continue;
       }
@@ -253,7 +260,7 @@ export async function POST(request: Request) {
       const formattedDestination = provider.formatDestination(job.destination);
       const messageText = job.message_body || '';
 
-      logJob('INFO', job.id, { action: 'sending', channelType, destination: formattedDestination });
+      logJob('INFO', job.id, { action: 'sending', channelType, destination: formattedDestination }, requestId);
 
       let result: SendResult;
 
@@ -291,7 +298,7 @@ export async function POST(request: Request) {
             delivered_at: new Date().toISOString()
           });
 
-        logJob('INFO', job.id, { action: 'delivered', channelType, messageId: result.messageId });
+        logJob('INFO', job.id, { action: 'delivered', channelType, messageId: result.messageId }, requestId);
         results.push({ jobId: job.id, status: 'completed' });
 
       } else {
@@ -326,11 +333,11 @@ export async function POST(request: Request) {
           errorType,
           error: result.error,
           attempt: newTryCount,
-        });
+        }, requestId);
 
         // ─── 9. Fallback Multi-Canal ─────────────────────────────────────
         if (finalStatus === 'failed' && job.fallback_channel_id) {
-          logJob('INFO', job.id, { action: 'fallback_triggered', fallbackChannelId: job.fallback_channel_id });
+          logJob('INFO', job.id, { action: 'fallback_triggered', fallbackChannelId: job.fallback_channel_id }, requestId);
 
           await supabase
             .from('send_jobs')
@@ -359,9 +366,12 @@ export async function POST(request: Request) {
       // Pacing agora é controlado individualmente por canSendFromChannel
     }
 
+    console.log(`[WORKER-DONE] [${requestId}] Processamento finalizado. Jobs processados: ${results.length}`);
+
     return NextResponse.json({
       processed: results.length,
-      results
+      results,
+      requestId
     });
 
   } catch (error: any) {
