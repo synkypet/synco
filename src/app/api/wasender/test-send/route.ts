@@ -83,8 +83,15 @@ export async function POST(request: Request) {
     }
 
     // 3. Executar o envio via WasenderClient
-    console.log(`${logPrefix} Disparando envio manual: Canal=${channelId}, Para=${phone}`);
+    console.log(`${logPrefix} >>> DISPARANDO ENVIO MANUAL:`);
+    console.log(`${logPrefix} [AUDIT] Canal: ${channelId}`);
+    console.log(`${logPrefix} [AUDIT] Session: ${wasenderSessionId}`);
+    console.log(`${logPrefix} [AUDIT] Destino: ${phone}`);
+    console.log(`${logPrefix} [AUDIT] Chave (prefix): ${sessionApiKey.substring(0, 8)}...`);
+
     const sendRes = await WasenderClient.sendMessage(sessionApiKey, phone, message);
+
+    console.log(`${logPrefix} [SUCCESS] Retorno do Provedor:`, JSON.stringify(sendRes).substring(0, 100));
 
     return NextResponse.json({
       success: true,

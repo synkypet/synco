@@ -169,7 +169,8 @@ export async function processInboundAutomation(payload: InboundPayload) {
     const normalized = normalizeShopeeUrl(rawUrl);
     console.log(`${logPrefix} [ITEM] Processando link: ${rawUrl}`);
     
-    // Camada 1: Dedupe de Ingestão
+    /* 
+    // Camada 1: Dedupe de Ingestão (DESATIVADO TEMPORARIAMENTE)
     const isDuplicate = await automationService.checkAndMarkDedupe(userId, normalized, externalGroupId, supabase);
     if (isDuplicate) {
       console.log(`${logPrefix} [ITEM] [DEDUPE] Ignorado: URL já processada neste grupo de origem.`);
@@ -182,6 +183,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
       }, supabase);
       continue;
     }
+    */
 
     try {
       console.log(`${logPrefix} [ITEM] Convertendo link e buscando metadados...`);

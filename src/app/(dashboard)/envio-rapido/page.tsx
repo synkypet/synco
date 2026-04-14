@@ -76,6 +76,8 @@ export default function EnvioRapidoPage() {
   const [testPhone, setTestPhone] = useState('');
   const [testMessage, setTestMessage] = useState('Oi, este é um teste do motor M1 SYNCO! 🚀');
   const [isTesting, setIsTesting] = useState(false);
+  const [lastApiResponse, setLastApiResponse] = useState<any>(null);
+  const [testGroupId, setTestGroupId] = useState('');
 
   useEffect(() => {
     if (channels && channels.length > 0 && !testChannelId) {
@@ -110,13 +112,23 @@ export default function EnvioRapidoPage() {
     }, {} as Record<string, { name: string; phone: string | null; groups: Group[] }>);
   }, [groups]);
 
+  // Grupos filtrados para a aba de teste
+  const availableTestGroups = useMemo(() => {
+    if (!testChannelId || !groupedDestinations[testChannelId]) return [];
+    return groupedDestinations[testChannelId].groups;
+  }, [testChannelId, groupedDestinations]);
+
   const handleTestSend = async () => {
-    if (!testChannelId || !testPhone || !testMessage) {
+    // Para WhatsApp, aceitamos testGroupId OU testPhone. Para Telegram, usamos testPhone (chatId).
+    const effectiveTarget = selectedChannelType === 'whatsapp' ? (testGroupId || testPhone) : testPhone;
+
+    if (!testChannelId || !effectiveTarget || !testMessage) {
       toast.error('Preencha os campos obrigatórios do teste.');
       return;
     }
 
     setIsTesting(true);
+    setLastApiResponse(null);
     toast.info('Iniciando requisição para API...');
 
     try {
@@ -125,11 +137,13 @@ export default function EnvioRapidoPage() {
 
       if (selectedChannelType === 'telegram') {
         apiUrl = '/api/telegram/send-test';
-        body = { channelId: testChannelId, chatId: testPhone, message: testMessage };
+        body = { channelId: testChannelId, chatId: effectiveTarget, message: testMessage };
       } else {
         apiUrl = '/api/wasender/test-send';
-        body = { channelId: testChannelId, phone: testPhone, message: testMessage };
+        body = { channelId: testChannelId, phone: effectiveTarget, message: testMessage };
       }
+
+      console.log(`[ENVIO-TESTE] Request:`, body);
 
       const res = await fetch(apiUrl, {
         method: 'POST',
@@ -143,20 +157,21 @@ export default function EnvioRapidoPage() {
       try {
         data = JSON.parse(text);
       } catch {
-        alert('ERRO CRÍTICO DO SERVIDOR:\n' + text.substring(0, 200));
-        toast.error('O Servidor retornou um erro não interpretável (verifique o log)');
+        console.error('ERRO CRÍTICO DO SERVIDOR:', text);
+        setLastApiResponse({ rawResponse: text, error: 'Resposta não J-SON' });
+        toast.error('O Servidor retornou um erro não interpretável.');
         return;
       }
+
+      setLastApiResponse(data);
 
       if (!res.ok) {
         throw new Error(data.error || 'Erro ao enviar via API');
       }
 
-      const platformName = selectedChannelType === 'telegram' ? 'Telegram' : 'Wasender';
-      alert(`SUCESSO! O ${platformName} aceitou a mensagem.\nRetorno: ` + JSON.stringify(data.response).substring(0, 100));
       toast.success('Envio direto disparado com sucesso!');
     } catch (e: any) {
-      alert('ERRO CATCH:\n' + (e.message || String(e)));
+      console.error('ERRO CATCH:', e);
       toast.error(e.message || String(e));
     } finally {
       setIsTesting(false);
@@ -809,120 +824,217 @@ export default function EnvioRapidoPage() {
         </TabsContent>
 
         <TabsContent value="test" className="mt-0">
-          <TactileCard className="p-8 max-w-2xl mx-auto border-none ring-1 ring-white/5 space-y-6">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                <SendHorizonal className="w-5 h-5 text-blue-400" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <TactileCard className="p-8 border-none ring-1 ring-white/5 space-y-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center shadow-skeuo-flat">
+                  <SendHorizonal className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="font-black uppercase tracking-widest text-sm font-headline italic">Fogo Direto (M1)</h3>
+                  <p className="text-[10px] uppercase text-white/40 font-bold tracking-tighter">
+                    Telemetria Operational: Envio sem persistência em jobs
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-black uppercase tracking-widest text-sm">Disparo Imediato</h3>
-                <p className="text-[10px] uppercase text-white/40 font-bold">
-                  Teste a conexão enviando para si mesmo
-                </p>
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-2 block">
-                  Canal de Disparo (Remetente)
-                </label>
-                {loadingChannels ? (
-                  <div className="text-xs font-bold text-white/30 uppercase">
-                    Carregando canais...
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
+              <div className="space-y-6">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-3 block italic">
+                    1. Vetor de Saída (Canal)
+                  </label>
+                  <div className="grid grid-cols-1 gap-2">
                     {channels?.map(c => (
                       <div
                         key={c.id}
-                        onClick={() => setTestChannelId(c.id)}
+                        onClick={() => {
+                          setTestChannelId(c.id);
+                          setTestGroupId(''); // Resetar grupo ao mudar canal
+                        }}
                         className={cn(
-                          'p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all',
+                          'p-4 rounded-2xl border-none flex items-center gap-3 cursor-pointer transition-all',
                           testChannelId === c.id
-                            ? 'bg-blue-500/10 border-blue-500/30 ring-1 ring-blue-500'
-                            : 'bg-deep-void border-white/5 hover:border-white/20'
+                            ? 'bg-kinetic-orange/10 shadow-skeuo-pressed ring-1 ring-kinetic-orange/40'
+                            : 'bg-deep-void shadow-skeuo-pressed opacity-50 hover:opacity-80'
                         )}
                       >
                         <div
                           className={cn(
-                            'w-2 h-2 rounded-full shadow-[0_0_10px]',
+                            'w-2.5 h-2.5 rounded-full shadow-[0_0_10px]',
                             c.config?.status === 'connected'
                               ? 'bg-emerald-500 shadow-emerald-500/50'
                               : 'bg-white/20 shadow-white/10'
                           )}
                         />
-                        <span className="text-xs font-bold">{c.name}</span>
+                        <div className="flex flex-col">
+                          <span className={cn(
+                            "text-xs font-black uppercase tracking-widest",
+                            testChannelId === c.id ? "text-white" : "text-white/40"
+                          )}>
+                            {c.name}
+                          </span>
+                          <span className="text-[8px] font-bold text-white/10 uppercase">{c.config?.phoneNumber || 'Sessão sem número'}</span>
+                        </div>
                         <Badge
                           variant="outline"
                           className={cn(
-                            'ml-auto border-none text-[8px] font-black uppercase tracking-widest h-5 px-2',
+                            'ml-auto border-none text-[8px] font-black uppercase tracking-widest h-5 px-2 rounded-lg',
                             c.type === 'telegram'
                               ? 'bg-blue-500/10 text-blue-400'
-                              : 'bg-emerald-500/10 text-emerald-400'
+                              : 'bg-emerald-500/10 text-emerald-400 shadow-glow-orange/5'
                           )}
                         >
-                          {c.type === 'telegram' ? '🤖 Telegram' : '📱 WhatsApp'}
+                          {c.type === 'telegram' ? '🤖 TG' : '📱 WA'}
                         </Badge>
                       </div>
                     ))}
-                    {(!channels || channels.length === 0) && (
-                      <div className="text-xs font-bold text-destructive uppercase">
-                        Nenhum canal conectado!
-                      </div>
-                    )}
+                  </div>
+                </div>
+
+                {selectedChannelType === 'whatsapp' && (
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-3 block italic">
+                      2. Alvo Operacional (Grupo/JID)
+                    </label>
+                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
+                      {availableTestGroups.length > 0 ? (
+                        availableTestGroups.map(group => (
+                          <div
+                            key={group.id}
+                            onClick={() => setTestGroupId(group.remote_id || '')}
+                            className={cn(
+                              'p-3 rounded-xl border-none flex items-center justify-between cursor-pointer transition-all',
+                              testGroupId === group.remote_id
+                                ? 'bg-white/10 shadow-skeuo-pressed ring-1 ring-white/20'
+                                : 'bg-deep-void/50 opacity-40 hover:opacity-100'
+                            )}
+                          >
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[11px] font-black uppercase tracking-tight text-white/90 truncate">
+                                {group.name}
+                              </span>
+                              <span className="text-[9px] font-mono text-kinetic-orange font-bold uppercase tracking-tighter truncate">
+                                {group.remote_id}
+                              </span>
+                            </div>
+                            {testGroupId === group.remote_id && (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-kinetic-orange" />
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 bg-deep-void rounded-xl border-dashed border border-white/5 text-center">
+                          <p className="text-[9px] font-black text-white/20 uppercase">Nenhum grupo sincronizado neste canal</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-4">
+                      <p className="text-[10px] font-black text-white/30 uppercase mb-2 ml-1 italic">Ou Inserir Manual (Telefone/JID)</p>
+                      <Input
+                        value={testPhone}
+                        onChange={e => {
+                          setTestPhone(e.target.value);
+                          if (e.target.value) setTestGroupId('');
+                        }}
+                        placeholder="Ex: 5547990000000 ou JID@g.us"
+                        className="bg-deep-void border-none shadow-skeuo-pressed font-mono text-sm h-11"
+                      />
+                    </div>
                   </div>
                 )}
-              </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-2 block">
-                  {selectedChannelType === 'telegram'
-                    ? 'Chat ID do Destinatário'
-                    : 'Número do Destinatário'}
-                </label>
-                <Input
-                  value={testPhone}
-                  onChange={e => setTestPhone(e.target.value)}
-                  placeholder={
-                    selectedChannelType === 'telegram'
-                      ? 'Ex: -1001234567890 ou 123456789'
-                      : 'Ex: +5547990000000'
-                  }
-                  className="bg-deep-void border-none shadow-skeuo-pressed font-mono text-sm"
-                />
                 {selectedChannelType === 'telegram' && (
-                  <p className="text-[9px] text-white/20 font-bold mt-1.5 uppercase tracking-tight">
-                    💡 Para grupos, use o ID numérico negativo. Ex: -1001234567890
-                  </p>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-2 block">
+                      Chat ID do Destinatário
+                    </label>
+                    <Input
+                      value={testPhone}
+                      onChange={e => setTestPhone(e.target.value)}
+                      placeholder="Ex: -1001234567890"
+                      className="bg-deep-void border-none shadow-skeuo-pressed font-mono text-sm h-11"
+                    />
+                  </div>
                 )}
-              </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-2 block">
-                  Mensagem Experimental
-                </label>
-                <Textarea
-                  value={testMessage}
-                  onChange={e => setTestMessage(e.target.value)}
-                  className="bg-deep-void border-none shadow-skeuo-pressed min-h-[100px] text-sm"
-                />
-              </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-3 block italic">
+                    3. Conteúdo do Disparo
+                  </label>
+                  <Textarea
+                    value={testMessage}
+                    onChange={e => setTestMessage(e.target.value)}
+                    className="bg-deep-void border-none shadow-skeuo-pressed min-h-[100px] text-xs font-mono p-4"
+                  />
+                </div>
 
-              <KineticButton
-                className="w-full h-12 uppercase font-black tracking-widest text-xs mt-4 bg-kinetic-orange hover:bg-kinetic-orange/90 text-black shadow-glow-orange/30"
-                onClick={handleTestSend}
-                disabled={isTesting || !testChannelId || !testPhone || !testMessage}
-              >
-                {isTesting ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <SendHorizonal className="w-4 h-4 mr-2" />
+                <KineticButton
+                  className="w-full h-14 font-black uppercase tracking-[0.2em] text-[11px] font-headline italic rounded-2xl shadow-glow-orange-intense"
+                  onClick={handleTestSend}
+                  disabled={isTesting || !testChannelId || (!testPhone && !testGroupId) || !testMessage}
+                >
+                  {isTesting ? (
+                    <Loader2 className="w-5 h-5 animate-spin mr-3" />
+                  ) : (
+                    <SendHorizonal className="w-4 h-4 mr-3" />
+                  )}
+                  {isTesting ? 'TRANSMITINDO SINAL...' : 'DISPARAR AGORA'}
+                </KineticButton>
+              </div>
+            </TactileCard>
+
+            <div className="space-y-6">
+              <TactileCard className="p-8 border-none ring-1 ring-white/5 min-h-[400px] flex flex-col">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shadow-skeuo-flat">
+                      <LayoutList className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-black uppercase tracking-widest text-sm font-headline italic">Response Audit</h3>
+                      <p className="text-[10px] uppercase text-white/40 font-bold tracking-tighter">
+                        Inspeção de Baixo Nível do Provedor
+                      </p>
+                    </div>
+                  </div>
+                  {lastApiResponse && (
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border-none uppercase text-[8px] font-black">
+                      Live Feed
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex-1 bg-black/40 rounded-2xl p-6 shadow-skeuo-pressed border border-white/5 overflow-hidden flex flex-col">
+                  {lastApiResponse ? (
+                    <div className="flex-1 overflow-auto custom-scrollbar">
+                      <pre className="text-[10px] font-mono leading-relaxed text-emerald-400/90 whitespace-pre-wrap">
+                        {JSON.stringify(lastApiResponse, null, 2)}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center opacity-20">
+                      <Sparkles className="w-12 h-12 mb-4 text-white/50" />
+                      <p className="text-[10px] font-black uppercase tracking-widest italic">Aguardando Transmissão</p>
+                      <p className="text-[8px] font-bold uppercase mt-1">Os dados de retorno aparecerão aqui após o disparo</p>
+                    </div>
+                  )}
+                </div>
+
+                {lastApiResponse && (
+                  <div className="mt-6 p-4 bg-deep-void/50 rounded-xl border border-white/5">
+                    <div className="flex items-center gap-2 mb-2">
+                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                       <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Análise de Payload</span>
+                    </div>
+                    <p className="text-[9px] font-bold uppercase text-white/30 leading-relaxed">
+                      O Provedor (M1) aceitou a requisição. Verifique o status acima para confirmar o 'wasender_message_id'.
+                    </p>
+                  </div>
                 )}
-                {isTesting ? 'Transmitindo...' : 'Fogo (Enviar Teste)'}
-              </KineticButton>
+              </TactileCard>
             </div>
-          </TactileCard>
+          </div>
         </TabsContent>
       </Tabs>
       <SaveListDialog 
