@@ -1,10 +1,11 @@
-// src/app/api/webhooks/wasender/route.ts
-// Webhook endpoint para receber eventos do Wasender com validação HMAC por canal.
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
+  const requestId = Math.random().toString(36).substring(7);
+  console.log(`[WEBHOOK-START] [${requestId}] Recebendo requisição da Wasender...`);
+
   try {
     const signature = request.headers.get('x-wasender-signature')
       || request.headers.get('webhook-signature')
@@ -12,45 +13,58 @@ export async function POST(request: Request) {
 
     // Ler o raw body antes de parsear JSON (necessário para validação HMAC)
     const rawBody = await request.text();
-    let body: any;
+    console.log(`[WEBHOOK-PAYLOAD] [${requestId}] Raw body length: ${rawBody.length}`);
 
+    let body: any;
     try {
       body = JSON.parse(rawBody);
     } catch {
+      console.error(`[WEBHOOK-ABORT] [${requestId}] Falha ao parsear JSON.`);
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
     const eventType = body.event || body.type;
-
     if (!eventType) {
+      console.error(`[WEBHOOK-ABORT] [${requestId}] Tipo de evento (event/type) não encontrado no payload.`);
       return NextResponse.json({ error: 'Event type not found' }, { status: 400 });
     }
 
-    const supabase = createClient();
+    // Usar admin client para bypass de RLS e garantir visibilidade dos canais
+    const supabase = createAdminClient();
 
-    // Extrair sessionId do payload
-    const sessionId = body.data?.session_id || body.sessionId || body.data?.id;
-
-    if (!sessionId) {
-      // Evento global (ping/health) — responder 200
+    // Extrair sessionId do payload (Tentando vários campos comuns da Wasender)
+    const sessionIdRaw = body.data?.session_id || body.sessionId || body.data?.id;
+    
+    if (!sessionIdRaw) {
+      console.log(`[WEBHOOK-SESSION] [${requestId}] Evento sem sessionId (provavelmente Health/Ping).`);
       return NextResponse.json({ received: true });
     }
 
+    const sessionId = String(sessionIdRaw);
+    console.log(`[WEBHOOK-SESSION] [${requestId}] ID Identificado: ${sessionId} (Type: ${typeof sessionIdRaw})`);
+
     // ─── 1. Identificar o canal vinculado a essa sessão ────────────────────
-    const { data: channels, error } = await supabase
+    console.log(`[WEBHOOK-CHANNEL] [${requestId}] Buscando canal por wasender_session_id ou sessionId: ${sessionId}`);
+    
+    // Busca robusta: Verifica tanto a chave nova (wasender_session_id) quanto a legada (sessionId)
+    const { data: channels, error: channelError } = await supabase
       .from('channels')
       .select('id, user_id, config')
-      .contains('config', { sessionId });
+      .or(`config->>wasender_session_id.eq.${sessionId},config->>sessionId.eq.${sessionId}`);
 
-    if (error || !channels || channels.length === 0) {
+    if (channelError || !channels || channels.length === 0) {
+      console.error(`[WEBHOOK-ABORT] [${requestId}] Canal não encontrado para sessionId ${sessionId}.`, {
+        error: channelError,
+        count: channels?.length || 0
+      });
       return NextResponse.json({ error: 'Channel not found for this session' }, { status: 404 });
     }
 
     const channel = channels[0];
+    console.log(`[WEBHOOK-CHANNEL] [${requestId}] ✓ Canal encontrado: ${channel.id} (User: ${channel.user_id})`);
 
     // ─── 2. Validar Assinatura com webhook_secret do banco ─────────────────
     // Buscar o webhook_secret específico desse canal na tabela de segredos
-    // Nota: Precisamos usar service role para ler channel_secrets (RLS bloqueado para client)
     const { data: secrets } = await supabase
       .from('channel_secrets')
       .select('webhook_secret')
