@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { extractWebhookMessageContext } from '@/lib/wasender/parser';
+import { processInboundAutomation } from '@/lib/automation/processor';
+import { triggerWorker } from '@/lib/worker/trigger';
 
 export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
@@ -229,12 +231,23 @@ export async function POST(request: Request) {
           }
         });
 
-        // Fire and forget
-        fetch(`${baseUrl}/api/automations/process`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(automPayload),
-        }).catch(err => console.error('[WEBHOOK] Failed to trigger automation process:', err));
+        // Execução Direta: Elimina o risco de ECONNRESET / Socket Hang Up
+        // Rodamos de forma assíncrona (não-bloqueante para responder o webhook rápido)
+        (async () => {
+          try {
+            console.log(`[WEBHOOK] [${requestId}] [DIRECT] Iniciando processamento core...`);
+            const result = await processInboundAutomation(automPayload);
+            
+            if (result && !result.skipped) {
+              console.log(`[WEBHOOK] [${requestId}] [DIRECT] Processamento concluído. Acionando worker...`);
+              await triggerWorker({ requestId, baseUrl });
+            } else {
+              console.log(`[WEBHOOK] [${requestId}] [DIRECT] Processamento finalizado (Skipped: ${result?.skipped || 'none'}).`);
+            }
+          } catch (err: any) {
+            console.error(`[WEBHOOK-ERROR] [${requestId}] Erro no processamento core direto:`, err.message);
+          }
+        })();
 
         break;
       }

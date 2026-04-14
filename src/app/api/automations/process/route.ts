@@ -1,6 +1,7 @@
 // src/app/api/automations/process/route.ts
 import { NextResponse } from 'next/server';
 import { processInboundAutomation } from '@/lib/automation/processor';
+import { triggerWorker } from '@/lib/worker/trigger';
 
 export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
@@ -17,21 +18,11 @@ export async function POST(request: Request) {
       const protocol = request.url.startsWith('https') ? 'https' : 'http';
       const host = request.headers.get('host');
       const baseUrl = `${protocol}://${host}`;
-      const workerUrl = `${baseUrl}/api/send-jobs/process`;
-
-      console.log(`[PROCESS-ROUTE] [${requestId}] [FAST-TRIGGER] Acionando worker em ${workerUrl}...`);
-
-      // Disparo assíncrono (Fire and Forget) com propagação de requestId
-      // Adicionamos timeout curto na conexão mas não aguardamos a resposta completa do processamento
-      fetch(workerUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-cron-secret': process.env.CRON_SECRET || '',
-          'x-request-id': requestId
-        }
-      }).catch(err => {
-        console.error(`[PROCESS-ROUTE] [${requestId}] [FAST-TRIGGER-ERROR] Falha ao acionar worker:`, err);
+      
+      // Utilizar o novo utilitário compartilhado
+      await triggerWorker({ 
+        requestId, 
+        baseUrl 
       });
     }
 
