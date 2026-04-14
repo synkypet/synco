@@ -181,11 +181,10 @@ export async function POST(request: Request) {
         break;
       }
 
+      // Aceitar apenas os eventos que a Wasender realmente envia em produção.
+      // Aliases extras eliminados para evitar duplo-processamento da mesma mensagem.
       case 'messages.received':
-      case 'messages-group.received':
-      case 'message.received':
-      case 'chat.message':
-      case 'chat.message_received': {
+      case 'messages-group.received': {
         // ─── Automação de Entrada ──────────────────────────────────────────
         const eventSource = eventType;
         

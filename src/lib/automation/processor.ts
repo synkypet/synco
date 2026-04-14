@@ -248,7 +248,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
         const campaign = await campaignService.create(userId, {
           name: `AUTO: ${snapshot.factual.title.substring(0, 30)}...`,
           items: [{
-            product_id: (snapshot.factual.itemId || snapshot.id).toString(),
+            product_id: snapshot.factual.itemId?.toString() || null,
             product_name: snapshot.factual.title,
             custom_text: finalMessage,
             affiliate_url: snapshot.factual.finalLinkToSend
