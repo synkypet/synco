@@ -142,15 +142,13 @@ export async function POST(request: Request) {
         break;
       }
 
+      case 'messages.received':
+      case 'messages-group.received':
       case 'message.received':
       case 'chat.message':
       case 'chat.message_received': {
         // ─── Automação de Entrada ──────────────────────────────────────────
-        // Disparar o processamento de forma assíncrona para responder rápido ao webhook
-        const protocol = request.url.startsWith('https') ? 'https' : 'http';
-        const host = request.headers.get('host');
-        const baseUrl = `${protocol}://${host}`;
-
+        const eventSource = eventType;
         const automPayload = {
           userId: channel.user_id,
           channelId: channel.id,
@@ -159,6 +157,27 @@ export async function POST(request: Request) {
           body: body.data?.body || body.data?.content || body.body || '',
           isFromMe: body.data?.isFromMe ?? body.isFromMe ?? false,
         };
+
+        console.log(`[WEBHOOK] [${eventSource}] Processando potencial automação:`, {
+          userId: automPayload.userId,
+          channelId: automPayload.channelId,
+          externalGroupId: automPayload.externalGroupId,
+          messageId: automPayload.messageId,
+          bodyPreview: automPayload.body?.substring(0, 50),
+          isFromMe: automPayload.isFromMe
+        });
+
+        if (automPayload.isFromMe) {
+          console.log(`[WEBHOOK] [${eventSource}] Ignorando: mensagem enviada pelo próprio número.`);
+          break;
+        }
+
+        // Disparar o processamento de forma assíncrona para responder rápido ao webhook
+        const protocol = request.url.startsWith('https') ? 'https' : 'http';
+        const host = request.headers.get('host');
+        const baseUrl = `${protocol}://${host}`;
+
+        console.log(`[WEBHOOK] [${eventSource}] Disparando POST /api/automations/process...`);
 
         // Fire and forget
         fetch(`${baseUrl}/api/automations/process`, {

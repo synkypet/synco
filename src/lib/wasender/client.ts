@@ -72,6 +72,8 @@ export class WasenderClient {
       'groups.update',
       'group-participants.update',
       'messages.received',
+      'messages-group.received',
+      'message.sent',
       'messages.update'
     ];
     body.ignore_groups = false;
@@ -121,6 +123,8 @@ export class WasenderClient {
         'groups.update',
         'group-participants.update',
         'messages.received',
+        'messages-group.received',
+        'message.sent',
         'messages.update'
       ],
       ignore_groups: false,

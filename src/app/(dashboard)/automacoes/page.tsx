@@ -127,7 +127,7 @@ export default function AutomacoesDashboardPage() {
                 <PlusCircle size={18} /> Nova Automação
               </KineticButton>
             </DialogTrigger>
-            <DialogContent className="max-w-lg p-0">
+            <DialogContent className="max-w-lg p-0 overflow-y-auto max-h-[90vh]">
               <div className="p-6 bg-gradient-to-b from-white/5 to-transparent">
                  <DialogHeader>
                    <DialogTitle className="mb-4 flex items-center gap-2">

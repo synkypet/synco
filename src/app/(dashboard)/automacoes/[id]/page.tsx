@@ -4,13 +4,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  useAutomationSource, 
-  useAutomationRoutes, 
-  useAutomationLogs, 
+import {
+  useAutomationSource,
+  useAutomationRoutes,
+  useAutomationLogs,
   useUpdateAutomationSource,
   useUpsertAutomationRoute,
-  useDeleteAutomationRoute
+  useDeleteAutomationRoute,
+  useDeleteAutomationSource
 } from '@/hooks/use-automations';
 import { useGroups } from '@/hooks/use-groups';
 import { useDestinations } from '@/hooks/use-destinations';
@@ -23,13 +24,14 @@ import { DeliveryBanner } from '@/components/automation/DeliveryBanner';
 import { LogFeed } from '@/components/automation/LogFeed';
 
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, Save, Zap } from 'lucide-react';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogFooter
+import { ArrowLeft, Loader2, Save, Zap, Trash2 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -43,7 +45,7 @@ export default function AutomationDetailPage() {
   const { data: source, isLoading: loadingSource } = useAutomationSource(id);
   const { data: routes, isLoading: loadingRoutes } = useAutomationRoutes(id);
   const { data: logs, isLoading: loadingLogs } = useAutomationLogs(id);
-  
+
   const { user } = useAuth();
   const { data: groups } = useGroups(user?.id as string);
   const { data: lists } = useDestinations(user?.id as string);
@@ -52,10 +54,13 @@ export default function AutomationDetailPage() {
   const updateSource = useUpdateAutomationSource();
   const upsertRoute = useUpsertAutomationRoute();
   const deleteRoute = useDeleteAutomationRoute();
+  const deleteSource = useDeleteAutomationSource();
 
   // Local State for Rules & Template
   const [filters, setFilters] = useState<any>({});
   const [template, setTemplate] = useState<any>({});
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isAddRouteOpen, setIsAddRouteOpen] = useState(false);
   const [newRouteType, setNewRouteType] = useState<'group' | 'list'>('group');
   const [newRouteTargetId, setNewRouteTargetId] = useState('');
@@ -81,28 +86,47 @@ export default function AutomationDetailPage() {
 
   if (!source) return (
     <div className="p-20 text-center">
-       <p className="font-black uppercase tracking-widest text-white/20">Automação não encontrada ou acesso negado.</p>
-       <Button variant="link" onClick={() => router.push('/automacoes')} className="text-kinetic-orange mt-4 uppercase text-xs font-bold">Voltar ao Painel</Button>
+      <p className="font-black uppercase tracking-widest text-white/20">Automação não encontrada ou acesso negado.</p>
+      <Button variant="link" onClick={() => router.push('/automacoes')} className="text-kinetic-orange mt-4 uppercase text-xs font-bold">Voltar ao Painel</Button>
     </div>
   );
 
-  const handleSavePipeline = () => {
+  const handleSavePipeline = async () => {
     if (!routes || routes.length === 0) {
       toast.error("Adicione ao menos um destino antes de salvar as regras.");
       return;
     }
 
-    // Persistência Real: Aplicar regras e template para TODAS as rotas
-    const promises = routes.map(route => upsertRoute.mutateAsync({
-      ...route,
-      filters,
-      template_config: template
-    }));
+    setIsSaving(true);
+    try {
+      // Persistência Real: Aplicar regras e template para TODAS as rotas
+      const promises = routes.map(route => upsertRoute.mutateAsync({
+        ...route,
+        filters,
+        template_config: template
+      }));
 
-    toast.promise(Promise.all(promises), {
-      loading: 'Persistindo alterações no pipeline...',
-      success: 'Configurações da esteira salvas com sucesso!',
-      error: 'Falha na persistência. Verifique sua conexão.'
+      await Promise.all(promises);
+      toast.success('Configurações da esteira salvas com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar pipeline:', error);
+      toast.error('Falha na persistência. Verifique sua conexão.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteSource = async () => {
+    const promise = deleteSource.mutateAsync(id);
+
+    toast.promise(promise, {
+      loading: 'Excluindo esteira operacional...',
+      success: () => {
+        setIsDeleteOpen(false);
+        router.push('/automacoes');
+        return 'Automação removida com sucesso.';
+      },
+      error: 'Erro ao excluir a automação.'
     });
   };
 
@@ -114,7 +138,7 @@ export default function AutomationDetailPage() {
       target_type: newRouteType,
       target_id: newRouteTargetId,
       is_active: true,
-      filters, 
+      filters,
       template_config: template
     });
 
@@ -143,32 +167,68 @@ export default function AutomationDetailPage() {
       {/* 0. Top Bar (Row 0) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-           <Button variant="ghost" className="p-0 h-10 w-10 rounded-2xl hover:bg-white/5 border border-white/5" onClick={() => router.push('/automacoes')}>
-             <ArrowLeft size={18} className="text-white/40" />
-           </Button>
-           <div>
-              <h2 className="text-2xl font-black italic text-white/90 uppercase tracking-tight flex items-center gap-2">
-                 {source.name}
-                 <Zap size={16} className="text-kinetic-orange" />
-              </h2>
-              <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Ambiente de Gerenciamento de Pipeline</p>
-           </div>
+          <Button variant="ghost" className="p-0 h-10 w-10 rounded-2xl hover:bg-white/5 border border-white/5" onClick={() => router.push('/automacoes')}>
+            <ArrowLeft size={18} className="text-white/40" />
+          </Button>
+          <div>
+            <h2 className="text-2xl font-black italic text-white/90 uppercase tracking-tight flex items-center gap-2">
+              {source.name}
+              <Zap size={16} className="text-kinetic-orange" />
+            </h2>
+            <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Ambiente de Gerenciamento de Pipeline</p>
+          </div>
         </div>
-        <Button 
-          onClick={handleSavePipeline}
-          className="gap-2 bg-kinetic-orange hover:bg-kinetic-orange/80 shadow-glow-orange font-black uppercase tracking-[0.2em] text-[10px] h-12 px-8 rounded-2xl transition-all"
-        >
-          <Save size={18} /> Salvar Esteira
-        </Button>
+        <div className="flex items-center gap-3">
+          <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                className="h-12 w-12 rounded-2xl hover:bg-red-500/10 hover:text-red-500 border border-white/5 transition-all"
+              >
+                <Trash2 size={18} className="opacity-40" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-anthracite-surface border-white/5 shadow-skeuo-elevated max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="uppercase tracking-[0.2em] font-black text-xs text-white/80 mb-2">Confirmar Exclusão</DialogTitle>
+                <p className="text-zinc-500 text-[11px] font-medium leading-relaxed">
+                  Esta ação é irreversível. Todas as regras, rotas e logs desta esteira operacional serão removidos permanentemente.
+                </p>
+              </DialogHeader>
+              <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-4">
+                <Button variant="ghost" onClick={() => setIsDeleteOpen(false)} className="flex-1 rounded-xl h-12 uppercase text-[10px] font-black tracking-widest">
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleDeleteSource}
+                  disabled={deleteSource.isPending}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl h-12 uppercase text-[10px] font-black tracking-widest shadow-glow-orange-intense shadow-red-500/20"
+                >
+                  {deleteSource.isPending ? <Loader2 className="animate-spin" /> : 'Excluir Agora'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Button 
+            onClick={handleSavePipeline}
+            disabled={isSaving}
+            className="gap-2 bg-kinetic-orange hover:bg-kinetic-orange/80 shadow-glow-orange font-black uppercase tracking-[0.2em] text-[10px] h-12 px-8 rounded-2xl transition-all disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+            {isSaving ? 'Salvando...' : 'Salvar Esteira'}
+          </Button>
+        </div>
       </div>
 
       {/* Row 1: ENTRADA + DESTINOS (Layout Operacional) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <OriginBlock 
-          source={source} 
-          onUpdate={(updates) => updateSource.mutate({ id, updates })} 
+        <OriginBlock
+          source={source}
+          sourceName={groups?.find(g => g.channel_id === source.channel_id && g.remote_id === source.external_group_id)?.name}
+          onUpdate={(updates) => updateSource.mutate({ id, updates })}
         />
-        <DestinationBlock 
+        <DestinationBlock
           routes={routes || []}
           targetNames={targetNames}
           onAdd={() => setIsAddRouteOpen(true)}
@@ -178,17 +238,17 @@ export default function AutomationDetailPage() {
 
       {/* Row 2: CURADORIA (Largura Total) */}
       <div className="animate-in slide-in-from-bottom-4 duration-500 delay-100">
-        <InboundRuleManager 
-          filters={filters} 
-          onUpdate={setFilters} 
+        <InboundRuleManager
+          filters={filters}
+          onUpdate={setFilters}
         />
       </div>
 
       {/* Row 3: TEMPLATE (Largura Total) */}
       <div className="animate-in slide-in-from-bottom-4 duration-500 delay-200">
-        <TemplateBlock 
-          template={template} 
-          onUpdate={setTemplate} 
+        <TemplateBlock
+          template={template}
+          onUpdate={setTemplate}
         />
       </div>
 
@@ -206,42 +266,42 @@ export default function AutomationDetailPage() {
             <DialogTitle className="uppercase tracking-[0.2em] font-black text-xs text-white/60 mb-4">Adicionar Saída ao Pipeline</DialogTitle>
           </DialogHeader>
           <div className="space-y-6 py-4">
-             <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Tipo de Destino</Label>
-                <Select value={newRouteType} onValueChange={(v: any) => { setNewRouteType(v); setNewRouteTargetId(''); }}>
-                  <SelectTrigger className="bg-white/5 border-white/5 h-12">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="group">Grupo Individual</SelectItem>
-                    <SelectItem value="list">Lista Organizacional</SelectItem>
-                  </SelectContent>
-                </Select>
-             </div>
-             <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Selecionar</Label>
-                <Select value={newRouteTargetId} onValueChange={setNewRouteTargetId}>
-                  <SelectTrigger className="bg-white/5 border-white/5 h-12">
-                    <SelectValue placeholder="Escolha um destino..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {newRouteType === 'group' ? (
-                      groups?.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)
-                    ) : (
-                      lists?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)
-                    )}
-                  </SelectContent>
-                </Select>
-             </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Tipo de Destino</Label>
+              <Select value={newRouteType} onValueChange={(v: any) => { setNewRouteType(v); setNewRouteTargetId(''); }}>
+                <SelectTrigger className="bg-white/5 border-white/5 h-12">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="group">Grupo Individual</SelectItem>
+                  <SelectItem value="list">Lista Organizacional</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Selecionar</Label>
+              <Select value={newRouteTargetId} onValueChange={setNewRouteTargetId}>
+                <SelectTrigger className="bg-white/5 border-white/5 h-12">
+                  <SelectValue placeholder="Escolha um destino..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {newRouteType === 'group' ? (
+                    groups?.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)
+                  ) : (
+                    lists?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter className="pt-4">
-             <Button 
+            <Button
               className="w-full bg-kinetic-orange font-black uppercase tracking-widest h-14 rounded-2xl shadow-glow-orange-intense"
               onClick={handleAddRoute}
               disabled={!newRouteTargetId || upsertRoute.isPending}
-             >
-               {upsertRoute.isPending ? <Loader2 className="animate-spin" /> : 'Confirmar Novo Destino'}
-             </Button>
+            >
+              {upsertRoute.isPending ? <Loader2 className="animate-spin" /> : 'Confirmar Novo Destino'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

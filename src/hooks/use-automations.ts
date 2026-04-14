@@ -100,3 +100,12 @@ export function useCreateAutomationPipeline() {
     }
   });
 }
+export function useDeleteAutomationSource() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => automationService.deleteSource(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['automation-sources'] });
+    }
+  });
+}
