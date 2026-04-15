@@ -1,7 +1,7 @@
 // src/hooks/use-campaigns.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { campaignService } from '@/services/supabase/campaign-service';
-import { CreateCampaignDTO } from '@/types/campaign';
+import { CreateCampaignDTO, Campaign } from '@/types/campaign';
 import { toast } from 'sonner';
 
 export function useCampaigns(userId?: string) {
@@ -18,7 +18,7 @@ export function useCreateCampaign() {
   return useMutation({
     mutationFn: ({ userId, dto }: { userId: string; dto: CreateCampaignDTO }) => 
       campaignService.create(userId, dto),
-    onSuccess: (data) => {
+    onSuccess: (data: Campaign) => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
       toast.success(`Campanha ${data.id.slice(0, 8)} criada com sucesso!`);
     },

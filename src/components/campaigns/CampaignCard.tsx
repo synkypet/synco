@@ -125,8 +125,8 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
               <span className="text-[9px] font-black uppercase tracking-widest text-white/40">
                 Pos.{' '}
                 <span className="text-white/80">#{queue.position}</span>
-                {etaLabel && (
-                  <> · ETA <span className="text-kinetic-orange">{etaLabel}</span></>
+                {realEtaLabel && (
+                  <> · ETA <span className="text-kinetic-orange">{realEtaLabel}</span></>
                 )}
                 {queue.pendingInCampaign > 1 && (
                   <> · {queue.pendingInCampaign} msgs</>
