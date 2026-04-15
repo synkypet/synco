@@ -27,7 +27,8 @@ export async function triggerWorker(options: TriggerOptions = {}): Promise<boole
       const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
       finalBaseUrl = `${protocol}://${host}`;
     } else {
-      finalBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      // Priorizar variável de ambiente em produção/Vercel
+      finalBaseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
     }
   }
 
