@@ -62,3 +62,52 @@ export function useCampaignJobs(campaignId: string | undefined, page: number = 1
     enabled: !!campaignId,
   });
 }
+
+// ─── Queue Visibility ────────────────────────────────────────────────────────
+
+export interface QueuePosition {
+  position: number;
+  pendingInCampaign: number;
+  channelId: string | null;
+  operationalStatus: 'queued' | 'cooldown' | 'sending' | 'completed';
+}
+
+export function useQueuePosition(campaignId?: string, hasPending?: boolean) {
+  return useQuery<QueuePosition>({
+    queryKey: ['queue-position', campaignId],
+    queryFn: async () => {
+      const res = await fetch(`/api/send-jobs/queue-position?campaign_id=${campaignId}`);
+      if (!res.ok) throw new Error('Failed to fetch queue position');
+      return res.json();
+    },
+    enabled: !!campaignId && !!hasPending,
+    // Polling a cada 4s enquanto houver jobs ativos
+    refetchInterval: hasPending ? 4000 : false,
+    staleTime: 2000,
+  });
+}
+
+export function useCancelPending() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (campaignId: string) => {
+      const res = await fetch('/api/send-jobs/cancel-pending', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaign_id: campaignId }),
+      });
+      if (!res.ok) throw new Error('Failed to cancel pending jobs');
+      return res.json();
+    },
+    onSuccess: (data, campaignId) => {
+      queryClient.invalidateQueries({ queryKey: ['campaign-stats', campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['campaign-jobs', campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['queue-position', campaignId] });
+      toast.success(`${data.cancelled} job(s) cancelados.`);
+    },
+    onError: () => {
+      toast.error('Erro ao cancelar jobs pendentes.');
+    }
+  });
+}

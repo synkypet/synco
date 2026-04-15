@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Drawer } from 'vaul';
 import { Campaign, CampaignStatus } from '@/types/campaign';
-import { useCampaignStats, useCampaignJobs } from '@/hooks/use-campaigns';
+import { useCampaignStats, useCampaignJobs, useCancelPending } from '@/hooks/use-campaigns';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { 
   X, 
@@ -16,7 +16,8 @@ import {
   ChevronRight,
   ExternalLink,
   ArrowRight,
-  Loader2
+  Loader2,
+  Ban
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,9 @@ export function CampaignDetailsDrawer({ isOpen, onClose, campaign }: CampaignDet
   const [page, setPage] = useState(1);
   const { data: stats } = useCampaignStats(campaign?.id);
   const { data: jobsData, isLoading: loadingJobs } = useCampaignJobs(campaign?.id, page);
+  const cancelPending = useCancelPending();
+
+  const hasPending = (stats?.pending ?? 0) > 0;
 
   if (!campaign) return null;
 
@@ -88,6 +92,26 @@ export function CampaignDetailsDrawer({ isOpen, onClose, campaign }: CampaignDet
                     <span className="text-[7px] font-black uppercase text-white/20 tracking-tighter">Erros</span>
                  </div>
               </div>
+
+              {/* Cancel Pending Action */}
+              {hasPending && (
+                <div className="mt-4 flex items-center justify-between p-3 rounded-xl bg-red-500/5 border border-red-500/10">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/60">{stats?.pending} job(s) na fila</span>
+                    <span className="text-[8px] font-bold text-white/20">Cancele para evitar envios não desejados</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => cancelPending.mutate(campaign.id)}
+                    disabled={cancelPending.isPending}
+                    className="h-8 gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-[8px] font-black uppercase tracking-widest border-none"
+                  >
+                    {cancelPending.isPending ? <Loader2 size={10} className="animate-spin" /> : <Ban size={10} />}
+                    Cancelar Pendências
+                  </Button>
+                </div>
+              )}
            </div>
 
            {/* Content */}

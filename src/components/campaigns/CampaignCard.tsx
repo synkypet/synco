@@ -1,18 +1,29 @@
 import React from 'react';
 import { Campaign } from '@/types/campaign';
-import { useCampaignStats } from '@/hooks/use-campaigns';
+import { useCampaignStats, useQueuePosition } from '@/hooks/use-campaigns';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
   Calendar, 
-  CheckCircle2, 
   Clock, 
   AlertCircle, 
   ArrowRight,
-  Loader2
+  Loader2,
+  SendHorizonal,
+  CheckCircle2,
+  Timer
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const COOLDOWN_MS = 5500;
+
+const OPERATIONAL_STATUS: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  queued:    { label: 'Aguardando fila',     color: 'bg-yellow-500/10 text-yellow-400',                           icon: <Clock size={8} /> },
+  cooldown:  { label: 'Aguardando cooldown', color: 'bg-blue-500/10 text-blue-400',                               icon: <Timer size={8} /> },
+  sending:   { label: 'Enviando',            color: 'bg-kinetic-orange/10 text-kinetic-orange animate-pulse',     icon: <SendHorizonal size={8} /> },
+  completed: { label: 'Finalizada',          color: 'bg-emerald-500/10 text-emerald-400',                         icon: <CheckCircle2 size={8} /> },
+};
 
 interface CampaignCardProps {
   campaign: Campaign;
@@ -20,10 +31,20 @@ interface CampaignCardProps {
 }
 
 export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
-  const { data: stats, isLoading } = useCampaignStats(campaign.id);
+  const { data: stats } = useCampaignStats(campaign.id);
+  const hasPending = (stats?.pending ?? 0) > 0 || (stats?.processing ?? 0) > 0;
+  const { data: queue } = useQueuePosition(campaign.id, hasPending);
 
   const progress = stats?.total ? Math.round((stats.completed / stats.total) * 100) : 0;
-  const isPending = (stats?.pending ?? 0) > 0 || (stats?.processing ?? 0) > 0;
+
+  // ETA: posição × cooldown (apenas jobs à frente desta campanha)
+  const etaMs = queue ? Math.max(0, (queue.position - 1)) * COOLDOWN_MS : 0;
+  const etaLabel = etaMs > 0
+    ? (etaMs < 60000 ? `~${Math.round(etaMs / 1000)}s` : `~${Math.round(etaMs / 60000)}m`)
+    : null;
+
+  const opStatus = queue?.operationalStatus || (hasPending ? 'queued' : 'completed');
+  const statusDef = OPERATIONAL_STATUS[opStatus] ?? OPERATIONAL_STATUS.completed;
 
   return (
     <TactileCard className="p-0 overflow-hidden border-none group animate-in fade-in duration-500">
@@ -42,17 +63,36 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
 
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline" className={cn(
-              "h-5 text-[8px] font-black uppercase tracking-widest border-none",
-              isPending ? "bg-blue-500/10 text-blue-400" : "bg-emerald-500/10 text-emerald-400"
+              "h-5 text-[8px] font-black uppercase tracking-widest border-none flex items-center gap-1",
+              statusDef.color
             )}>
-              {isPending ? 'Sincronizando...' : 'Finalizada'}
+              {statusDef.icon}
+              {statusDef.label}
             </Badge>
-            { (stats?.failed ?? 0) > 0 && (
-              <Badge variant="outline" className="h-5 text-[8px] font-black uppercase tracking-widest bg-red-500/10 text-red-500 border-none">
+            {(stats?.failed ?? 0) > 0 && (
+              <Badge variant="outline" className="h-5 text-[8px] font-black uppercase tracking-widest bg-red-500/10 text-red-500 border-none flex items-center gap-1">
+                <AlertCircle size={8} />
                 {stats?.failed} Erros
               </Badge>
             )}
           </div>
+
+          {/* Queue Position & ETA */}
+          {hasPending && queue && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-white/5">
+              <Timer size={10} className="text-white/30 flex-shrink-0" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-white/40">
+                Pos.{' '}
+                <span className="text-white/80">#{queue.position}</span>
+                {etaLabel && (
+                  <> · ETA <span className="text-kinetic-orange">{etaLabel}</span></>
+                )}
+                {queue.pendingInCampaign > 1 && (
+                  <> · {queue.pendingInCampaign} msgs</>
+                )}
+              </span>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-2 pt-2">
              <div className="flex flex-col">
@@ -72,7 +112,6 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
 
         {/* Right: Circular Progress */}
         <div className="relative w-20 h-20 flex items-center justify-center">
-            {/* SVG Progress Circle */}
             <svg className="w-full h-full -rotate-90">
                 <circle 
                   cx="40" cy="40" r="34" 
@@ -82,8 +121,9 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
                 <circle 
                   cx="40" cy="40" r="34" 
                   className={cn(
-                    "stroke-kinetic-orange fill-none transition-all duration-1000 ease-out",
-                    isPending ? "stroke-blue-400 shadow-glow-orange/20" : "stroke-emerald-500"
+                    "fill-none transition-all duration-1000 ease-out",
+                    opStatus === 'sending'   ? "stroke-kinetic-orange" :
+                    opStatus === 'completed' ? "stroke-emerald-500"    : "stroke-blue-400"
                   )}
                   strokeWidth="6"
                   strokeDasharray={`${2 * Math.PI * 34}`}
@@ -93,7 +133,7 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
             </svg>
             <div className="absolute flex flex-col items-center">
                 <span className="text-xs font-black text-white">{progress}%</span>
-                {isPending && <Loader2 size={8} className="animate-spin text-blue-400 mt-0.5" />}
+                {opStatus === 'sending' && <Loader2 size={8} className="animate-spin text-kinetic-orange mt-0.5" />}
             </div>
         </div>
       </div>
