@@ -70,7 +70,9 @@ interface CampaignCardProps {
 }
 
 export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
-  const { data: stats } = useCampaignStats(campaign.id);
+  // Passa o created_at para o hook para que o polling se mantenha ativo
+  // em campanhas recém-criadas onde os send_jobs ainda não refletiram.
+  const { data: stats, isLoading: statsLoading } = useCampaignStats(campaign.id, campaign.created_at);
   const hasPending = (stats?.pending ?? 0) > 0 || (stats?.processing ?? 0) > 0;
   const { data: queue } = useQueuePosition(campaign.id, hasPending);
 
@@ -78,8 +80,19 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
 
   const realEtaLabel = useRealtimeEta(queue, hasPending);
 
+  // Guard: stats não chegaram ainda OU campanha nova com total=0
+  // Impede classificação prematura como 'completed'
+  const NEW_THRESHOLD_MS = 3 * 60 * 1000;
+  const isRecentlyCreated = campaign.created_at
+    ? (Date.now() - new Date(campaign.created_at).getTime()) < NEW_THRESHOLD_MS
+    : false;
+  const statsTotal = stats?.total ?? 0;
+  const isStatsReady = !statsLoading && stats !== null && stats !== undefined;
+
   let opStatus: string;
-  if ((stats?.processing ?? 0) > 0) {
+  if (!isStatsReady || (statsTotal === 0 && isRecentlyCreated)) {
+    opStatus = 'queued'; // Aguardando sincronização — mostra como "na fila"
+  } else if ((stats?.processing ?? 0) > 0) {
     opStatus = 'sending';
   } else if ((stats?.pending ?? 0) > 0) {
     opStatus = queue?.position === 1 ? 'cooldown' : 'queued';

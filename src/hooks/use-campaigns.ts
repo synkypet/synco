@@ -9,8 +9,8 @@ export function useCampaigns(userId?: string) {
     queryKey: ['campaigns', userId],
     queryFn: () => userId ? campaignService.list(userId) : Promise.resolve([]),
     enabled: !!userId,
-    // Polling a cada 10s para garantir visibilidade de novas campanhas sem refresh manual
-    refetchInterval: 10000,
+    // Polling mais agressivo para ver novas campanhas
+    refetchInterval: 5000,
   });
 }
 
@@ -44,15 +44,26 @@ export function useDeleteCampaign() {
   });
 }
 
-export function useCampaignStats(campaignId?: string) {
+export function useCampaignStats(campaignId?: string, createdAt?: string) {
   return useQuery({
     queryKey: ['campaign-stats', campaignId],
     queryFn: () => campaignId ? campaignService.getStats(campaignId) : null,
     enabled: !!campaignId,
+    staleTime: 0,
     refetchInterval: (query) => {
       const stats = query.state.data as any;
-      // Se ainda houver jobs pendentes ou em processamento, continua o refresh a cada 3s
-      return (stats?.pending > 0 || stats?.processing > 0) ? 3000 : false;
+      const isActive = (stats?.pending > 0 || stats?.processing > 0);
+
+      // Campanha nova (< 3 min) com stats zerados: poll agressivo para pegar o
+      // estado real dos send_jobs assim que o worker os registrar.
+      const isNew = createdAt
+        ? (Date.now() - new Date(createdAt).getTime()) < 3 * 60 * 1000
+        : false;
+      const isZero = stats && stats.total === 0;
+
+      if (isActive)           return 2000;  // enviando / na fila
+      if (isNew && isZero)    return 2000;  // recém-criada, aguardando jobs
+      return 10000;                          // estável
     }
   });
 }
@@ -62,6 +73,7 @@ export function useCampaignJobs(campaignId: string | undefined, page: number = 1
     queryKey: ['campaign-jobs', campaignId, page],
     queryFn: () => campaignId ? campaignService.getJobsPaginated(campaignId, page) : null,
     enabled: !!campaignId,
+    staleTime: 0,
   });
 }
 
@@ -84,9 +96,9 @@ export function useQueuePosition(campaignId?: string, hasPending?: boolean) {
       return res.json();
     },
     enabled: !!campaignId && !!hasPending,
-    // Polling a cada 4s enquanto houver jobs ativos
-    refetchInterval: hasPending ? 4000 : false,
-    staleTime: 2000,
+    // Polling agressivo enquanto houver jobs ativos
+    refetchInterval: hasPending ? 3000 : false,
+    staleTime: 0,
   });
 }
 
