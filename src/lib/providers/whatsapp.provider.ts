@@ -12,6 +12,8 @@ const PERMANENT_ERROR_PATTERNS = [
   'not on whatsapp',
   'receiver is not valid',
   'blocked',
+  'must be a valid whatsapp jid', // 422 - JID inválido
+  'the to must be',               // 422 - campo "to" inválido
 ];
 
 export class WhatsAppProvider implements ChannelProvider {
@@ -50,9 +52,28 @@ export class WhatsAppProvider implements ChannelProvider {
     }
   }
 
+  /**
+   * Normaliza o destino para o formato JID completo que a Wasender exige.
+   * Regras:
+   *  - Grupo:   mantém/adiciona sufixo @g.us        (ex: 1234567890@g.us)
+   *  - Número:  mantém/adiciona sufixo @s.whatsapp.net (ex: 5511999999999@s.whatsapp.net)
+   *  - JIDs já completos passam sem alteração.
+   */
   formatDestination(raw: string): string {
-    // Wasender exige apenas dígitos (sem +, espaços, hifens, ou @c.us)
-    return raw.replace(/[^\d]/g, '');
+    // JID já completo (grupo ou usuário) — não modificar
+    if (raw.includes('@g.us') || raw.includes('@s.whatsapp.net') || raw.includes('@c.us')) {
+      return raw;
+    }
+
+    const digits = raw.replace(/[^\d]/g, '');
+
+    // Heurística: IDs de grupo do WhatsApp têm 18+ dígitos
+    if (digits.length >= 15) {
+      return `${digits}@g.us`;
+    }
+
+    // Número pessoal: usar @s.whatsapp.net
+    return `${digits}@s.whatsapp.net`;
   }
 
   classifyError(error: any): ErrorType {
@@ -63,14 +84,15 @@ export class WhatsAppProvider implements ChannelProvider {
       }
     }
     // Rate limit é temporário
-    if (msg.includes('rate limit') || msg.includes('retry_after') || msg.includes('too many')) {
+    if (msg.includes('rate limit') || msg.includes('retry_after') || msg.includes('too many') || msg.includes('every 5 seconds')) {
       return 'TEMPORARY';
     }
     return 'TEMPORARY';
   }
 
   getCooldownMs(): number {
-    return parseInt(process.env.SEND_COOLDOWN_MS || '3000', 10);
+    // Mínimo de 5500ms entre envios para respeitar o limite da Wasender (1 msg/5s)
+    return parseInt(process.env.SEND_COOLDOWN_MS || '5500', 10);
   }
 
   getBatchSize(): number {
