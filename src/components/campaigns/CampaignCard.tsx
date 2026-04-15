@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Campaign } from '@/types/campaign';
-import { useCampaignStats, useQueuePosition } from '@/hooks/use-campaigns';
+import { useCampaignStats, useQueuePosition, QueuePosition } from '@/hooks/use-campaigns';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,45 @@ const OPERATIONAL_STATUS: Record<string, { label: string; color: string; icon: R
   completed: { label: 'Finalizada',          color: 'bg-emerald-500/10 text-emerald-400',                         icon: <CheckCircle2 size={8} /> },
 };
 
+function useRealtimeEta(queue: QueuePosition | undefined, hasPending: boolean) {
+  const [etaLabel, setEtaLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!hasPending || !queue || queue.operationalStatus === 'sending' || queue.operationalStatus === 'completed') {
+      setEtaLabel(null);
+      return;
+    }
+
+    const updateEta = () => {
+      const now = Date.now();
+      const lastProcessedTime = queue.lastProcessedAt ? new Date(queue.lastProcessedAt).getTime() : now - COOLDOWN_MS;
+      const nextAvailableTime = lastProcessedTime + COOLDOWN_MS;
+
+      const queueStartTime = Math.max(now, nextAvailableTime);
+      const targetTime = queueStartTime + Math.max(0, queue.position - 1) * COOLDOWN_MS;
+      
+      const diffMs = Math.max(0, targetTime - now);
+
+      if (diffMs === 0) {
+        setEtaLabel(queue.position === 1 ? 'agora' : null);
+        return;
+      }
+
+      if (diffMs < 60000) {
+        setEtaLabel(`${Math.ceil(diffMs / 1000)}s`);
+      } else {
+        setEtaLabel(`~${Math.ceil(diffMs / 60000)}m`);
+      }
+    };
+
+    updateEta();
+    const interval = setInterval(updateEta, 1000);
+    return () => clearInterval(interval);
+  }, [queue, hasPending]);
+
+  return etaLabel;
+}
+
 interface CampaignCardProps {
   campaign: Campaign;
   onViewDetails: (campaign: Campaign) => void;
@@ -37,13 +76,15 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
 
   const progress = stats?.total ? Math.round((stats.completed / stats.total) * 100) : 0;
 
-  // ETA: posição × cooldown (apenas jobs à frente desta campanha)
-  const etaMs = queue ? Math.max(0, (queue.position - 1)) * COOLDOWN_MS : 0;
-  const etaLabel = etaMs > 0
-    ? (etaMs < 60000 ? `~${Math.round(etaMs / 1000)}s` : `~${Math.round(etaMs / 60000)}m`)
-    : null;
+  const realEtaLabel = useRealtimeEta(queue, hasPending);
 
-  const opStatus = queue?.operationalStatus || (hasPending ? 'queued' : 'completed');
+  let opStatus = queue?.operationalStatus || (hasPending ? 'queued' : 'completed');
+  // Ajuste visual agressivo: se o ETA é "agora" ou 0 e tava aguardando cooldown, 
+  // já mostra "Enviando" na UI para não ter delay visual até o polling voltar.
+  if (opStatus === 'cooldown' && realEtaLabel === 'agora') {
+    opStatus = 'sending';
+  }
+  
   const statusDef = OPERATIONAL_STATUS[opStatus] ?? OPERATIONAL_STATUS.completed;
 
   return (

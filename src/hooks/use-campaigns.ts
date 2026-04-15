@@ -70,6 +70,7 @@ export interface QueuePosition {
   pendingInCampaign: number;
   channelId: string | null;
   operationalStatus: 'queued' | 'cooldown' | 'sending' | 'completed';
+  lastProcessedAt: string | null;
 }
 
 export function useQueuePosition(campaignId?: string, hasPending?: boolean) {

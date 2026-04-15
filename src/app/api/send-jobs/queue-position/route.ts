@@ -63,6 +63,15 @@ export async function GET(request: Request) {
       .eq('campaign_id', campaignId)
       .eq('status', 'pending');
 
+    // 4. Buscar o último job processado no canal para calcular cooldown/ETA real
+    const { data: lastProcessedJob } = await supabase
+      .from('send_jobs')
+      .select('processed_at')
+      .eq('channel_id', firstJob.channel_id)
+      .not('processed_at', 'is', null)
+      .order('processed_at', { ascending: false })
+      .limit(1);
+
     const position = (jobsAhead || 0) + 1;
     const operationalStatus = position === 1 ? 'cooldown' : 'queued';
 
@@ -71,6 +80,7 @@ export async function GET(request: Request) {
       pendingInCampaign: pendingInCampaign || 0,
       channelId: firstJob.channel_id,
       operationalStatus,
+      lastProcessedAt: lastProcessedJob?.[0]?.processed_at || null,
     });
 
   } catch (error: any) {
