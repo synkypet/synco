@@ -279,6 +279,58 @@ export const automationService = {
   },
 
   /**
+   * Busca as últimas campanhas geradas por uma automação,
+   * baseando-se nos logs de 'job_created'.
+   */
+  async getRecentCampaigns(sourceId: string, limit: number = 10, client?: SupabaseClient) {
+    const supabase = client || createClient();
+    
+    // 1. Buscar os IDs das campanhas nos logs
+    const { data: logs, error: logsError } = await supabase
+      .from('automation_logs')
+      .select('details')
+      .eq('source_id', sourceId)
+      .eq('event_type', 'job_created')
+      .order('created_at', { ascending: false });
+
+    if (logsError) {
+      console.error('Error fetching campaign ids from logs:', logsError);
+      return [];
+    }
+
+    // 2. Extrair IDs únicos
+    const campaignIds = Array.from(new Set(
+      logs
+        .map(log => log.details?.campaignId)
+        .filter(Boolean)
+    )).slice(0, limit);
+
+    if (campaignIds.length === 0) return [];
+
+    // 3. Buscar as campanhas (reutilizando campaignService se possível, 
+    // mas aqui fazemos direto para evitar import circular se necessário, 
+    // embora no client side não haja problema)
+    // Vamos importar o campaignService dinamicamente ou apenas fazer a query aqui.
+    // Como estamos no mesmo arquivo de serviços, vamos fazer a query direta para ser mais performático e isolado.
+    const { data: campaigns, error: campaignsError } = await supabase
+      .from('campaigns')
+      .select(`
+        *,
+        items:campaign_items(*),
+        destinations:campaign_destinations(*)
+      `)
+      .in('id', campaignIds)
+      .order('created_at', { ascending: false });
+
+    if (campaignsError) {
+      console.error('Error fetching campaigns for automation:', campaignsError);
+      return [];
+    }
+
+    return campaigns || [];
+  },
+
+  /**
    * Registra um evento de automação para observabilidade
    */
   async logEvent(log: {

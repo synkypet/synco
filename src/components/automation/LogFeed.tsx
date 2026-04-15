@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CheckCircle2, XCircle, AlertCircle, Search, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 
 interface LogFeedProps {
   logs: any[];
@@ -36,7 +37,18 @@ export function LogFeed({ logs, title }: LogFeedProps) {
   const getEventDescription = (log: any) => {
     const { event_type, details } = log;
     switch (event_type) {
-      case 'job_created': return `Job criado com sucesso (${details.campaignId?.substring(0, 8)})`;
+      case 'job_created': 
+        return (
+          <span className="flex items-center gap-1">
+            Job criado com sucesso 
+            <Link 
+              href={`/campanhas/${details.campaignId}`}
+              className="text-kinetic-orange hover:underline font-mono"
+            >
+              ({details.campaignId?.substring(0, 8)})
+            </Link>
+          </span>
+        );
       case 'no_routes': return 'Nenhuma rota de destino configurada';
       case 'ingest_dedupe': return 'Link já processado recentemente (Dedupe Camada 1)';
       case 'dest_dedupe': return 'Link já enviado para este destino (Dedupe Camada 2)';

@@ -8,6 +8,7 @@ import {
   useAutomationSource,
   useAutomationRoutes,
   useAutomationLogs,
+  useAutomationRecentCampaigns,
   useUpdateAutomationSource,
   useUpsertAutomationRoute,
   useDeleteAutomationRoute,
@@ -22,6 +23,7 @@ import { TemplateBlock } from '@/components/automation/TemplateBlock';
 import { DestinationBlock } from '@/components/automation/DestinationBlock';
 import { DeliveryBanner } from '@/components/automation/DeliveryBanner';
 import { LogFeed } from '@/components/automation/LogFeed';
+import { AutomationCampaignSection } from '@/components/automation/AutomationCampaignSection';
 
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Save, Zap, Trash2 } from 'lucide-react';
@@ -45,6 +47,7 @@ export default function AutomationDetailPage() {
   const { data: source, isLoading: loadingSource } = useAutomationSource(id);
   const { data: routes, isLoading: loadingRoutes } = useAutomationRoutes(id);
   const { data: logs, isLoading: loadingLogs } = useAutomationLogs(id);
+  const { data: recentCampaigns, isLoading: loadingRecent } = useAutomationRecentCampaigns(id);
 
   const { user } = useAuth();
   const { data: groups } = useGroups(user?.id as string);
@@ -252,7 +255,13 @@ export default function AutomationDetailPage() {
         />
       </div>
 
-      {/* Row 4: LOGS (Largura Total) */}
+      {/* Row 4: RECENT CAMPAIGNS */}
+      <AutomationCampaignSection 
+        campaigns={recentCampaigns || []} 
+        isLoading={loadingRecent} 
+      />
+
+      {/* Row 5: LOGS (Largura Total) */}
       <div className="animate-in slide-in-from-bottom-4 duration-500 delay-300 space-y-8">
         <LogFeed logs={logs || []} title="5. Histórico e Atividade Operacional" />
         {/* Row 5: BANNER */}

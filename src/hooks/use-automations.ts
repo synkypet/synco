@@ -109,3 +109,12 @@ export function useDeleteAutomationSource() {
     }
   });
 }
+
+export function useAutomationRecentCampaigns(sourceId: string) {
+  return useQuery({
+    queryKey: ['automation-recent-campaigns', sourceId],
+    queryFn: () => automationService.getRecentCampaigns(sourceId, 10),
+    enabled: !!sourceId,
+    refetchInterval: 10000, 
+  });
+}

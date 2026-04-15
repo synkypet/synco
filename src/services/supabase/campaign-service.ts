@@ -242,5 +242,29 @@ export const campaignService = {
       pageSize,
       totalPages: Math.ceil((count || 0) / pageSize)
     };
+  },
+
+  /**
+   * Busca múltiplas campanhas pelos seus IDs
+   */
+  async getByIds(ids: string[]): Promise<Campaign[]> {
+    if (!ids || ids.length === 0) return [];
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select(`
+        *,
+        items:campaign_items(*),
+        destinations:campaign_destinations(*)
+      `)
+      .in('id', ids)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching campaigns by ids:', error);
+      throw error;
+    }
+
+    return data as Campaign[];
   }
 };
