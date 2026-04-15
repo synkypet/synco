@@ -18,7 +18,22 @@ export async function GET(request: Request) {
       console.warn(`[HEARTBEAT-UNAUTHORIZED] [${requestId}] Tentativa de acesso sem secret válido.`);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    // 1. Verificar se existem jobs pendentes
+    // 1. Lock de Manutenção (Previnir execuções paralelas do cron)
+    const { data: hasLock } = await supabase.rpc('claim_maintenance_lock', {
+      p_lock_key: 'queue_pump',
+      p_worker_id: requestId,
+      p_timeout_seconds: 55 // Expira pouco antes do próximo ciclo de 1min
+    });
+
+    if (!hasLock) {
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Heartbeat skip: already locked by another process', 
+        requestId 
+      });
+    }
+
+    // 2. Verificar se existem jobs pendentes
     const { count, error: countError } = await supabase
       .from('send_jobs')
       .select('*', { count: 'exact', head: true })
@@ -29,14 +44,12 @@ export async function GET(request: Request) {
     if (!count || count === 0) {
       return NextResponse.json({ 
         success: true, 
-        message: 'Queue is empty', 
+        message: 'Queue idle: no pending jobs', 
         requestId 
       });
     }
 
-    // 2. Verificar se existe algum job em "processing" (indicativo de worker ativo)
-    // Nota: Buscamos o job processando mais antigo (updated_at ASC) para detectar
-    // de forma determinística se a fila está estagnada.
+    // 3. Verificar estado do processamento atual
     const { data: activeJobs } = await supabase
       .from('send_jobs')
       .select('id, updated_at')
@@ -45,32 +58,33 @@ export async function GET(request: Request) {
       .limit(1);
 
     const hasActiveWorker = activeJobs && activeJobs.length > 0;
-
-    // Se não houver ninguém processando, ou se o job ativo estiver lá há mais de 2 minutos
-    // (provável queda de worker), reiniciamos a corrente.
     let shouldTrigger = !hasActiveWorker;
 
     if (hasActiveWorker) {
       const updatedAt = new Date(activeJobs[0].updated_at).getTime();
       const diffMs = Date.now() - updatedAt;
-      if (diffMs > 120000) { // 2 minutos
-        console.log(`[HEARTBEAT] [${requestId}] Detectado job "processing" antigo (${diffMs}ms). Forçando trigger.`);
+      
+      // Se o job ativo estiver parado há mais de 2.5 minutos, consideramos worker morto
+      if (diffMs > 150000) { 
+        console.log(`[HEARTBEAT] [${requestId}] Detectada estagnação (${diffMs}ms). Reativando drenagem.`);
         shouldTrigger = true;
       }
     }
 
     if (shouldTrigger) {
-      console.log(`[HEARTBEAT] [${requestId}] Acionando worker de recuperação para ${count} jobs pendentes.`);
+      console.log(`[HEARTBEAT] [${requestId}] Bombeando fila: ${count} jobs pendentes.`);
       const host = request.headers.get('host') || undefined;
-      await triggerWorker({ 
+      
+      // Aciona o worker. Usamos shouldAwait: true no heartbeat para confirmar que o pump começou.
+      const triggered = await triggerWorker({ 
         requestId, 
         host,
-        shouldAwait: true // Espera o trigger ser aceito para garantir que a corrente reiniciou
+        shouldAwait: true 
       });
       
       return NextResponse.json({ 
         success: true, 
-        message: 'Worker triggered', 
+        message: triggered ? 'Worker re-activated' : 'Worker trigger failed', 
         pendingCount: count,
         requestId 
       });
@@ -78,7 +92,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Worker seems active, skip trigger', 
+      message: 'Queue flowing: worker is active', 
       requestId 
     });
 

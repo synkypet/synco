@@ -19,16 +19,21 @@ export async function triggerWorker(options: TriggerOptions = {}): Promise<boole
   const { requestId, baseUrl, host, shouldAwait } = options;
   const rid = requestId || Math.random().toString(36).substring(7);
   
-  // No ambiente operacional, o baseUrl deve ser preferencialmente o host local ou domínio atual
-  let finalBaseUrl = baseUrl;
+  // Resolução de URL com prioridade:
+  // 1. Variável de ambiente EXPLÍCITA (Produção)
+  // 2. Host da requisição atual (Dinâmico)
+  // 3. Vercel System URL (Fallback)
+  // 4. Localhost (Ambiente de desenvolvimento)
+  let finalBaseUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
   
   if (!finalBaseUrl) {
     if (host) {
       const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
       finalBaseUrl = `${protocol}://${host}`;
+    } else if (process.env.VERCEL_URL) {
+      finalBaseUrl = `https://${process.env.VERCEL_URL}`;
     } else {
-      // Priorizar variável de ambiente em produção/Vercel
-      finalBaseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+      finalBaseUrl = 'http://localhost:3000';
     }
   }
 
