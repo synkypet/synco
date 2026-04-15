@@ -7,14 +7,19 @@ export interface TriggerOptions {
   requestId?: string;
   baseUrl?: string;
   host?: string;
+  shouldAwait?: boolean;
 }
 
-export async function triggerWorker(options: TriggerOptions = {}) {
-  const { requestId, baseUrl, host } = options;
+/**
+ * Aciona o worker de processamento de fila.
+ * @param options Configurações de disparo
+ * @returns true se o disparo foi realizado (ou aceito), false em caso de erro crítico
+ */
+export async function triggerWorker(options: TriggerOptions = {}): Promise<boolean> {
+  const { requestId, baseUrl, host, shouldAwait } = options;
   const rid = requestId || Math.random().toString(36).substring(7);
   
   // No ambiente operacional, o baseUrl deve ser preferencialmente o host local ou domínio atual
-  // Se não fornecido, tenta derivar do host ou do ambiente
   let finalBaseUrl = baseUrl;
   
   if (!finalBaseUrl) {
@@ -28,23 +33,29 @@ export async function triggerWorker(options: TriggerOptions = {}) {
 
   const workerUrl = `${finalBaseUrl}/api/send-jobs/process`;
 
-  console.log(`[WORKER-TRIGGER] [${rid}] Acionando worker em ${workerUrl}...`);
+  console.log(`[WORKER-TRIGGER] [${rid}] Acionando worker em ${workerUrl} (await: ${!!shouldAwait})...`);
 
   try {
-    // Disparo Fire-and-Forget
-    // Usamos fetch mas encapsulamos em um contexto que não bloqueia o fluxo principal
-    fetch(workerUrl, {
+    const promise = fetch(workerUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-cron-secret': process.env.CRON_SECRET || '',
         'x-request-id': rid
       }
-    }).catch(err => {
-      console.error(`[WORKER-TRIGGER-ERROR] [${rid}] Falha no disparo do worker:`, err.message);
     });
-    
-    return true;
+
+    if (shouldAwait) {
+      const res = await promise;
+      console.log(`[WORKER-TRIGGER] [${rid}] Trigger finalizado com aguardo (Status: ${res.status})`);
+      return res.ok;
+    } else {
+      // Disparo Fire-and-Forget
+      promise.catch(err => {
+        console.error(`[WORKER-TRIGGER-ERROR] [${rid}] Falha no disparo do worker (background):`, err.message);
+      });
+      return true; // Retornamos true pois o disparo foi iniciado
+    }
   } catch (error: any) {
     console.error(`[WORKER-TRIGGER-ERROR] [${rid}] Erro crítico no utilitário de disparo:`, error.message);
     return false;
