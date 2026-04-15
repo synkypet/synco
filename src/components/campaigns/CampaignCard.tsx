@@ -44,7 +44,7 @@ function useRealtimeEta(queue: QueuePosition | undefined, hasPending: boolean) {
       
       const diffMs = Math.max(0, targetTime - now);
 
-      if (diffMs === 0) {
+      if (diffMs <= 1000) {
         setEtaLabel(queue.position === 1 ? 'agora' : null);
         return;
       }
@@ -78,11 +78,13 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
 
   const realEtaLabel = useRealtimeEta(queue, hasPending);
 
-  let opStatus = queue?.operationalStatus || (hasPending ? 'queued' : 'completed');
-  // Ajuste visual agressivo: se o ETA é "agora" ou 0 e tava aguardando cooldown, 
-  // já mostra "Enviando" na UI para não ter delay visual até o polling voltar.
-  if (opStatus === 'cooldown' && realEtaLabel === 'agora') {
+  let opStatus: string;
+  if ((stats?.processing ?? 0) > 0) {
     opStatus = 'sending';
+  } else if ((stats?.pending ?? 0) > 0) {
+    opStatus = queue?.position === 1 ? 'cooldown' : 'queued';
+  } else {
+    opStatus = 'completed';
   }
   
   const statusDef = OPERATIONAL_STATUS[opStatus] ?? OPERATIONAL_STATUS.completed;

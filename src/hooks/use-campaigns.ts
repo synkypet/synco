@@ -9,6 +9,8 @@ export function useCampaigns(userId?: string) {
     queryKey: ['campaigns', userId],
     queryFn: () => userId ? campaignService.list(userId) : Promise.resolve([]),
     enabled: !!userId,
+    // Polling a cada 10s para garantir visibilidade de novas campanhas sem refresh manual
+    refetchInterval: 10000,
   });
 }
 
