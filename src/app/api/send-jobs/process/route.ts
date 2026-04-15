@@ -1,8 +1,9 @@
 // src/app/api/send-jobs/process/route.ts
-// Worker de fila v2 — Provider Engine: desacoplado, com retry inteligente e rate limit por destino.
+// Worker de fila v3 — Atomic Channel Locking & Persistent Pacing
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getProvider } from '@/lib/providers/factory';
+import { triggerWorker } from '@/lib/worker/trigger';
 import type { SendResult, ErrorType } from '@/lib/providers/types';
 
 // ─── Configuração Global ────────────────────────────────────────────────────
@@ -13,9 +14,8 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Rate Limit por Destino (Map em memória) ────────────────────────────────
+// ─── Rate Limit por Destino (Map em memória — Destinos são globais, canais são individuais) ───
 const destinationLastSent = new Map<string, number>();
-const channelLastSent = new Map<string, number>();
 
 function canSendToDestination(destination: string): boolean {
   const lastSent = destinationLastSent.get(destination);
@@ -27,14 +27,24 @@ function markDestinationSent(destination: string) {
   destinationLastSent.set(destination, Date.now());
 }
 
-function canSendFromChannel(channelId: string, cooldownMs: number): boolean {
-  const lastSent = channelLastSent.get(channelId);
-  if (!lastSent) return true;
-  return (Date.now() - lastSent) >= cooldownMs;
-}
+// ─── Pacing Persistente (Check de BD) ───────────────────────────────────────
+async function checkPersistentPacing(supabase: any, channelId: string, cooldownMs: number): Promise<boolean> {
+  // Busca o timestamp do último job processado com sucesso/finalizado para este canal
+  const { data: lastJob } = await supabase
+    .from('send_jobs')
+    .select('processed_at')
+    .eq('channel_id', channelId)
+    .not('processed_at', 'is', null)
+    .order('processed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-function markChannelSent(channelId: string) {
-  channelLastSent.set(channelId, Date.now());
+  if (!lastJob?.processed_at) return true;
+
+  const lastSent = new Date(lastJob.processed_at).getTime();
+  const diff = Date.now() - lastSent;
+  
+  return diff >= cooldownMs;
 }
 
 // ─── Structured Logger ──────────────────────────────────────────────────────
@@ -46,336 +56,192 @@ function logJob(level: 'INFO' | 'ERROR' | 'WARN', jobId: string, data: Record<st
     reqId: requestId,
     ...data,
   };
-  if (level === 'ERROR') {
-    console.error(`[WORKER] [${requestId || 'SYSTEM'}]`, JSON.stringify(entry));
-  } else if (level === 'WARN') {
-    console.warn(`[WORKER] [${requestId || 'SYSTEM'}]`, JSON.stringify(entry));
-  } else {
-    console.log(`[WORKER] [${requestId || 'SYSTEM'}]`, JSON.stringify(entry));
-  }
+  const prefix = `[WORKER] [${requestId || 'SYSTEM'}]`;
+  if (level === 'ERROR') console.error(prefix, JSON.stringify(entry));
+  else if (level === 'WARN') console.warn(prefix, JSON.stringify(entry));
+  else console.log(prefix, JSON.stringify(entry));
 }
 
 export async function POST(request: Request) {
   const incomingRequestId = request.headers.get('x-request-id');
   const requestId = incomingRequestId || Math.random().toString(36).substring(7);
+  const host = request.headers.get('host') || '';
   
-  console.log(`[WORKER-START] [${requestId}] ${incomingRequestId ? 'Acionamento via Fast-Trigger' : 'Acionamento via Cron/Manual'}. Iniciando processamento...`);
+  console.log(`[WORKER-START] [${requestId}] Iniciando processamento (Serialização por Canal)...`);
+
+  const supabase = createAdminClient();
 
   try {
-    const supabase = createAdminClient();
-
     // ─── 1. Autenticação ─────────────────────────────────────────────────
     const cronSecret = request.headers.get('x-cron-secret');
     const expectedSecret = process.env.CRON_SECRET;
 
     if (expectedSecret && cronSecret !== expectedSecret) {
-      console.warn(`[WORKER-FAIL] [${requestId}] Falha de autenticação: Secret inválido.`);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // ─── 2. Buscar jobs — Algoritmo Fila Justa (Round-Robin) ───────────
+    // ─── 2. Identificar Canais com Jobs Pendentes ─────────────────────────
     const CHANNELS_PER_BATCH = 15;
-    const JOBS_PER_CHANNEL = 3;
-    const globalBatchSize = parseInt(process.env.SEND_BATCH_SIZE || '15', 10);
-
-    // Etapa A: Identificar canais ativos com jobs pendentes
-    // Limitação MVP: Deduplicação em memória para compensar falta de DISTINCT no PostgREST
+    
+    // Lista canais distintos que possuem jobs 'pending'
     const { data: recentPendingJobs, error: sampleError } = await supabase
       .from('send_jobs')
       .select('channel_id')
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
-      .limit(100);
+      .limit(200);
 
-    if (sampleError) throw new Error(`Fetch sample error: ${sampleError.message}`);
+    if (sampleError) throw new Error(`Fetch jobs error: ${sampleError.message}`);
 
     const activeChannelIds = [...new Set((recentPendingJobs || []).map(j => j.channel_id))]
       .slice(0, CHANNELS_PER_BATCH);
 
-    // Etapa B: Buscar fatias de cada canal para intercalar (Round-Robin)
-    const interleavedJobs: any[] = [];
-    const jobsByChannel: Record<string, any[]> = {};
-
-    for (const channelId of activeChannelIds) {
-      const { data: channelJobs } = await supabase
-        .from('send_jobs')
-        .select('*')
-        .eq('channel_id', channelId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true })
-        .limit(JOBS_PER_CHANNEL);
-      
-      if (channelJobs && channelJobs.length > 0) {
-        jobsByChannel[channelId] = channelJobs;
-      }
-    }
-
-    // Etapa C: Intercalar jobs na lista final
-    let hasMore = true;
-    let index = 0;
-    while (hasMore && interleavedJobs.length < globalBatchSize) {
-      hasMore = false;
-      for (const channelId of activeChannelIds) {
-        if (jobsByChannel[channelId] && jobsByChannel[channelId][index]) {
-          interleavedJobs.push(jobsByChannel[channelId][index]);
-          hasMore = true;
-        }
-      }
-      index++;
-    }
-
-    const jobs = interleavedJobs;
-
-    if (!jobs || jobs.length === 0) {
+    if (activeChannelIds.length === 0) {
       return NextResponse.json({ processed: 0, message: 'No pending jobs' });
     }
 
-    const results: { jobId: string; status: string; error?: string; errorType?: string }[] = [];
+    const results: any[] = [];
+    let processedAny = false;
 
-    for (const job of jobs) {
-      // ─── 3. Lock otimista ──────────────────────────────────────────────
-      await supabase
-        .from('send_jobs')
-        .update({ status: 'processing', updated_at: new Date().toISOString() })
-        .eq('id', job.id)
-        .eq('status', 'pending');
+    // ─── 3. Processamento Serial por Canal ────────────────────────────────
+    for (const channelId of activeChannelIds) {
+      // 3.1 Lock Atômico por Canal
+      const { data: hasLock } = await supabase.rpc('claim_channel_lock', {
+        p_channel_id: channelId,
+        p_worker_id: requestId,
+        p_lock_timeout: '1 minute'
+      });
 
-      // ─── 4. Idempotência ──────────────────────────────────────────────
-      if (job.campaign_id) {
-        const { data: existingReceipt } = await supabase
-          .from('send_receipts')
-          .select('id')
-          .eq('campaign_id', job.campaign_id)
-          .eq('campaign_item_id', job.campaign_item_id || '')
-          .eq('destination', job.destination)
+      if (!hasLock) {
+        logJob('INFO', 'N/A', { action: 'lock_skip', channelId, reason: 'Busy or locked by another worker' }, requestId);
+        continue;
+      }
+
+      try {
+        // 3.2 Verificar Pacing (BD)
+        // Precisamos do channel config para saber o cooldown
+        const { data: channel } = await supabase
+          .from('channels')
+          .select('id, type, name, config')
+          .eq('id', channelId)
+          .single();
+
+        if (!channel) continue;
+        
+        const provider = getProvider(channel.type || 'whatsapp');
+        const isPaced = await checkPersistentPacing(supabase, channelId, provider.getCooldownMs());
+
+        if (!isPaced) {
+          logJob('INFO', 'N/A', { action: 'pacing_skip', channelId, name: channel.name }, requestId);
+          continue;
+        }
+
+        // 3.3 Buscar 1 único job para este canal
+        const { data: job } = await supabase
+          .from('send_jobs')
+          .select('*')
+          .eq('channel_id', channelId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: true })
           .limit(1)
           .maybeSingle();
 
-        if (existingReceipt) {
-          await supabase
-            .from('send_jobs')
-            .update({
-              status: 'completed',
-              last_error: 'Skipped: duplicate (idempotency)',
-              processed_at: new Date().toISOString()
-            })
-            .eq('id', job.id);
+        if (!job) continue;
 
-          logJob('INFO', job.id, { action: 'skipped_duplicate', destination: job.destination }, requestId);
-          results.push({ jobId: job.id, status: 'skipped_duplicate' });
-          continue;
-        }
-      }
-
-      // ─── 5. Resolver canal e provider ──────────────────────────────────
-      let apiKey = '';
-      let channelType = 'whatsapp';
-
-      try {
-        const { data: channel } = await supabase
-          .from('channels')
-          .select('config, type, name')
-          .eq('id', job.channel_id)
+        // 3.4 Lock do Job
+        const { data: lockedJob } = await supabase
+          .from('send_jobs')
+          .update({ status: 'processing', updated_at: new Date().toISOString() })
+          .eq('id', job.id)
+          .eq('status', 'pending')
+          .select()
           .single();
 
-        channelType = channel?.type || 'whatsapp';
-        const sessionStatus = channel?.config?.status;
+        if (!lockedJob) continue;
 
-        if (sessionStatus === 'session_lost' || sessionStatus === 'disconnected') {
-          const errorMsg = `Sessão Offline: O canal '${channel?.name || job.channel_id}' está desconectado. Reconecte no painel.`;
-          await supabase
-            .from('send_jobs')
-            .update({
-              status: 'failed',
-              error_type: 'PERMANENT',
-              last_error: errorMsg,
-              try_count: job.try_count + 1,
-              processed_at: new Date().toISOString()
-            })
-            .eq('id', job.id);
+        // 3.5 Processar Envio
+        processedAny = true;
+        logJob('INFO', job.id, { action: 'sending', channel: channel.name, destination: job.destination }, requestId);
 
-          logJob('ERROR', job.id, { action: 'channel_unavailable', channelType, status: sessionStatus }, requestId);
-          results.push({ jobId: job.id, status: 'failed', error: 'session_lost', errorType: 'PERMANENT' });
-          continue;
-        }
-
+        // Resolver segredos
         const { data: secretData } = await supabase
           .from('channel_secrets')
           .select('session_api_key')
-          .eq('channel_id', job.channel_id)
+          .eq('channel_id', channelId)
           .maybeSingle();
 
-        apiKey = secretData?.session_api_key || '';
+        const apiKey = secretData?.session_api_key;
+        if (!apiKey) throw new Error('API Key missing');
 
-        if (!apiKey) {
-          throw new Error('Chave de API do canal não encontrada. Reconecte no painel.');
-        }
+        // Formatação e Envio
+        const destination = provider.formatDestination(job.destination);
+        const result: SendResult = job.image_url 
+          ? await provider.sendMedia(apiKey, destination, job.image_url, job.message_body || '')
+          : await provider.sendMessage(apiKey, destination, job.message_body || '');
 
-      } catch (authErr: any) {
-        await supabase
-          .from('send_jobs')
-          .update({
-            status: 'failed',
-            error_type: 'PERMANENT',
-            last_error: authErr.message || 'Erro de autenticação',
-            try_count: job.try_count + 1,
-            processed_at: new Date().toISOString()
-          })
-          .eq('id', job.id);
-
-        logJob('ERROR', job.id, { action: 'auth_failed', channelType, error: authErr.message }, requestId);
-        results.push({ jobId: job.id, status: 'failed', error: 'missing_auth', errorType: 'PERMANENT' });
-        continue;
-      }
-
-      // ─── 6. Rate Limit por Destino ─────────────────────────────────────
-      if (!canSendToDestination(job.destination)) {
-        // Devolve pra fila pra ser processado na próxima rodada
-        await supabase
-          .from('send_jobs')
-          .update({ status: 'pending', updated_at: new Date().toISOString() })
-          .eq('id', job.id);
-
-        logJob('WARN', job.id, { action: 'rate_limited', destination: job.destination }, requestId);
-        results.push({ jobId: job.id, status: 'rate_limited' });
-        continue;
-      }
-
-      // ─── 7. Pacing por Canal (Isolado) ──────────────────────────────────
-      const provider = getProvider(channelType);
-      
-      if (!canSendFromChannel(job.channel_id, provider.getCooldownMs())) {
-        // Devolve pra fila para processar em outra oportunidade ou próxima rodada
-        await supabase
-          .from('send_jobs')
-          .update({ status: 'pending', updated_at: new Date().toISOString() })
-          .eq('id', job.id);
-
-        logJob('INFO', job.id, { action: 'channel_pacing', channelId: job.channel_id }, requestId);
-        results.push({ jobId: job.id, status: 'pacing_skip' });
-        continue;
-      }
-
-      // ─── 8. Enviar via Provider ────────────────────────────────────────
-      const formattedDestination = provider.formatDestination(job.destination);
-      const messageText = job.message_body || '';
-
-      logJob('INFO', job.id, { action: 'sending', channelType, destination: formattedDestination }, requestId);
-
-      let result: SendResult;
-
-      if (job.image_url) {
-        result = await provider.sendMedia(apiKey, formattedDestination, job.image_url, messageText);
-      } else {
-        result = await provider.sendMessage(apiKey, formattedDestination, messageText);
-      }
-
-      // ─── 8. Processar resultado ────────────────────────────────────────
-      if (result.success) {
-        markChannelSent(job.channel_id);
-        markDestinationSent(job.destination);
-        // ... resta do sucesso ...
-
-        await supabase
-          .from('send_jobs')
-          .update({
+        // 3.6 Finalizar Job
+        if (result.success) {
+          await supabase.from('send_jobs').update({
             status: 'completed',
             processed_at: new Date().toISOString(),
             try_count: job.try_count + 1
-          })
-          .eq('id', job.id);
+          }).eq('id', job.id);
 
-        await supabase
-          .from('send_receipts')
-          .insert({
+          await supabase.from('send_receipts').insert({
             send_job_id: job.id,
             user_id: job.user_id,
             campaign_id: job.campaign_id,
-            campaign_item_id: job.campaign_item_id || null,
             destination: job.destination,
-            status: 'delivered',
-            wasender_message_id: result.messageId,
-            delivered_at: new Date().toISOString()
+            wasender_message_id: result.messageId
           });
 
-        logJob('INFO', job.id, { action: 'delivered', channelType, messageId: result.messageId }, requestId);
-        results.push({ jobId: job.id, status: 'completed' });
-
-      } else {
-        // Erro — classificar e decidir retry vs fail
-        const errorType: ErrorType = result.errorType || provider.classifyError(result.error);
-        const newTryCount = job.try_count + 1;
-
-        let finalStatus: string;
-
-        if (errorType === 'PERMANENT') {
-          finalStatus = 'failed';
-        } else if (newTryCount >= MAX_RETRIES) {
-          finalStatus = 'failed';
+          logJob('INFO', job.id, { action: 'delivered' }, requestId);
+          results.push({ jobId: job.id, status: 'completed' });
         } else {
-          finalStatus = 'pending'; // Volta pra fila
-        }
-
-        await supabase
-          .from('send_jobs')
-          .update({
+          const errorType: ErrorType = result.errorType || provider.classifyError(result.error);
+          const finalStatus = (errorType === 'PERMANENT' || job.try_count + 1 >= MAX_RETRIES) ? 'failed' : 'pending';
+          
+          await supabase.from('send_jobs').update({
             status: finalStatus,
             error_type: errorType,
-            try_count: newTryCount,
+            try_count: job.try_count + 1,
             last_error: result.error,
             processed_at: new Date().toISOString()
-          })
-          .eq('id', job.id);
+          }).eq('id', job.id);
 
-        logJob(errorType === 'PERMANENT' ? 'ERROR' : 'WARN', job.id, {
-          action: finalStatus === 'failed' ? 'failed_final' : 'retry_scheduled',
-          channelType,
-          errorType,
-          error: result.error,
-          attempt: newTryCount,
-        }, requestId);
-
-        // ─── 9. Fallback Multi-Canal ─────────────────────────────────────
-        if (finalStatus === 'failed' && job.fallback_channel_id) {
-          logJob('INFO', job.id, { action: 'fallback_triggered', fallbackChannelId: job.fallback_channel_id }, requestId);
-
-          await supabase
-            .from('send_jobs')
-            .insert({
-              user_id: job.user_id,
-              channel_id: job.fallback_channel_id,
-              session_id: job.session_id,
-              campaign_id: job.campaign_id,
-              campaign_item_id: job.campaign_item_id,
-              destination: job.destination,
-              destination_name: job.destination_name,
-              message_body: job.message_body,
-              message_type: job.message_type,
-              image_url: job.image_url,
-              status: 'pending',
-              try_count: 0,
-              fallback_channel_id: null, // Evitar loop infinito
-            });
+          logJob('WARN', job.id, { action: 'failed', error: result.error, nextStatus: finalStatus }, requestId);
+          results.push({ jobId: job.id, status: finalStatus, error: result.error });
         }
 
-        results.push({ jobId: job.id, status: finalStatus, error: result.error, errorType });
+      } finally {
+        // 3.7 Liberar Lock do Canal
+        await supabase.rpc('release_channel_lock', {
+          p_channel_id: channelId,
+          p_worker_id: requestId
+        });
       }
-
-      // ─── 10. Cooldown por provider ─────────────────────────────────────
-      // Removido Global Sleep fixo para permitir processamento paralelo de canais
-      // Pacing agora é controlado individualmente por canSendFromChannel
     }
 
-    console.log(`[WORKER-DONE] [${requestId}] Processamento finalizado. Jobs processados: ${results.length}`);
+    // ─── 4. Auto-Retrigger (Se houver mais pendentes) ─────────────────────
+    const { count } = await supabase
+      .from('send_jobs')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+
+    if (count && count > 0) {
+      console.log(`[WORKER-RETRIGGER] [${requestId}] Ainda existem ${count} jobs pendentes. Agendando próximo ciclo...`);
+      // Disparo Fire-and-Forget
+      triggerWorker({ host, requestId: `next-${requestId.slice(0,5)}` });
+    }
 
     return NextResponse.json({
       processed: results.length,
-      results,
+      remaining: count || 0,
       requestId
     });
 
   } catch (error: any) {
-    console.error('[WORKER] Fatal Error:', error);
+    console.error(`[WORKER-FATAL] [${requestId}]`, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

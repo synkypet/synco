@@ -6,15 +6,26 @@
 export interface TriggerOptions {
   requestId?: string;
   baseUrl?: string;
+  host?: string;
 }
 
 export async function triggerWorker(options: TriggerOptions = {}) {
-  const { requestId, baseUrl } = options;
+  const { requestId, baseUrl, host } = options;
   const rid = requestId || Math.random().toString(36).substring(7);
   
   // No ambiente operacional, o baseUrl deve ser preferencialmente o host local ou domínio atual
-  // Se não fornecido, tenta derivar do ambiente
-  const finalBaseUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // Se não fornecido, tenta derivar do host ou do ambiente
+  let finalBaseUrl = baseUrl;
+  
+  if (!finalBaseUrl) {
+    if (host) {
+      const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
+      finalBaseUrl = `${protocol}://${host}`;
+    } else {
+      finalBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    }
+  }
+
   const workerUrl = `${finalBaseUrl}/api/send-jobs/process`;
 
   console.log(`[WORKER-TRIGGER] [${rid}] Acionando worker em ${workerUrl}...`);
