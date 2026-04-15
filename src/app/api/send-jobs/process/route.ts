@@ -71,6 +71,8 @@ export async function POST(request: Request) {
     }
 
     // 2. Identificar Canais com Jobs Pendentes
+    const { count: totalPendingInitial } = await supabase.from('send_jobs').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+
     const CHANNELS_PER_BATCH = 15;
     const { data: recentPendingJobs, error: sampleError } = await supabase
       .from('send_jobs')
@@ -83,6 +85,8 @@ export async function POST(request: Request) {
 
     const activeChannelIds = [...new Set((recentPendingJobs || []).map(j => j.channel_id))].slice(0, CHANNELS_PER_BATCH);
 
+    console.log(`[WORKER-STATS] [${requestId}] Total Pending: ${totalPendingInitial}, Active Channels found: ${activeChannelIds.length}`);
+
     if (activeChannelIds.length === 0) {
       return NextResponse.json({ processed: 0, message: 'No pending jobs' });
     }
@@ -90,7 +94,8 @@ export async function POST(request: Request) {
     const results: any[] = [];
     let processedAny = false;
     let minRemainingMs = Infinity;
-    let hasPacingSkip = false;
+    let pacingSkipCount = 0;
+    let lockedSkipCount = 0;
 
     // 3. Processamento Serial por Canal
     for (const channelId of activeChannelIds) {
@@ -101,6 +106,7 @@ export async function POST(request: Request) {
       });
 
       if (!hasLock) {
+        lockedSkipCount++;
         logJob('INFO', 'N/A', { action: 'lock_skip', channelId, reason: 'Busy/Locked' }, requestId);
         continue;
       }
@@ -113,7 +119,7 @@ export async function POST(request: Request) {
         const pacing = await checkPersistentPacing(supabase, channelId as string, provider.getCooldownMs());
 
         if (!pacing.isPaced) {
-          hasPacingSkip = true;
+          pacingSkipCount++;
           minRemainingMs = Math.min(minRemainingMs, pacing.remainingMs);
           logJob('INFO', 'N/A', { action: 'pacing_skip', channelId, remaining_cooldown_ms: pacing.remainingMs }, requestId);
           continue;
@@ -151,7 +157,6 @@ export async function POST(request: Request) {
             results.push({ jobId: job.id, status: finalStatus, error: result.error });
           }
         } catch (jobError: any) {
-          // Captura erros estruturais (ex: falta de API Key) ou exceções do provedor
           const errorMessage = jobError.message || 'Unknown pre-send error';
           console.error(`[WORKER-JOB-ERROR] [${requestId}] Job ${job.id}:`, errorMessage);
           
@@ -171,43 +176,61 @@ export async function POST(request: Request) {
     }
 
     // 4. Agendamento do Próximo Ciclo (Auto-Retrigger)
-    const { count } = await supabase.from('send_jobs').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+    const { count: finalPendingCount } = await supabase.from('send_jobs').select('*', { count: 'exact', head: true }).eq('status', 'pending');
 
-    if (count && count > 0) {
+    console.log(`[WORKER-BATCH-RESULT] [${requestId}] Processed: ${results.length}, Pacing Skips: ${pacingSkipCount}, Locked Skips: ${lockedSkipCount}, Still Pending: ${finalPendingCount}`);
+
+    if (finalPendingCount && finalPendingCount > 0) {
       let shouldRetrigger = false;
+      let triggerMode: 'await' | 'fire-forget' = 'fire-forget';
 
       if (processedAny) {
-        // Se processamos algo, continuamos drenando
+        // Se processamos algo, continuamos drenando imediatamente.
+        // MUDANÇA: Usamos fire-forget para não acumular execução na Vercel (evitar timeout em cadeia).
         shouldRetrigger = true;
-      } else if (hasPacingSkip && minRemainingMs !== Infinity) {
+        triggerMode = 'fire-forget';
+      } else if (pacingSkipCount > 0 && minRemainingMs !== Infinity) {
         // Nada enviado, apenas pulado por pacing. Aguardar o cooldown restante (com limite seguro)
         const waitMs = Math.min(minRemainingMs, MAX_SLEEP_MS);
-        const nextRetryAt = new Date(Date.now() + waitMs).toISOString();
-        
-        console.log(`[WORKER-WAIT] [${requestId}] Aguardando ${waitMs}ms de cooldown. Próxima tentativa estimada: ${nextRetryAt}`);
+        console.log(`[WORKER-WAIT] [${requestId}] Nada elegível no momento. Aguardando ${waitMs}ms de cooldown...`);
         await sleep(waitMs);
         shouldRetrigger = true;
+        triggerMode = 'fire-forget';
       } else {
-        // Se sobrou jobs mas não processamos nada E não foi por pacing (ex: todos bloqueados)
-        // Evitamos retrigger imediato para não gerar loop infinito de CPU.
-        console.log(`[WORKER-IDLE] [${requestId}] Jobs pendentes mas nenhum elegível ou todos bloqueados. Aguardando Heartbeat.`);
+        console.log(`[WORKER-IDLE] [${requestId}] Jobs pendentes mas nenhum elegível (todos bloqueados). Aguardando Heartbeat.`);
         shouldRetrigger = false;
       }
 
       if (shouldRetrigger) {
-        console.log(`[WORKER-RETRIGGER] [${requestId}] Agendando próximo ciclo...`);
-        // O trigger local é disparado sem await para liberar o canal, 
-        // mas o worker principal só retorna após o próximo ser "aceito" 
-        // ou após falha, se shouldAwait for true.
-        await triggerWorker({ 
+        console.log(`[WORKER-DECISION] [${requestId}] Status: RETRIGGER (${triggerMode}).`);
+        
+        // Dispara o próximo ciclo.
+        // Como o worker agora sempre usa fire-forget para auto-retrigger evitaremos timeouts em cadeia.
+        const triggerPromise = triggerWorker({ 
           host, 
           requestId: `next-${requestId.slice(0,5)}`,
-          shouldAwait: true 
+          shouldAwait: false 
         });
+
+        // Não aguardamos o resultado para retornar logo o 200 pro worker anterior ou heartbeat
+        triggerPromise.catch(e => console.error(`[WORKER-TRIGGER-ERROR] [${requestId}]`, e));
+      } else {
+        console.log(`[WORKER-DECISION] [${requestId}] Status: STOP (Idle/Blocked).`);
       }
+    } else {
+        console.log(`[WORKER-DECISION] [${requestId}] Status: FINISHED (Queue empty).`);
     }
 
-    return NextResponse.json({ processed: results.length, remaining: count || 0, requestId });
+    return NextResponse.json({ 
+      processed: results.length, 
+      remaining: finalPendingCount || 0, 
+      requestId,
+      batch: {
+        processed: results.length,
+        pacingSkips: pacingSkipCount,
+        lockedSkips: lockedSkipCount
+      }
+    });
 
   } catch (error: any) {
     console.error(`[WORKER-FATAL] [${requestId}]`, error);
