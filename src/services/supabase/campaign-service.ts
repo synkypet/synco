@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { Campaign, CreateCampaignDTO } from '@/types/campaign';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { triggerWorker } from '@/lib/worker/trigger';
 
 export const campaignService = {
 
@@ -157,6 +158,23 @@ export const campaignService = {
         }
       }
     }
+
+    // 5. Kickstart the worker (Trigger)
+    // Se estivermos no servidor, o CRON_SECRET estará disponível e o disparo será imediato.
+    // Se estivermos no browser, o triggerWorker tentará disparar (pode falhar por falta de secret, 
+    // mas o heartbeat/automação garantirá a drenagem redundante).
+    // 5. Kickstart the worker (Trigger) - Best Effort
+    // Não usamos await aqui deliberadamente para não atrasar a resposta ao usuário.
+    // O utilitário triggerWorker já lida com erros internos de rede/secret.
+    triggerWorker().then(success => {
+      if (success) {
+        console.log(`[CAMPAIGN-CREATE] [${campaign.id}] Worker acionado com sucesso.`);
+      } else {
+        console.warn(`[CAMPAIGN-CREATE] [${campaign.id}] Falha ao acionar worker (Heartbeat garantirá a drenagem).`);
+      }
+    }).catch(e => {
+      console.error(`[CAMPAIGN-CREATE] [${campaign.id}] Erro inesperado no disparo do worker:`, e);
+    });
 
     return campaign as Campaign;
   },
