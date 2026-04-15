@@ -27,8 +27,68 @@ export const campaignService = {
 
   async create(userId: string, dto: CreateCampaignDTO, client?: SupabaseClient): Promise<Campaign> {
     const supabase = client || createClient();
+    console.log(`[CAMPAIGN-SERVICE] Iniciando criação de campanha para user ${userId}...`);
 
-    // 1. Insert campaign
+    // ─── 0. Validação Prévia ──────────────────────────────────────────────────
+    if (!dto.items || dto.items.length === 0) {
+      console.warn('[CAMPAIGN-SERVICE] Abortando: Nenhun item fornecido.');
+      throw new Error('Nenhum item fornecido para a campanha.');
+    }
+
+    if (!dto.destinations || dto.destinations.length === 0) {
+      console.warn('[CAMPAIGN-SERVICE] Abortando: Nenhum destino fornecido.');
+      throw new Error('Nenhum destino fornecido para a campanha.');
+    }
+
+    // ─── 1. Resolução de Destinos (Expansão de Listas) ─────────────────────────
+    const finalGroupIds = new Set<string>();
+    
+    // Separar grupos diretos e listas
+    const directGroupIds = dto.destinations.filter(d => d.type === 'group').map(d => d.id);
+    const listIds = dto.destinations.filter(d => d.type === 'list').map(d => d.id);
+
+    directGroupIds.forEach(id => finalGroupIds.add(id));
+
+    if (listIds.length > 0) {
+      console.log(`[CAMPAIGN-SERVICE] Expandindo ${listIds.length} listas de destino...`);
+      const { data: listGroups } = await supabase
+        .from('destination_list_groups')
+        .select('group_id')
+        .in('list_id', listIds);
+      
+      if (listGroups) {
+        listGroups.forEach(lg => finalGroupIds.add(lg.group_id));
+      }
+    }
+
+    if (finalGroupIds.size === 0) {
+      console.warn('[CAMPAIGN-SERVICE] Abortando: Nenhun destino real (grupo) resolvido após expansão.');
+      throw new Error('Nenhum destino válido encontrado após expansão das listas.');
+    }
+
+    // ─── 2. Buscar informações dos Grupos e Canais ────────────────────────────
+    const { data: groupsInfo, error: groupsError } = await supabase
+      .from('groups')
+      .select('id, remote_id, name, channel_id, channels(config, type)')
+      .in('id', Array.from(finalGroupIds));
+
+    if (groupsError || !groupsInfo || groupsInfo.length === 0) {
+      console.error('[CAMPAIGN-SERVICE] Erro ao buscar informações dos grupos:', groupsError);
+      throw new Error('Falha ao processar destinos da campanha.');
+    }
+
+    // Deduplicação extra por remote_id (Prevenção de loop/spam no mesmo grupo via rotas redundantes)
+    const uniqueGroups = new Map<string, any>();
+    groupsInfo.forEach(g => {
+      const key = `${g.channel_id}:${g.remote_id}`;
+      if (!uniqueGroups.has(key)) {
+        uniqueGroups.set(key, g);
+      }
+    });
+
+    console.log(`[CAMPAIGN-SERVICE] Destinos resolvidos: ${groupsInfo.length} total, ${uniqueGroups.size} únicos por remote_id.`);
+
+    // ─── 3. Persistência da Campanha (Finalmente!) ────────────────────────────
     const { data: campaign, error: campaignError } = await supabase
       .from('campaigns')
       .insert({
@@ -45,118 +105,91 @@ export const campaignService = {
       throw campaignError;
     }
 
-    // 2. Insert items
-    let insertedItems: any[] = [];
-    if (dto.items && dto.items.length > 0) {
-      const itemsToInsert = dto.items.map(item => ({
-        campaign_id: campaign.id,
-        product_id: item.product_id,
-        product_name: item.product_name,
-        custom_text: item.custom_text,
-        affiliate_url: item.affiliate_url
-      }));
+    // 4. Inserir Itens
+    const itemsToInsert = dto.items.map(item => ({
+      campaign_id: campaign.id,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      custom_text: item.custom_text,
+      affiliate_url: item.affiliate_url
+    }));
 
-      const { data: items, error: itemsError } = await supabase
-        .from('campaign_items')
-        .insert(itemsToInsert)
-        .select();
+    const { data: insertedItems, error: itemsError } = await supabase
+      .from('campaign_items')
+      .insert(itemsToInsert)
+      .select();
 
-      if (itemsError) {
-        console.error('Error inserting campaign items:', itemsError);
-        throw itemsError;
-      }
-      insertedItems = items;
+    if (itemsError) {
+      console.error('Error inserting campaign items:', itemsError);
+      // Cleanup básico se falhar (opcional, já que estamos no mesmo processo)
+      throw itemsError;
     }
 
-    // 3. Insert destinations
-    let insertedDestinations: any[] = [];
-    if (dto.destinations && dto.destinations.length > 0) {
-      const destinationsToInsert = dto.destinations.map(dest => ({
-        campaign_id: campaign.id,
-        destination_type: dest.type,
-        destination_id: dest.id
-      }));
+    // 5. Inserir Destinos Originais (Manter rastreabilidade da rota/lista)
+    const destinationsToInsert = dto.destinations.map(dest => ({
+      campaign_id: campaign.id,
+      destination_type: dest.type,
+      destination_id: dest.id
+    }));
 
-      const { data: dests, error: destError } = await supabase
-        .from('campaign_destinations')
-        .insert(destinationsToInsert)
-        .select();
+    await supabase.from('campaign_destinations').insert(destinationsToInsert);
 
-      if (destError) {
-        console.error('Error inserting campaign destinations:', destError);
-        throw destError;
-      }
-      insertedDestinations = dests;
-    }
+    // ─── 6. Geração Real dos Send Jobs ────────────────────────────────────────
+    // Buscar canais para fallback
+    const { data: userChannels } = await supabase
+      .from('channels')
+      .select('id, type, config')
+      .eq('user_id', userId)
+      .eq('is_active', true);
 
-    // 4. Transformar em Send Jobs (Geração Real da Fila)
-    // Para cada canal de destino (group/list), e cada item de campanha, gerar um send_job
-    if (insertedItems.length > 0 && insertedDestinations.length > 0) {
-      // Buscar a config e os detalhes dos destinos (grupos) para pegar remote_id e session_id
-      const groupIds = insertedDestinations.map(d => d.destination_id);
-      const { data: groupsInfo } = await supabase
-        .from('groups')
-        .select('id, remote_id, name, channel_id, channels(config, type)')
-        .in('id', groupIds);
+    const jobsToInsert: any[] = [];
 
-      // Buscar outros canais ativos do usuário para fallback
-      const { data: userChannels } = await supabase
-        .from('channels')
-        .select('id, type, config')
-        .eq('user_id', userId)
-        .eq('is_active', true);
+    insertedItems.forEach(item => {
+      uniqueGroups.forEach(group => {
+        const channelConfig = (group.channels as any)?.config || {};
+        const channelType = (group.channels as any)?.type || 'whatsapp';
+        const sessionId = channelConfig.sessionId || channelConfig.bot_id || null;
 
-      if (groupsInfo && groupsInfo.length > 0) {
-        const jobsToInsert: any[] = [];
+        const isConnected = channelType === 'telegram' 
+          ? channelConfig.status === 'connected'
+          : !!sessionId;
 
-        insertedItems.forEach(item => {
-          groupsInfo.forEach(group => {
-            const channelConfig = (group.channels as any)?.config || {};
-            const channelType = (group.channels as any)?.type || 'whatsapp';
-            const sessionId = channelConfig.sessionId || channelConfig.bot_id || null;
+        if (isConnected) {
+          const fallbackChannel = userChannels?.find(ch => 
+            ch.id !== group.channel_id && 
+            ch.config?.status === 'connected'
+          );
 
-            // Aceitar canais Telegram (que usam bot_id) e WhatsApp (que usam sessionId)
-            const isConnected = channelType === 'telegram' 
-              ? channelConfig.status === 'connected'
-              : !!sessionId;
-
-            if (isConnected) {
-              // Buscar canal de fallback (outro canal ativo do mesmo user, tipo diferente)
-              const fallbackChannel = userChannels?.find(ch => 
-                ch.id !== group.channel_id && 
-                ch.config?.status === 'connected'
-              );
-
-              jobsToInsert.push({
-                user_id: userId,
-                campaign_id: campaign.id,
-                campaign_item_id: item.id,
-                channel_id: group.channel_id,
-                session_id: sessionId,
-                destination: group.remote_id,
-                destination_name: group.name,
-                message_body: item.custom_text || item.product_name,
-                message_type: 'text',
-                status: 'pending',
-                try_count: 0,
-                fallback_channel_id: fallbackChannel?.id || null,
-              });
-            }
+          jobsToInsert.push({
+            user_id: userId,
+            campaign_id: campaign.id,
+            campaign_item_id: item.id,
+            channel_id: group.channel_id,
+            session_id: sessionId,
+            destination: group.remote_id,
+            destination_name: group.name,
+            message_body: item.custom_text || item.product_name,
+            message_type: 'text',
+            status: 'pending',
+            try_count: 0,
+            fallback_channel_id: fallbackChannel?.id || null,
           });
-        });
-
-        if (jobsToInsert.length > 0) {
-          // On-conflict garante idempotência. A database ignora se a constraint única for violada
-          const { error: jobsError } = await supabase
-            .from('send_jobs')
-            .upsert(jobsToInsert, { onConflict: 'campaign_id, campaign_item_id, destination', ignoreDuplicates: true });
-
-          if (jobsError) {
-             console.error('Falha ao gerar send_jobs:', jobsError);
-             throw new Error(`Failed to generate send jobs: ${jobsError.message}`);
-          }
         }
+      });
+    });
+
+    if (jobsToInsert.length > 0) {
+      const { error: jobsError } = await supabase
+        .from('send_jobs')
+        .upsert(jobsToInsert, { onConflict: 'campaign_id, campaign_item_id, destination', ignoreDuplicates: true });
+
+      if (jobsError) {
+         console.error('Falha ao gerar send_jobs:', jobsError);
+         throw new Error(`Failed to generate send jobs: ${jobsError.message}`);
       }
+      console.log(`[CAMPAIGN-SERVICE] ✓ ${jobsToInsert.length} jobs gerados com sucesso.`);
+    } else {
+      console.warn(`[CAMPAIGN-SERVICE] Nenhum job elegível gerado para a campanha #${campaign.id}.`);
     }
 
     // 5. Kickstart the worker (Trigger)

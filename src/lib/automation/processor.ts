@@ -252,12 +252,11 @@ export async function processInboundAutomation(payload: InboundPayload) {
         */
 
         // 4. Composição e Geração de Job
-        console.log(`${logPrefix} [ITEM] [CAMPAIGN] Gerando campanha e disparos...`);
         const finalMessage = route.template_config?.body 
           ? fillTemplate(route.template_config.body, snapshot.factual, source.name)
           : snapshot.copy.messageText;
 
-        const campaign = await campaignService.create(userId, {
+        const campaignDto = {
           name: `AUTO: ${snapshot.factual.title.substring(0, 30)}...`,
           items: [{
             product_id: snapshot.factual.itemId?.toString() || undefined,
@@ -269,16 +268,30 @@ export async function processInboundAutomation(payload: InboundPayload) {
             type: route.target_type,
             id: route.target_id
           }]
-        }, supabase);
+        };
 
-        console.log(`${logPrefix} [ITEM] [SUCCESS] ★ Campanha #${campaign.id} criada com sucesso.`);
+        console.log(`${logPrefix} [ITEM] [CAMPAIGN-DTO] Preparado:`, {
+          items: campaignDto.items.length,
+          destinations: campaignDto.destinations.length,
+          target_type: route.target_type,
+          target_id: route.target_id
+        });
 
+        const campaign = await campaignService.create(userId, campaignDto, supabase);
+
+        console.log(`${logPrefix} [ITEM] [SUCCESS] ★ Campanha #${campaign.id} criada.`);
+        
         await automationService.logEvent({
           source_id: source.id,
           user_id: userId,
           status: 'processed',
           event_type: 'job_created',
-          details: { url: normalized, targetId: route.target_id, campaignId: campaign.id }
+          details: { 
+            url: normalized, 
+            targetId: route.target_id, 
+            targetType: route.target_type,
+            campaignId: campaign.id 
+          }
         }, supabase);
 
         results.push({ url: normalized, routeId: route.id, campaignId: campaign.id });
