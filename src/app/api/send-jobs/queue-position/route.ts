@@ -1,12 +1,12 @@
-// src/app/api/send-jobs/queue-position/route.ts
-// Retorna a posição na fila de um conjunto de jobs de uma campanha,
-// calculado por canal (respeitando o pacing real do worker).
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { triggerWorker } from '@/lib/worker/trigger';
+import { waitUntil } from '@vercel/functions';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const campaignId = searchParams.get('campaign_id');
+  const rid = `nudge-${Math.random().toString(36).substring(7)}`;
 
   if (!campaignId) {
     return NextResponse.json({ error: 'Missing campaign_id' }, { status: 400 });
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createAdminClient();
+    let nudgeAttempted = false;
 
     // 1. Buscar o canal e created_at do primeiro job pending desta campanha
     const { data: campaignJobs } = await supabase
@@ -28,8 +29,47 @@ export async function GET(request: Request) {
 
     if (!firstJob) {
       // Nenhum job active — campanha finalizada
-      return NextResponse.json({ position: 0, pendingInCampaign: 0, channelId: null, operationalStatus: 'completed' });
+      return NextResponse.json({ position: 0, pendingInCampaign: 0, channelId: null, operationalStatus: 'completed', nudgeAttempted: false });
     }
+
+    // ─── LÓGICA DE AUTO-NUDGE (Despertar da Fila) ───────────────────────────
+    // Se o job desta campanha está 'pending', vamos conferir a saúde global da fila.
+    if (firstJob.status === 'pending') {
+      // 1. Verificar se existe algum processo ATIVO e RECENTE no sistema
+      const { data: recentProcessing } = await supabase
+        .from('send_jobs')
+        .select('updated_at')
+        .eq('status', 'processing')
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      const isStalled = !recentProcessing || recentProcessing.length === 0 || 
+        (Date.now() - new Date(recentProcessing[0].updated_at).getTime() > 60000); // 60s de silêncio
+
+      if (isStalled) {
+        // 2. Tentar adquirir lock para evitar tempestade de triggers (Debounce de 60s)
+        const { data: hasLock } = await supabase.rpc('claim_maintenance_lock', {
+          p_lock_key: 'auto_nudge_debounce',
+          p_worker_id: rid,
+          p_timeout_seconds: 60
+        });
+
+        if (hasLock) {
+          console.log(`[AUTO-NUDGE] [${rid}] Fila estagnada detectada. Acordando worker...`);
+          nudgeAttempted = true;
+          const host = request.headers.get('host') || undefined;
+          
+          // Disparo seguro em background
+          waitUntil(triggerWorker({ 
+            requestId: rid, 
+            host, 
+            source: 'auto-nudge',
+            shouldAwait: false 
+          }));
+        }
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     // Se o primeiro job está em processing, está enviando agora
     if (firstJob.status === 'processing') {
@@ -44,6 +84,7 @@ export async function GET(request: Request) {
         pendingInCampaign: pendingCount || 1,
         channelId: firstJob.channel_id,
         operationalStatus: 'sending',
+        nudgeAttempted
       });
     }
 
@@ -81,6 +122,7 @@ export async function GET(request: Request) {
       channelId: firstJob.channel_id,
       operationalStatus,
       lastProcessedAt: lastProcessedJob?.[0]?.processed_at || null,
+      nudgeAttempted
     });
 
   } catch (error: any) {
