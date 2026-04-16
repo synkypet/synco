@@ -20,6 +20,7 @@ export class WhatsAppProvider implements ChannelProvider {
 
   async sendMessage(apiKey: string, destination: string, text: string): Promise<SendResult> {
     try {
+      console.log(`[WHATSAPP-PROVIDER] [${new Date().toISOString()}] final payload mode: text-only | dest: ${destination}`);
       const data = await WasenderClient.sendMessage(apiKey, destination, text);
       const messageId = data?.message_id || data?.id || data?.data?.id || null;
       return {
@@ -36,9 +37,18 @@ export class WhatsAppProvider implements ChannelProvider {
   }
 
   async sendMedia(apiKey: string, destination: string, mediaUrl: string, caption: string): Promise<SendResult> {
+    if (!mediaUrl) {
+      console.log(`[WHATSAPP-PROVIDER] [${new Date().toISOString()}] send_job imageUrl missing, fallback to text`);
+      return this.sendMessage(apiKey, destination, caption);
+    }
+
     try {
-      const data = await WasenderClient.sendImage(apiKey, destination, mediaUrl, caption);
+      console.log(`[WHATSAPP-PROVIDER] [${new Date().toISOString()}] send_job using imageUrl: ${mediaUrl}`);
+      console.log(`[WHATSAPP-PROVIDER] [${new Date().toISOString()}] final payload mode: image+caption | dest: ${destination}`);
+      
+      const data = await WasenderClient.sendMessage(apiKey, destination, caption, mediaUrl);
       const messageId = data?.message_id || data?.id || data?.data?.id || null;
+      
       return {
         success: true,
         messageId: messageId?.toString() || null,
@@ -46,15 +56,10 @@ export class WhatsAppProvider implements ChannelProvider {
     } catch (error: any) {
       const errorMsg = error.message || 'Erro desconhecido';
       
-      console.error(`[WHATSAPP-IMAGE-FAILURE] [${new Date().toISOString()}] Falha ao enviar mídia.`);
-      console.error(`- Destination: ${destination}`);
-      console.error(`- Image URL: ${mediaUrl}`);
+      console.error(`[WHATSAPP-PROVIDER] [${new Date().toISOString()}] send_job image send failed, retrying as text-only`);
       console.error(`- Error: ${errorMsg}`);
       
-      console.warn(`[WHATSAPP-PROVIDER] [${new Date().toISOString()}] Acionando fallback para texto puro devido a erro na mídia.`);
-      
-      // Se for erro permanente de destino (ex: número inválido), o fallback para texto também falhará.
-      // Mas se for erro de processamento de mídia na Wasender, o texto pode funcionar.
+      // Fallback para texto puro
       return this.sendMessage(apiKey, destination, caption);
     }
   }
