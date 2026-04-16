@@ -1,0 +1,46 @@
+name: SYNCO Queue Pump
+
+on:
+  schedule:
+    # Intervalo mínimo de 5 minutos (limite do GitHub para workflows agendados)
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    # Permite disparo manual para testes imediatos
+
+jobs:
+  pump:
+    name: Heartbeat Pulse
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Pulse to API
+        run: |
+          echo "Starting Pump at $(date)"
+          
+          # Realiza a chamada ao heartbeat capturando o status HTTP e a resposta
+          # Usamos secrets para proteger a URL e o token do cron
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.RENDER_APP_URL }}/api/maintenance/heartbeat" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --connect-timeout 30 \
+            --retry 2)
+          
+          # Extrai o status e o corpo
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n 1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "API Response: $BODY"
+          
+          # Validação: Falha se o status for de erro crítico (5xx)
+          if [[ "$HTTP_STATUS" -ge 500 ]]; then
+            echo "::error::Critical failure in API (HTTP $HTTP_STATUS)"
+            exit 1
+          fi
+          
+          # Verificação de segregação de sucesso/unauthorized
+          if [[ "$HTTP_STATUS" -eq 401 ]]; then
+            echo "::error::Authentication failed. Check CRON_SECRET."
+            exit 1
+          fi
+          
+          echo "Pump completed successfully."
