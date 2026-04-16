@@ -16,53 +16,14 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const COOLDOWN_MS = 5500;
+// Hook useRealtimeEta removido para evitar indicadores de tempo ilusórios
 
 const OPERATIONAL_STATUS: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  queued:    { label: 'Aguardando fila',     color: 'bg-yellow-500/10 text-yellow-400',                           icon: <Clock size={8} /> },
-  cooldown:  { label: 'Aguardando cooldown', color: 'bg-blue-500/10 text-blue-400',                               icon: <Timer size={8} /> },
-  sending:   { label: 'Enviando',            color: 'bg-kinetic-orange/10 text-kinetic-orange animate-pulse',     icon: <SendHorizonal size={8} /> },
-  completed: { label: 'Finalizada',          color: 'bg-emerald-500/10 text-emerald-400',                         icon: <CheckCircle2 size={8} /> },
+  queued:    { label: 'Na fila',           color: 'bg-yellow-500/10 text-yellow-400',                           icon: <Clock size={8} /> },
+  cooldown:  { label: 'Aguardando envio',  color: 'bg-blue-500/10 text-blue-400',                               icon: <Timer size={8} /> },
+  sending:   { label: 'Processando',       color: 'bg-kinetic-orange/10 text-kinetic-orange animate-pulse',     icon: <SendHorizonal size={8} /> },
+  completed: { label: 'Finalizada',        color: 'bg-emerald-500/10 text-emerald-400',                         icon: <CheckCircle2 size={8} /> },
 };
-
-function useRealtimeEta(queue: QueuePosition | undefined, hasPending: boolean) {
-  const [etaLabel, setEtaLabel] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!hasPending || !queue || queue.operationalStatus === 'sending' || queue.operationalStatus === 'completed') {
-      setEtaLabel(null);
-      return;
-    }
-
-    const updateEta = () => {
-      const now = Date.now();
-      const lastProcessedTime = queue.lastProcessedAt ? new Date(queue.lastProcessedAt).getTime() : now - COOLDOWN_MS;
-      const nextAvailableTime = lastProcessedTime + COOLDOWN_MS;
-
-      const queueStartTime = Math.max(now, nextAvailableTime);
-      const targetTime = queueStartTime + Math.max(0, queue.position - 1) * COOLDOWN_MS;
-      
-      const diffMs = Math.max(0, targetTime - now);
-
-      if (diffMs <= 1000) {
-        setEtaLabel(queue.position === 1 ? 'agora' : null);
-        return;
-      }
-
-      if (diffMs < 60000) {
-        setEtaLabel(`${Math.ceil(diffMs / 1000)}s`);
-      } else {
-        setEtaLabel(`~${Math.ceil(diffMs / 60000)}m`);
-      }
-    };
-
-    updateEta();
-    const interval = setInterval(updateEta, 1000);
-    return () => clearInterval(interval);
-  }, [queue, hasPending]);
-
-  return etaLabel;
-}
 
 interface CampaignCardProps {
   campaign: Campaign;
@@ -77,8 +38,7 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
   const { data: queue } = useQueuePosition(campaign.id, hasPending);
 
   const progress = stats?.total ? Math.round((stats.completed / stats.total) * 100) : 0;
-
-  const realEtaLabel = useRealtimeEta(queue, hasPending);
+// realEtaLabel removido
 
   // Guard: stats não chegaram ainda OU campanha nova com total=0
   // Impede classificação prematura como 'completed'
@@ -140,9 +100,6 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
               <span className="text-[9px] font-black uppercase tracking-widest text-white/40">
                 Pos.{' '}
                 <span className="text-white/80">#{queue.position}</span>
-                {realEtaLabel && (
-                  <> · ETA <span className="text-kinetic-orange">{realEtaLabel}</span></>
-                )}
                 {queue.pendingInCampaign > 1 && (
                   <> · {queue.pendingInCampaign} msgs</>
                 )}
