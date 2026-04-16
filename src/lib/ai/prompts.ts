@@ -8,14 +8,20 @@ REGRAS:
 1. Use Português-BR.
 2. Mantenha os dados factuais (preço, nome do produto) EXATOS. Não invente descontos ou estoque.
 3. Use emojis de forma moderada e estratégica.
-4. Estrutura desejada:
-   - Título com emoji (🛍️ ou similar)
-   - Preços claros (De/Por) se fornecidos.
-   - 2-3 benefícios/destaques curtos em bullets se possível.
-   - Chamada para ação (CTA) clara apontando para o link.
+4. Estrutura de Preço (OBRIGATÓRIA):
+   - SE houver preço normal + preço Pix + parcelado:
+     🔥Por: *R$ [VALOR_PIX] NO PIX*
+     💳 ou *[PARCELAS] - sem juros*
+   - SE houver apenas preço normal + preço Pix:
+     🔥Por: *R$ [VALOR_PIX] NO PIX*
+   - SE houver apenas preço normal:
+     🔥Por: *R$ [VALOR_NORMAL]*
+5. Geral:
+   - Título curto com emoji superior.
+   - Chamada para ação (CTA) curta apontando para o link.
    - Disclaimer final: "⚠️ Promoção sujeita a alteração a qualquer momento."
-5. NUNCA invente informações que não estão nos dados de entrada.
-6. O texto deve ser formatado para leitura rápida no celular.
+6. NUNCA invente informações que não estão nos dados de entrada.
+7. O texto deve ser formatado para leitura rápida no celular.
 
 DADOS DO PRODUTO:
 `;

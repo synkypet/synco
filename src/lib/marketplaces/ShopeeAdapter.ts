@@ -149,24 +149,27 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       const estimatedPixPrice = currentPriceFactual * 0.92;
       const estimatedPixSource = 'heuristic.pix_0_92';
 
+      // Heurística Parcelamento (Se preço > 50, assume 3x para o template)
+      const installmentsVal = currentPriceFactual / 3;
+      const installments = currentPriceFactual > 50 
+        ? `3x de R$ ${installmentsVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+        : null;
+
       console.log('--- [SHOPEE PRO AUDIT] ---');
       console.log(`Vencedor: ${winner.productName}`);
       console.log(`Price Factual: ${currentPriceFactual} (Source: ${currentPriceSource})`);
       console.log(`Pix Estimado: ${estimatedPixPrice}`);
+      console.log(`Parcelas (Heurística): ${installments}`);
       console.log(`Commission Factual: ${commissionValueFactual} (Source: ${commissionSource})`);
       console.log('--------------------------');
 
       return {
         name: winner.productName || nameFallback,
-        /**
-         * NOTA TÉCNICA: O campo originalPrice (GraphQL) não existe no node productOfferV2.
-         * Inferimos o preço original usando priceMax (Fonte Factual API).
-         * Se o produto tiver variação/grade, priceMax representará o teto da oferta.
-         */
         originalPrice: this.normalizeValue(winner.priceMax) || currentPriceFactual,
         currentPrice: currentPriceFactual,
         discountPercent: parseFloat(winner.priceDiscountRate || "0"),
         imageUrl: winner.imageUrl || '',
+        installments,
         marketplace: 'Shopee',
         shopName: winner.shopName || 'Shopee',
         

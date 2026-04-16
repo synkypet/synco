@@ -48,6 +48,7 @@ export interface ProductMetadata {
   // Campos de Estimativa (Opcionais)
   estimatedPixPrice?: number | null;
   estimatedPixSource?: 'heuristic.pix_0_92' | null;
+  installments?: string | null;
 
   // Timestamps
   fetchedAt?: string;
