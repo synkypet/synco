@@ -346,59 +346,46 @@ export class WasenderClient {
   // ─── Messaging ──────────────────────────────────────────────────────────
 
   /**
-   * Envia uma mensagem de texto para um destino via Wasender.
-   * IMPORTANTE: Envio requer a API_KEY da sessão (e não o PAT global) e a rota /send-message.
-   * @param sessionApiKey - Chave de API única da sessão (do channel_secrets)
+   * Envia uma mensagem para um destino via Wasender (Texto ou Imagem+Legenda).
+   * @param sessionApiKey - Chave de API única da sessão
    * @param to - Número do destinatário
-   * @param message - Corpo da mensagem
+   * @param message - Corpo da mensagem ou legenda
+   * @param imageUrl - URL opcional da imagem
    */
-  static async sendMessage(sessionApiKey: string, to: string, message: string) {
+  static async sendMessage(sessionApiKey: string, to: string, message: string, imageUrl?: string) {
+    const payload: Record<string, any> = {
+      to,
+      text: message || ''
+    };
+
+    if (imageUrl) {
+      payload.imageUrl = imageUrl;
+    }
+
     const res = await fetch(`${this.baseURL}/send-message`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${sessionApiKey}`
       },
-      body: JSON.stringify({
-        to,
-        text: message
-      })
+      body: JSON.stringify(payload)
     });
 
     // O wasender muitas vezes volta sucesso, mas message=..., precisamos checar res.json
     const data = await res.json();
     
     if (!res.ok || data.success === false) {
-      throw new Error(`Failed to send message: ${data.message || JSON.stringify(data.errors) || 'Unknown Error'}`);
+      const errorMsg = data.message || JSON.stringify(data.errors) || 'Unknown Error';
+      throw new Error(`Failed to send message: ${errorMsg}`);
     }
     return data;
   }
 
   /**
    * Envia uma mensagem com imagem e texto opcional.
-   * @param sessionApiKey - Chave de API da sessão
-   * @param to - Número ou remote_id do grupo
-   * @param imageUrl - URL da imagem
-   * @param caption - Texto opcional embaixo da imagem
+   * Alias para sendMessage com imageUrl.
    */
   static async sendImage(sessionApiKey: string, to: string, imageUrl: string, caption?: string) {
-    const res = await fetch(`${this.baseURL}/send-message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${sessionApiKey}`
-      },
-      body: JSON.stringify({
-        to,
-        image: imageUrl,
-        text: caption || ''
-      })
-    });
-
-    const data = await res.json();
-    if (!res.ok || data.success === false) {
-      throw new Error(`Failed to send image: ${data.message || JSON.stringify(data.errors) || 'Unknown Error'}`);
-    }
-    return data;
+    return this.sendMessage(sessionApiKey, to, caption || '', imageUrl);
   }
 }

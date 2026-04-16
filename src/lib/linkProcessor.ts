@@ -86,38 +86,50 @@ function findAdapter(url: string): MarketplaceAdapter | null {
 /**
  * Construtor central de mensagens baseadas no snapshot factual.
  * FOCADO EM PREÇO FACTUAL COM ESTIMATIVA PIX OPCIONAL.
+ * Padroniza o visual do WhatsApp para automação e envio rápido.
  */
-export function buildMessageFromSnapshot(factual: FactualData, tone: string): string {
-  const title = factual.title.toUpperCase();
-  const priceOriginal = factual.originalPriceFormatted ? `De: ~~${factual.originalPriceFormatted}~~` : '';
-  
+export function buildMessageFromSnapshot(factual: FactualData, blurb?: string): string {
+  // 1. Título
+  const title = factual.title;
+  const emoji = '🛍️'; // Emoji padrão de oferta
+
+  // 2. Preços (Padronização obrigatória)
   const pixPrice = factual.estimatedPixPriceFormatted;
   const priceFactual = factual.priceFormatted;
 
   let mainPriceLine = '';
   if (pixPrice) {
-    mainPriceLine = `🔥Por: *${pixPrice} NO PIX*`;
+    mainPriceLine = `🔥 Por: *${pixPrice} no Pix*`;
   } else if (priceFactual) {
-    mainPriceLine = `🔥Por: *${priceFactual}*`;
+    mainPriceLine = `🔥 Por: *${priceFactual}*`;
   }
 
-  const installmentsLine = factual.installments ? `💳 ou *${factual.installments} - sem juros*` : '';
+  // 3. Parcelamento
+  const installmentsLine = factual.installments ? `💳 ou *${factual.installments} sem juros*` : '';
+  
+  // 4. Link & CTA
   const link = factual.finalLinkToSend;
 
+  // 5. Blurb/IA Fallback
+  const finalBlurb = blurb || 'Oportunidade para garantir seu produto! Confira os detalhes dessa oferta.';
+
+  // 6. Montagem Final (Respeitando linhas em branco e respiro visual)
   const lines = [
-    `🛍️ *${title}*`,
+    `${emoji} ${title}`,
     '',
-    priceOriginal,
+    finalBlurb,
+    '',
     mainPriceLine,
     installmentsLine,
     '',
-    '👉 *Compre aqui:*',
+    '🛒 Compre aqui:',
     link,
     '',
     '⚠️ Promoção sujeita a alteração a qualquer momento.'
-  ].filter(line => line !== '');
+  ].filter(line => line !== null);
 
-  return lines.join('\n');
+  // Garantir que não existam 3+ quebras de linha seguidas
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /**
@@ -182,8 +194,8 @@ export function buildProductSnapshot(opts: {
     id,
     factual,
     copy: {
-      messageText: buildMessageFromSnapshot(factual, tone),
-      toneUsed: tone,
+      messageText: buildMessageFromSnapshot(factual),
+      toneUsed: 'deterministic',
       generatedAt: new Date().toISOString()
     },
     metadata: {
@@ -229,7 +241,7 @@ export async function processLinks(
 
         // ─── Refinamento por IA (Se disponível) ────────────────────────────────
         try {
-          const refinedCopy = await refineOfferCopy({
+          const refinedBlurb = await refineOfferCopy({
             productName: snapshot.factual.title,
             price: snapshot.factual.priceFormatted,
             originalPrice: snapshot.factual.originalPriceFormatted,
@@ -238,11 +250,13 @@ export async function processLinks(
             link: snapshot.factual.finalLinkToSend,
             highlights: [] 
           });
-          snapshot.copy.messageText = refinedCopy;
+          
+          // RE-CONSTRUIR a mensagem final usando o blurb refinado
+          snapshot.copy.messageText = buildMessageFromSnapshot(snapshot.factual, refinedBlurb);
           snapshot.copy.toneUsed = 'ai-refined';
         } catch (aiError) {
           console.error(`linkProcessor: AI Refinement failed for ${link}:`, aiError);
-          // Mantém a copy determinística do buildProductSnapshot
+          // O messageText já contém o fallback determinístico do buildProductSnapshot
         }
 
         results.push(snapshot);

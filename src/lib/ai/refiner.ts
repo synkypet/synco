@@ -61,20 +61,14 @@ Destaques: ${input.highlights?.join(', ') || 'Nenhum'}
  * Construtor determinístico de fallback (Garante que a oferta saia mesmo sem IA)
  */
 function buildFallbackCopy(input: RefineInput): string {
-  const lines = [
-    `🛍️ *${input.productName.toUpperCase()}*`,
-    '',
-    input.originalPrice ? `De: ~~${input.originalPrice}~~` : '',
-    input.pixPrice 
-      ? `🔥Por: *${input.pixPrice} NO PIX*`
-      : (input.price ? `🔥Por: *${input.price}*` : ''),
-    input.installments ? `💳 ou *${input.installments} - sem juros*` : '',
-    '',
-    '👉 *Compre aqui:*',
-    input.link,
-    '',
-    '⚠️ Promoção sujeita a alteração a qualquer momento.'
-  ].filter(l => l !== '');
-
-  return lines.join('\n');
+  const generic = `Oportunidade para garantir seu produto! Confira os detalhes dessa oferta.`;
+  
+  if (!input.productName) return generic;
+  
+  // Tenta algo ligeiramente melhor baseado no título
+  const title = input.productName.trim();
+  const blurb = `Confira essa oferta especial de ${title.substring(0, 50)}${title.length > 50 ? '...' : ''}. Garanta o seu antes que acabe!`;
+  
+  // Garante limite de 120 chars e 2 linhas (heurística)
+  return blurb.substring(0, 120);
 }
