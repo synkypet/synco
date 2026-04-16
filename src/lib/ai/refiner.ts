@@ -38,7 +38,7 @@ Destaques: ${input.highlights?.join(', ') || 'Nenhum'}
     `.trim();
 
     const { text } = await generateText({
-      model: google('gemini-1.5-flash'),
+      model: google('gemini-flash-latest'),
       system: OFFER_REFINER_PROMPT,
       prompt: promptData,
     });
