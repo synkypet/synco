@@ -134,9 +134,9 @@ export async function processInboundAutomation(payload: InboundPayload) {
     return { skipped: 'no_shopee_links', bodyPreview: body?.substring(0, 50) };
   }
 
-  console.log(`${logPrefix} [STEP] ✓ Identificados ${links.length} links Shopee. Extraindo conexões...`);
+  console.log(`${logPrefix} [STEP] ✓ Identificados ${links.length} links Shopee. Extraindo conexões enriquecidas...`);
 
-  const connections: UserMarketplaceConnection[] = await marketplaceService.getUserConnections(userId, supabase);
+  const connections = await marketplaceService.getEnrichedConnections(userId, supabase);
   console.log(`${logPrefix} [STEP] Buscando rotas de destino ativas para Source ${source.id}...`);
   const routes = await automationService.getRoutesBySourceId(source.id, supabase);
   
@@ -262,7 +262,8 @@ export async function processInboundAutomation(payload: InboundPayload) {
             product_id: snapshot.factual.itemId?.toString() || undefined,
             product_name: snapshot.factual.title,
             custom_text: finalMessage,
-            affiliate_url: snapshot.factual.finalLinkToSend
+            affiliate_url: snapshot.factual.finalLinkToSend,
+            image_url: snapshot.factual.image
           }],
           destinations: [{
             type: route.target_type,
