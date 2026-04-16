@@ -44,8 +44,14 @@ export class WhatsAppProvider implements ChannelProvider {
         messageId: messageId?.toString() || null,
       };
     } catch (error: any) {
-      const errorMsg = error.message || '';
-      console.warn(`[WHATSAPP-PROVIDER] Falha ao enviar mídia (${errorMsg}). Tentando fallback para texto puro...`);
+      const errorMsg = error.message || 'Erro desconhecido';
+      
+      console.error(`[WHATSAPP-IMAGE-FAILURE] [${new Date().toISOString()}] Falha ao enviar mídia.`);
+      console.error(`- Destination: ${destination}`);
+      console.error(`- Image URL: ${mediaUrl}`);
+      console.error(`- Error: ${errorMsg}`);
+      
+      console.warn(`[WHATSAPP-PROVIDER] [${new Date().toISOString()}] Acionando fallback para texto puro devido a erro na mídia.`);
       
       // Se for erro permanente de destino (ex: número inválido), o fallback para texto também falhará.
       // Mas se for erro de processamento de mídia na Wasender, o texto pode funcionar.

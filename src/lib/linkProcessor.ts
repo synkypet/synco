@@ -16,6 +16,7 @@ export interface FactualData {
   shopName?: string;
   title: string;
   image?: string | null;
+  installments?: string | null;
   
   // Preços Factuais (API)
   price?: number | null; 
@@ -89,22 +90,26 @@ function findAdapter(url: string): MarketplaceAdapter | null {
 export function buildMessageFromSnapshot(factual: FactualData, tone: string): string {
   const title = factual.title.toUpperCase();
   const priceOriginal = factual.originalPriceFormatted ? `De: ~~${factual.originalPriceFormatted}~~` : '';
-  const priceFactual = factual.priceFormatted ? `🔥 *Por: ${factual.priceFormatted}*` : '';
   
-  let pixLine = '';
-  if (factual.estimatedPixPrice && factual.price && factual.estimatedPixPrice < factual.price) {
-    const pixFormatted = `R$ ${factual.estimatedPixPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    pixLine = `🎯 *No Pix: ${pixFormatted}*`;
+  const pixPrice = factual.estimatedPixPriceFormatted;
+  const priceFactual = factual.priceFormatted;
+
+  let mainPriceLine = '';
+  if (pixPrice) {
+    mainPriceLine = `🔥Por: *${pixPrice} NO PIX*`;
+  } else if (priceFactual) {
+    mainPriceLine = `🔥Por: *${priceFactual}*`;
   }
 
+  const installmentsLine = factual.installments ? `💳 ou *${factual.installments} - sem juros*` : '';
   const link = factual.finalLinkToSend;
 
   const lines = [
     `🛍️ *${title}*`,
     '',
     priceOriginal,
-    priceFactual,
-    pixLine,
+    mainPriceLine,
+    installmentsLine,
     '',
     '👉 *Compre aqui:*',
     link,
@@ -144,6 +149,7 @@ export function buildProductSnapshot(opts: {
     shopName: metadata.shopName,
     title: metadata.name || 'Produto sem título',
     image: metadata.imageUrl || null,
+    installments: metadata.installments || null,
     
     // Auditoria Factual (Pro)
     price,
@@ -228,6 +234,7 @@ export async function processLinks(
             price: snapshot.factual.priceFormatted,
             originalPrice: snapshot.factual.originalPriceFormatted,
             pixPrice: snapshot.factual.estimatedPixPriceFormatted,
+            installments: snapshot.factual.installments,
             link: snapshot.factual.finalLinkToSend,
             highlights: [] 
           });

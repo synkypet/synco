@@ -12,6 +12,7 @@ export interface RefineInput {
   price?: string | null;
   originalPrice?: string | null;
   pixPrice?: string | null;
+  installments?: string | null;
   link: string;
   highlights?: string[];
 }
@@ -33,6 +34,7 @@ Produto: ${input.productName}
 Preço Atual: ${input.price || 'Não informado'}
 Preço Original: ${input.originalPrice || ''}
 Preço Pix: ${input.pixPrice || ''}
+Parcelamento: ${input.installments || ''}
 Link: ${input.link}
 Destaques: ${input.highlights?.join(', ') || 'Nenhum'}
     `.trim();
@@ -63,8 +65,10 @@ function buildFallbackCopy(input: RefineInput): string {
     `🛍️ *${input.productName.toUpperCase()}*`,
     '',
     input.originalPrice ? `De: ~~${input.originalPrice}~~` : '',
-    input.price ? `🔥 *Por: ${input.price}*` : '',
-    input.pixPrice ? `🎯 *No Pix: ${input.pixPrice}*` : '',
+    input.pixPrice 
+      ? `🔥Por: *${input.pixPrice} NO PIX*`
+      : (input.price ? `🔥Por: *${input.price}*` : ''),
+    input.installments ? `💳 ou *${input.installments} - sem juros*` : '',
     '',
     '👉 *Compre aqui:*',
     input.link,

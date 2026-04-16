@@ -113,7 +113,8 @@ export const campaignService = {
       custom_text: item.custom_text,
       affiliate_url: item.affiliate_url,
       image_url: item.image_url,
-      external_product_id: item.external_product_id
+      external_product_id: item.external_product_id,
+      installments: item.installments
     }));
 
     const { data: insertedItems, error: itemsError } = await supabase
@@ -172,6 +173,7 @@ export const campaignService = {
             destination_name: group.name,
             message_body: item.custom_text || item.product_name,
             image_url: item.image_url,
+            installments: item.installments,
             message_type: item.image_url ? 'image' : 'text',
             status: 'pending',
             try_count: 0,
