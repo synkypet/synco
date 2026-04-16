@@ -30,6 +30,7 @@ export interface CampaignItem {
   custom_text?: string | null;
   affiliate_url?: string | null;
   image_url?: string | null;
+  external_product_id?: string | null;
   created_at?: string;
 }
 
@@ -50,6 +51,7 @@ export interface CreateCampaignDTO {
     custom_text?: string;
     affiliate_url?: string;
     image_url?: string | null;
+    external_product_id?: string | null;
   }[];
   destinations: {
     type: 'list' | 'group';

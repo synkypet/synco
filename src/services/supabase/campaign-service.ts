@@ -112,7 +112,8 @@ export const campaignService = {
       product_name: item.product_name,
       custom_text: item.custom_text,
       affiliate_url: item.affiliate_url,
-      image_url: item.image_url
+      image_url: item.image_url,
+      external_product_id: item.external_product_id
     }));
 
     const { data: insertedItems, error: itemsError } = await supabase

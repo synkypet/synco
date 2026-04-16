@@ -260,11 +260,12 @@ export async function processInboundAutomation(payload: InboundPayload) {
         const campaignDto = {
           name: `AUTO: ${snapshot.factual.title.substring(0, 30)}...`,
           items: [{
-            product_id: snapshot.factual.itemId?.toString() || undefined,
+            product_id: undefined, // UUID interno não disponível no momento
             product_name: snapshot.factual.title,
             custom_text: finalMessage,
             affiliate_url: snapshot.factual.finalLinkToSend,
-            image_url: snapshot.factual.image
+            image_url: snapshot.factual.image,
+            external_product_id: snapshot.factual.itemId?.toString()
           }],
           destinations: [{
             type: route.target_type,
