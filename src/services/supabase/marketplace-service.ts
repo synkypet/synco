@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { Marketplace, UserMarketplaceConnection } from '@/types/marketplace';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { decrypt } from '@/lib/encryption';
 
 export const marketplaceService = {
   /**
@@ -35,6 +36,60 @@ export const marketplaceService = {
       throw error;
     }
     return data || [];
+  },
+
+  /**
+   * Busca as conexões do usuário enriquecidas com os segredos descriptografados.
+   * EXCLUSIVO PARA USO EM SERVER-SIDE/WORKER (Requer decrypter e MASTER_KEY).
+   */
+  async getEnrichedConnections(userId: string, supabaseAdmin: SupabaseClient): Promise<any[]> {
+    // 1. Buscar conexões base (dados públicos + app_id)
+    const { data: connections, error: connError } = await supabaseAdmin
+      .from('user_marketplaces')
+      .select('*, marketplaces(name)')
+      .eq('user_id', userId)
+      .eq('is_active', true);
+
+    if (connError) {
+      console.error('[MARKETPLACE-SERVICE] Error fetching connections:', connError);
+      return [];
+    }
+
+    if (!connections || connections.length === 0) return [];
+
+    // 2. Buscar segredos para essas conexões
+    const { data: secrets, error: secretsError } = await supabaseAdmin
+      .from('user_marketplace_secrets')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (secretsError) {
+       console.error('[MARKETPLACE-SERVICE] Error fetching secrets:', secretsError);
+    }
+
+    // 3. Mesclar e Descriptografar
+    return connections.map(conn => {
+      const secretRow = (secrets || []).find(s => s.marketplace_id === conn.marketplace_id);
+      let appSecret = '';
+
+      if (secretRow) {
+        try {
+          appSecret = decrypt({
+            encryptedValue: secretRow.encrypted_secret,
+            iv: secretRow.iv,
+            authTag: secretRow.auth_tag
+          });
+        } catch (err) {
+          console.error(`[MARKETPLACE-SERVICE] Falha ao descriptografar segredo para marketplace ${conn.marketplace_id}:`, err);
+        }
+      }
+
+      return {
+        ...conn,
+        marketplace_name: conn.marketplaces?.name || '',
+        shopee_app_secret: appSecret
+      };
+    });
   },
 
   /**

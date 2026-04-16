@@ -3,6 +3,7 @@
 
 import { MarketplaceAdapter, AffiliateResult } from './marketplaces/BaseAdapter';
 import { ShopeeAdapter } from './marketplaces/ShopeeAdapter';
+import { refineOfferCopy } from './ai/refiner';
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
 
@@ -86,50 +87,32 @@ function findAdapter(url: string): MarketplaceAdapter | null {
  * FOCADO EM PREÇO FACTUAL COM ESTIMATIVA PIX OPCIONAL.
  */
 export function buildMessageFromSnapshot(factual: FactualData, tone: string): string {
-  const title = factual.title;
-  const priceFactual = factual.priceFormatted ? `💰 *${factual.priceFormatted}*` : '';
+  const title = factual.title.toUpperCase();
+  const priceOriginal = factual.originalPriceFormatted ? `De: ~~${factual.originalPriceFormatted}~~` : '';
+  const priceFactual = factual.priceFormatted ? `🔥 *Por: ${factual.priceFormatted}*` : '';
   
-  // Heurística de exibição de Pix na copy (apenas se existir e for menor que o factual)
   let pixLine = '';
-  if (factual.estimatedPixPrice && factual.currentPriceFactual && factual.estimatedPixPrice < factual.currentPriceFactual) {
+  if (factual.estimatedPixPrice && factual.price && factual.estimatedPixPrice < factual.price) {
     const pixFormatted = `R$ ${factual.estimatedPixPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    pixLine = `\n🎯 *No Pix:* ${pixFormatted}`;
+    pixLine = `🎯 *No Pix: ${pixFormatted}*`;
   }
 
-  const store = factual.shopName ? `🏪 *Loja:* ${factual.shopName}` : '';
   const link = factual.finalLinkToSend;
 
-  const baseLines = [
-    `🔥 *OFERTA DETECTADA*`,
+  const lines = [
+    `🛍️ *${title}*`,
     '',
-    `*${title}*`,
+    priceOriginal,
     priceFactual,
     pixLine,
-    store,
     '',
-    '🛒 *Garanta no link abaixo:*',
+    '👉 *Compre aqui:*',
     link,
     '',
-    `#oferta #promoção #${factual.marketplace.toLowerCase()}`
+    '⚠️ Promoção sujeita a alteração a qualquer momento.'
   ].filter(line => line !== '');
 
-  if (tone === 'promocional' || tone === 'vendedor') {
-    return [
-      '🚨 *PROMOÇÃO IMPERDÍVEL* 🚨',
-      '',
-      `*${title}*`,
-      priceFactual ? `✅ *Apenas:* ${factual.priceFormatted}` : '',
-      pixLine ? `👉 *${pixLine.trim()}*` : '',
-      store,
-      '',
-      '🛒 *Aproveite agora:*',
-      link,
-      '',
-      '⚠️ _Estoque limitado!_'
-    ].filter(line => line !== '').join('\n');
-  }
-
-  return baseLines.join('\n');
+  return lines.join('\n');
 }
 
 /**
@@ -237,6 +220,23 @@ export async function processLinks(
           affiliateUrl: result.affiliateUrl,
           tone
         });
+
+        // ─── Refinamento por IA (Se disponível) ────────────────────────────────
+        try {
+          const refinedCopy = await refineOfferCopy({
+            productName: snapshot.factual.title,
+            price: snapshot.factual.priceFormatted,
+            originalPrice: snapshot.factual.originalPriceFormatted,
+            pixPrice: snapshot.factual.estimatedPixPriceFormatted,
+            link: snapshot.factual.finalLinkToSend,
+            highlights: [] 
+          });
+          snapshot.copy.messageText = refinedCopy;
+          snapshot.copy.toneUsed = 'ai-refined';
+        } catch (aiError) {
+          console.error(`linkProcessor: AI Refinement failed for ${link}:`, aiError);
+          // Mantém a copy determinística do buildProductSnapshot
+        }
 
         results.push(snapshot);
       } catch (error) {

@@ -44,11 +44,12 @@ export class WhatsAppProvider implements ChannelProvider {
         messageId: messageId?.toString() || null,
       };
     } catch (error: any) {
-      return {
-        success: false,
-        error: error.message,
-        errorType: this.classifyError(error),
-      };
+      const errorMsg = error.message || '';
+      console.warn(`[WHATSAPP-PROVIDER] Falha ao enviar mídia (${errorMsg}). Tentando fallback para texto puro...`);
+      
+      // Se for erro permanente de destino (ex: número inválido), o fallback para texto também falhará.
+      // Mas se for erro de processamento de mídia na Wasender, o texto pode funcionar.
+      return this.sendMessage(apiKey, destination, caption);
     }
   }
 
