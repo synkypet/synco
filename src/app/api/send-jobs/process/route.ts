@@ -204,16 +204,13 @@ export async function POST(request: Request) {
       if (shouldRetrigger) {
         console.log(`[WORKER-DECISION] [${requestId}] Status: RETRIGGER (${triggerMode}).`);
         
-        // Dispara o próximo ciclo.
-        // Como o worker agora sempre usa fire-forget para auto-retrigger evitaremos timeouts em cadeia.
-        const triggerPromise = triggerWorker({ 
+        // Dispara o próximo ciclo de forma não-bloqueante.
+        // triggerWorker utiliza waitUntil internamente para garantir sobrevivência em serverless.
+        triggerWorker({ 
           host, 
           requestId: `next-${requestId.slice(0,5)}`,
           shouldAwait: false 
         });
-
-        // Não aguardamos o resultado para retornar logo o 200 pro worker anterior ou heartbeat
-        triggerPromise.catch(e => console.error(`[WORKER-TRIGGER-ERROR] [${requestId}]`, e));
       } else {
         console.log(`[WORKER-DECISION] [${requestId}] Status: STOP (Idle/Blocked).`);
       }

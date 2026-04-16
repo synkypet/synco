@@ -1,6 +1,5 @@
 // src/app/api/maintenance/heartbeat/route.ts
-// Heartbeat v1 — Rede de segurança para garantir drenagem da fila.
-// Deve ser acionado via Cron (ex: cada 1 ou 2 minutos).
+// Heartbeat v2 — Hardened safety pump and stuck job recovery.
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { triggerWorker } from '@/lib/worker/trigger';
@@ -18,22 +17,46 @@ export async function GET(request: Request) {
       console.warn(`[HEARTBEAT-UNAUTHORIZED] [${requestId}] Tentativa de acesso sem secret válido.`);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
     // 1. Lock de Manutenção (Previnir execuções paralelas do cron)
     const { data: hasLock } = await supabase.rpc('claim_maintenance_lock', {
       p_lock_key: 'queue_pump',
       p_worker_id: requestId,
-      p_timeout_seconds: 55 // Expira pouco antes do próximo ciclo de 1min
+      p_timeout_seconds: 55 
     });
 
     if (!hasLock) {
       return NextResponse.json({ 
         success: true, 
-        message: 'Heartbeat skip: already locked by another process', 
+        message: 'Heartbeat skip: already locked', 
         requestId 
       });
     }
 
-    // 2. Verificar se existem jobs pendentes
+    // 2. Manutenção de Jobs Presos (Auto-Recovery)
+    // Reseta jobs que ficaram travados em 'processing' por mais de 10 minutos
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: recoveredData, error: recoveryError } = await supabase
+      .from('send_jobs')
+      .update({ 
+        status: 'pending', 
+        updated_at: new Date().toISOString(),
+        last_error: 'Recovered to pending (processing stall > 10m)' 
+      })
+      .eq('status', 'processing')
+      .lt('updated_at', tenMinutesAgo)
+      .select('id');
+
+    if (recoveryError) {
+      console.error(`[HEARTBEAT] [${requestId}] Erro ao recuperar jobs:`, recoveryError);
+    }
+    const recoveredCount = recoveredData?.length || 0;
+
+    if (recoveredCount > 0) {
+      console.log(`[HEARTBEAT] [${requestId}] Recuperados ${recoveredCount} jobs estagnados.`);
+    }
+
+    // 3. Verificar se existem jobs pendentes
     const { count, error: countError } = await supabase
       .from('send_jobs')
       .select('*', { count: 'exact', head: true })
@@ -44,12 +67,13 @@ export async function GET(request: Request) {
     if (!count || count === 0) {
       return NextResponse.json({ 
         success: true, 
-        message: 'Queue idle: no pending jobs', 
+        message: 'Queue idle: no pending jobs',
+        recovered: recoveredCount || 0,
         requestId 
       });
     }
 
-    // 3. Verificar estado do processamento atual
+    // 4. Verificar estado do processamento atual
     const { data: activeJobs } = await supabase
       .from('send_jobs')
       .select('id, updated_at')
@@ -64,9 +88,10 @@ export async function GET(request: Request) {
       const updatedAt = new Date(activeJobs[0].updated_at).getTime();
       const diffMs = Date.now() - updatedAt;
       
-      // Se o job ativo estiver parado há mais de 2.5 minutos, consideramos worker morto
-      if (diffMs > 150000) { 
-        console.log(`[HEARTBEAT] [${requestId}] Detectada estagnação (${diffMs}ms). Reativando drenagem.`);
+      // Se o job ativo estiver parado há mais de 3 minutos e não foi pego pelo recovery de 10m,
+      // re-disparamos o worker para garantir que o fluxo não parou.
+      if (diffMs > 180000) { 
+        console.log(`[HEARTBEAT] [${requestId}] Detectada lentidão no worker (${diffMs}ms). Forçando re-trigger.`);
         shouldTrigger = true;
       }
     }
@@ -75,17 +100,19 @@ export async function GET(request: Request) {
       console.log(`[HEARTBEAT] [${requestId}] Bombeando fila: ${count} jobs pendentes.`);
       const host = request.headers.get('host') || undefined;
       
-      // Aciona o worker. Usamos shouldAwait: true no heartbeat para confirmar que o pump começou.
-      const triggered = await triggerWorker({ 
+      // Aciona o worker em background (NON-BLOCKING)
+      // triggerWorker agora usa waitUntil internamente para garantir execução em serverless
+      triggerWorker({ 
         requestId, 
         host,
-        shouldAwait: true 
+        shouldAwait: false 
       });
       
       return NextResponse.json({ 
         success: true, 
-        message: triggered ? 'Worker re-activated' : 'Worker trigger failed', 
+        message: 'Worker trigger initiated (background)', 
         pendingCount: count,
+        recovered: recoveredCount || 0,
         requestId 
       });
     }
@@ -93,6 +120,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ 
       success: true, 
       message: 'Queue flowing: worker is active', 
+      recovered: recoveredCount || 0,
       requestId 
     });
 
