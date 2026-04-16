@@ -18,6 +18,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const paramSource = searchParams.get('source');
+    const validSource = (paramSource === 'cronjob' || paramSource === 'github' || paramSource === 'manual') 
+      ? paramSource 
+      : 'heartbeat';
+
     // 1. Lock de Manutenção (Previnir execuções paralelas do cron)
     const { data: hasLock } = await supabase.rpc('claim_maintenance_lock', {
       p_lock_key: 'queue_pump',
@@ -105,12 +111,13 @@ export async function GET(request: Request) {
       triggerWorker({ 
         requestId, 
         host,
-        shouldAwait: false 
+        shouldAwait: false,
+        source: validSource as any
       });
       
       return NextResponse.json({ 
         success: true, 
-        message: 'Worker trigger initiated (background)', 
+        message: 'Worker trigger initiated (heartbeat pump)', 
         pendingCount: count,
         recovered: recoveredCount || 0,
         requestId 

@@ -1,15 +1,11 @@
 import { waitUntil } from '@vercel/functions';
 
-/**
- * Utilitário compartilhado para acionamento do worker de envio (queue processor).
- * Centraliza o disparo do "Fast-Trigger" para evitar duplicidade e facilitar manutenção.
- */
-
 export interface TriggerOptions {
   requestId?: string;
   baseUrl?: string;
   host?: string;
   shouldAwait?: boolean;
+  source?: 'manual' | 'heartbeat' | 'auto-nudge' | 'autoretrigger' | 'cronjob' | 'github';
 }
 
 /**
@@ -18,7 +14,7 @@ export interface TriggerOptions {
  * @returns true se o disparo foi realizado (ou aceito), false em caso de erro crítico
  */
 export async function triggerWorker(options: TriggerOptions = {}): Promise<boolean> {
-  const { requestId, baseUrl, host, shouldAwait } = options;
+  const { requestId, baseUrl, host, shouldAwait, source = 'manual' } = options;
   const rid = requestId || Math.random().toString(36).substring(7);
   
   // Resolução de URL com prioridade:
@@ -40,7 +36,7 @@ export async function triggerWorker(options: TriggerOptions = {}): Promise<boole
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout para o disparo em si
 
-  console.log(`[WORKER-TRIGGER] [${rid}] Acionando worker em ${workerUrl} (await: ${!!shouldAwait})...`);
+  console.log(`[WORKER-TRIGGER] [${rid}] [SOURCE:${source.toUpperCase()}] Acionando worker em ${workerUrl} (await: ${!!shouldAwait})...`);
 
   try {
     const fetchPromise = fetch(workerUrl, {
@@ -56,7 +52,7 @@ export async function triggerWorker(options: TriggerOptions = {}): Promise<boole
     if (shouldAwait) {
       const res = await fetchPromise;
       clearTimeout(timeoutId);
-      console.log(`[WORKER-TRIGGER] [${rid}] Trigger finalizado com aguardo (Status: ${res.status})`);
+      console.log(`[WORKER-TRIGGER] [${rid}] [SOURCE:${source.toUpperCase()}] Trigger finalizado com aguardo (Status: ${res.status})`);
       return res.ok;
     } else {
       // Disparo em Background (Serverless-Safe via waitUntil se disponível)
@@ -66,26 +62,26 @@ export async function triggerWorker(options: TriggerOptions = {}): Promise<boole
           fetchPromise
             .then(res => {
               clearTimeout(timeoutId);
-              if (!res.ok) console.warn(`[WORKER-TRIGGER] [${rid}] Worker respondeu com erro: ${res.status}`);
+              if (!res.ok) console.warn(`[WORKER-TRIGGER] [${rid}] [SOURCE:${source.toUpperCase()}] Worker respondeu com erro: ${res.status}`);
             })
             .catch(err => {
               clearTimeout(timeoutId);
               if (err.name === 'AbortError') {
-                console.error(`[WORKER-TRIGGER-TIMEOUT] [${rid}] Timeout no disparo do worker (8s).`);
+                console.error(`[WORKER-TRIGGER-TIMEOUT] [${rid}] [SOURCE:${source.toUpperCase()}] Timeout no disparo do worker (8s).`);
               } else {
-                console.error(`[WORKER-TRIGGER-ERROR] [${rid}] Falha no background:`, err.message);
+                console.error(`[WORKER-TRIGGER-ERROR] [${rid}] [SOURCE:${source.toUpperCase()}] Falha no background:`, err.message);
               }
             })
         );
       } catch (waitError) {
         // Fallback caso waitUntil não esteja disponível (ambiente não-Vercel dev)
-        fetchPromise.catch(err => console.error(`[WORKER-TRIGGER-FALLBACK-ERROR] [${rid}]`, err.message));
+        fetchPromise.catch(err => console.error(`[WORKER-TRIGGER-FALLBACK-ERROR] [${rid}] [SOURCE:${source.toUpperCase()}]`, err.message));
       }
       return true; // Retornamos true pois o disparo foi iniciado
     }
   } catch (error: any) {
     clearTimeout(timeoutId);
-    console.error(`[WORKER-TRIGGER-ERROR] [${rid}] Erro crítico no utilitário de disparo:`, error.message);
+    console.error(`[WORKER-TRIGGER-ERROR] [${rid}] [SOURCE:${source.toUpperCase()}] Erro crítico no utilitário de disparo:`, error.message);
     return false;
   }
 }
