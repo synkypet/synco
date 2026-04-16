@@ -116,13 +116,14 @@ export async function processInboundAutomation(payload: InboundPayload) {
   const source = await automationService.getSourceByExternalId(userId, channelId, externalGroupId, supabase);
   
   if (!source) {
-    console.warn(`${logPrefix} [SKIP] Motivo: Nenhuma fonte ATIVA encontrada para este conjunto (User/Channel/Group).`);
-    console.warn(`${logPrefix} [DEBUG] Verifique se existe um registro em 'automation_sources' com:`, { 
+    console.warn(`${logPrefix} [SKIP] Motivo: Nenhuma fonte ATIVA encontrada para este conjunto.`);
+    console.warn(`${logPrefix} [DEBUG] Tentativa de busca falhou para:`, { 
       user_id: userId, 
       channel_id: channelId, 
       external_group_id: externalGroupId, 
       is_active: true 
     });
+    console.warn(`${logPrefix} [TIP] Certifique-se de que o grupo está cadastrado em 'automation_sources' com o ID exato acima.`);
     return { skipped: 'not_a_source', details: { userId, channelId, externalGroupId } };
   }
 
