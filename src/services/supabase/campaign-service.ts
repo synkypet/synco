@@ -94,7 +94,7 @@ export const campaignService = {
       .insert({
         user_id: userId,
         name: dto.name || `Envio ${new Date().toLocaleString()}`,
-        status: dto.scheduled_at ? 'scheduled' : 'completed',
+        status: dto.scheduled_at ? 'scheduled' : 'pending',
         scheduled_at: dto.scheduled_at
       })
       .select()
