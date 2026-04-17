@@ -65,7 +65,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
       variant={isSelected ? "elevated" : "flat"}
       className={cn(
         "overflow-hidden transition-all duration-300 group relative flex flex-col h-full",
-        isSelected && "shadow-[0_0_20px_rgba(255,107,0,0.2)]"
+        isSelected && "shadow-[0_0_20px_rgba(255,107,0,0.2)] ring-1 ring-kinetic-orange/30",
+        !isSelected && score >= 90 && "shadow-[0_0_10px_rgba(255,107,0,0.1)] hover:shadow-glow-orange ring-1 ring-kinetic-orange/10"
       )}
     >
       {/* Imagem - Skeuo pressed cavity */}

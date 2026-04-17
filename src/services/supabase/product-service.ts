@@ -34,6 +34,18 @@ export const productService = {
       if (filters.search) {
         query = query.ilike('name', `%${filters.search}%`);
       }
+      if (filters.has_coupon) {
+        query = query.not('coupon', 'is', null);
+      }
+      if (filters.free_shipping) {
+        query = query.eq('free_shipping', true);
+      }
+      if (filters.official_store) {
+        query = query.eq('official_store', true);
+      }
+      if (filters.favorites_only) {
+        query = query.eq('is_favorite', true);
+      }
     }
 
     // Default sorting

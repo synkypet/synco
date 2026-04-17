@@ -102,6 +102,10 @@ module.exports = {
           from: { transform: 'rotate(0deg)' },
           to: { transform: 'rotate(360deg)' },
         },
+        'radar-scan': {
+          '0%': { transform: 'translateY(-100%)' },
+          '100%': { transform: 'translateY(800px)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -109,6 +113,7 @@ module.exports = {
         'fade-in': 'fade-in 0.2s ease-out',
         'slide-in-left': 'slide-in-left 0.3s ease-out',
         'spin': 'spin 1s linear infinite',
+        'radar-scan': 'radar-scan 3s ease-in-out infinite',
       },
     },
   },

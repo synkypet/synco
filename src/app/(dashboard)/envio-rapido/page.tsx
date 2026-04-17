@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils';
 import { ProductSnapshot } from '@/lib/linkProcessor';
 import LayoutContainer from '@/components/layout/LayoutContainer';
 import { Zap } from 'lucide-react';
+import { useSelectedProducts } from '@/contexts/SelectedProductsContext';
 
 // Opções de Tonalidade da IA (Base44)
 const TONE_OPTIONS = [
@@ -57,6 +58,9 @@ export default function EnvioRapidoPage() {
   const { data: groups, isLoading: loadingDestinations } = useGroups(user?.id);
   const { mutate: createCampaign, isPending: isSending } = useCreateCampaign();
   const router = useRouter();
+
+  // Radar Integration
+  const { selectedProducts, isHydrated, clearProducts } = useSelectedProducts();
 
   const [linksInput, setLinksInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -78,6 +82,20 @@ export default function EnvioRapidoPage() {
   const [isTesting, setIsTesting] = useState(false);
   const [lastApiResponse, setLastApiResponse] = useState<any>(null);
   const [testGroupId, setTestGroupId] = useState('');
+
+  // Auto-fill from Radar Context
+  useEffect(() => {
+    if (isHydrated && selectedProducts.length > 0 && !linksInput) {
+      const urls = selectedProducts.map(p => p.original_url).filter(Boolean).join('\n');
+      if (urls) {
+        setLinksInput(urls);
+        toast.info(`${selectedProducts.length} oferta(s) carregada(s) do Radar! Clique em "Iniciar Extração".`, {
+          duration: 5000,
+          position: 'top-center'
+        });
+      }
+    }
+  }, [isHydrated, selectedProducts, linksInput]);
 
   useEffect(() => {
     if (channels && channels.length > 0 && !testChannelId) {

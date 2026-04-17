@@ -38,4 +38,8 @@ export type ProductFilter = {
   minCommission?: number;
   minScore?: number;
   search?: string;
+  has_coupon?: boolean;
+  free_shipping?: boolean;
+  official_store?: boolean;
+  favorites_only?: boolean;
 };

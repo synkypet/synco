@@ -281,21 +281,26 @@ export default function RadarOfertasPage() {
           <Button variant="link" onClick={handleResetFilters} className="text-kinetic-orange">Limpar todos os filtros</Button>
         </div>
       ) : (
-        <div className={cn(
-          "grid gap-4",
-          viewMode === 'grid' 
-            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
-            : "grid-cols-1"
-        )}>
-          {products?.map(product => (
-            <ProductCard 
-              key={product.id}
-              product={product}
-              isSelected={isSelected(product.id)}
-              onSelect={toggleProduct}
-              onToggleFavorite={(id, fav) => toggleFavoriteMutation.mutate({ id, isFavorite: fav })}
-            />
-          ))}
+        <div className="relative rounded-2xl overflow-hidden p-1">
+          {/* Radar Scanning Line Animation */}
+          <div className="absolute top-0 left-0 w-full h-[2px] bg-kinetic-orange shadow-[0_0_15px_rgba(255,107,0,0.8)] opacity-50 z-10 animate-radar-scan pointer-events-none" />
+          
+          <div className={cn(
+            "grid gap-4 relative z-0",
+            viewMode === 'grid' 
+              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
+              : "grid-cols-1"
+          )}>
+            {products?.map(product => (
+              <ProductCard 
+                key={product.id}
+                product={product}
+                isSelected={isSelected(product.id)}
+                onSelect={toggleProduct}
+                onToggleFavorite={(id, fav) => toggleFavoriteMutation.mutate({ id, isFavorite: fav })}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -23,6 +23,7 @@ interface SelectedProductsContextValue {
   isSelected: (productId: string) => boolean;
   clearProducts: () => void;
   count: number;
+  isHydrated: boolean;
 }
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -38,24 +39,32 @@ const SelectedProductsContext = createContext<SelectedProductsContextValue | nul
  * Adicionado: tipagem TypeScript, toggleProduct, isSelected
  */
 export function SelectedProductsProvider({ children }: { children: ReactNode }) {
-  const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('synco_cart');
-        const parsed = saved ? JSON.parse(saved) : [];
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (err) {
-        console.error('[TRACE] SelectedProducts: failed to parse localStorage', err);
-        return [];
-      }
-    }
-    return [];
-  });
+  const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // Sync with localStorage
+  // Inicialização segura no Client-Side (evita Hydration Mismatch)
   useEffect(() => {
-    localStorage.setItem('synco_cart', JSON.stringify(selectedProducts));
-  }, [selectedProducts]);
+    try {
+      const saved = localStorage.getItem('synco_cart');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSelectedProducts(parsed);
+        }
+      }
+    } catch (err) {
+      console.error('[TRACE] SelectedProducts: failed to parse localStorage', err);
+    } finally {
+      setIsHydrated(true);
+    }
+  }, []);
+
+  // Sincroniza com localStorage sempre que mudar, APÓS estar hidratado
+  useEffect(() => {
+    if (isHydrated) {
+      localStorage.setItem('synco_cart', JSON.stringify(selectedProducts));
+    }
+  }, [selectedProducts, isHydrated]);
 
   const addProduct = useCallback((product: SelectedProduct) => {
     setSelectedProducts((prev) => {
@@ -95,6 +104,7 @@ export function SelectedProductsProvider({ children }: { children: ReactNode }) 
         isSelected,
         clearProducts,
         count: selectedProducts.length,
+        isHydrated,
       }}
     >
       {children}
