@@ -10,7 +10,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
   canHandle(url: string): boolean {
     const lower = url.toLowerCase();
-    return lower.includes('shopee.com.br') || lower.includes('shope.ee');
+    return lower.includes('shopee.com.br') || lower.includes('shope.ee') || lower.includes('br.shp.ee');
   }
 
   // ─── Pré-processamento Explícito (Fase 1) ──────────────────────────────

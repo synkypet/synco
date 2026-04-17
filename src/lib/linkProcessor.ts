@@ -85,7 +85,7 @@ export function detectMarketplace(url: string): Marketplace {
   // Priorizar subdomínios específicos de redirecionamento Shopee
   if (lower.includes('s.shopee.com.br')) return 'Shopee';
   
-  if (lower.includes('shopee.com.br') || lower.includes('shope.ee')) return 'Shopee';
+  if (lower.includes('shopee.com.br') || lower.includes('shope.ee') || lower.includes('br.shp.ee')) return 'Shopee';
   if (lower.includes('amazon.com.br')) return 'Amazon';
   if (lower.includes('mercadolivre.com.br')) return 'Mercado Livre';
   if (lower.includes('magazineluiza.com.br') || lower.includes('magalu.com')) return 'Magalu';
