@@ -149,19 +149,24 @@ export const automationService = {
   async checkAndMarkDedupe(userId: string, normalizedUrl: string, sourceGroupId: string, client?: SupabaseClient): Promise<boolean> {
     const supabase = client || createClient();
     
-    const hashKey = generateHash(`ingest:${userId}:${normalizedUrl}:${sourceGroupId}`);
+    try {
+      const hashKey = generateHash(`ingest:${userId}:${normalizedUrl}:${sourceGroupId}`);
 
-    const { error } = await supabase
-      .from('automation_dedupe')
-      .insert({ hash_key: hashKey });
+      const { error } = await supabase
+        .from('automation_dedupe')
+        .insert({ hash_key: hashKey });
 
-    if (error) {
-      if (error.code === '23505') return true; 
-      console.error('Error checking ingest dedupe:', error);
+      if (error) {
+        if (error.code === '23505') return true; 
+        console.error('[AUTO-SERVICE] [DEDUPE] Error inserting ingest hash:', error);
+        return false;
+      }
+
       return false;
+    } catch (err) {
+      console.error('[AUTO-SERVICE] [DEDUPE-CRITICAL] ingest_check failed:', err);
+      return false; // Fallback para não bloquear o pipeline
     }
-
-    return false;
   },
 
   /**
@@ -171,20 +176,25 @@ export const automationService = {
     if (!messageId || !channelId) return false;
     const supabase = client || createClient();
     
-    // Chave única composta pelo canal e ID da mensagem
-    const hashKey = generateHash(`msg:${channelId}:${messageId}`);
+    try {
+      // Chave única composta pelo canal e ID da mensagem
+      const hashKey = generateHash(`msg:${channelId}:${messageId}`);
 
-    const { error } = await supabase
-      .from('automation_dedupe')
-      .insert({ hash_key: hashKey });
+      const { error } = await supabase
+        .from('automation_dedupe')
+        .insert({ hash_key: hashKey });
 
-    if (error) {
-      if (error.code === '23505') return true; 
-      console.error('Error checking message dedupe:', error);
+      if (error) {
+        if (error.code === '23505') return true; 
+        console.error('[AUTO-SERVICE] [DEDUPE] Error inserting message hash:', error);
+        return false;
+      }
+
       return false;
+    } catch (err) {
+      console.error('[AUTO-SERVICE] [DEDUPE-CRITICAL] message_check failed:', err);
+      return false; // Fallback: processar de novo é melhor que sumir com a mensagem
     }
-
-    return false;
   },
 
   /**
@@ -350,18 +360,23 @@ export const automationService = {
   async checkAndMarkDestinationDedupe(userId: string, normalizedUrl: string, targetId: string, client?: SupabaseClient): Promise<boolean> {
     const supabase = client || createClient();
     
-    const hashKey = generateHash(`dest:${userId}:${normalizedUrl}:${targetId}`);
+    try {
+      const hashKey = generateHash(`dest:${userId}:${normalizedUrl}:${targetId}`);
 
-    const { error } = await supabase
-      .from('automation_dedupe')
-      .insert({ hash_key: hashKey });
+      const { error } = await supabase
+        .from('automation_dedupe')
+        .insert({ hash_key: hashKey });
 
-    if (error) {
-      if (error.code === '23505') return true; 
-      console.error('Error checking destination dedupe:', error);
+      if (error) {
+        if (error.code === '23505') return true; 
+        console.error('[AUTO-SERVICE] [DEDUPE] Error inserting destination hash:', error);
+        return false;
+      }
+
+      return false;
+    } catch (err) {
+      console.error('[AUTO-SERVICE] [DEDUPE-CRITICAL] destination_check failed:', err);
       return false;
     }
-
-    return false;
   }
 };

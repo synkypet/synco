@@ -94,248 +94,192 @@ export async function processInboundAutomation(payload: InboundPayload) {
   const { userId, channelId, externalGroupId, body, isFromMe, messageId } = payload;
   const logPrefix = `[PROCESSOR] [MSG:${messageId?.substring(0, 6)}] [GRP:${externalGroupId?.substring(0, 6)}]`;
 
-  console.log(`${logPrefix} >>> INICIANDO PROCESSAMENTO E2E...`);
+  try {
+    console.log(`${logPrefix} >>> INICIANDO PROCESSAMENTO E2E...`);
 
-  const supabase: SupabaseClient = createAdminClient();
+    const supabase: SupabaseClient = createAdminClient();
 
-  // Camada 0: Dedupe de Mensagem (Evita duplo processamento de eventos do provedor)
-  const isMessageDuplicate = await automationService.checkAndMarkMessageDedupe(channelId, messageId, supabase);
-  if (isMessageDuplicate) {
-    console.log(`${logPrefix} [SKIP] Motivo: Mensagem já processada (Message-Level Dedupe).`);
-    return { skipped: 'msg_dedupe', details: { channelId, messageId } };
-  }
-
-  console.log(`${logPrefix} Data:`, { userId, channelId, externalGroupId, isFromMe, bodyPreview: body?.substring(0, 50) });
-
-  if (isFromMe) {
-    console.log(`${logPrefix} [SKIP] Motivo: Mensagem enviada pelo próprio número (Self-sent).`);
-    return { skipped: 'self_sent', reason: 'isFromMe is true' };
-  }
-  
-  console.log(`${logPrefix} [STEP] Buscando fonte em 'automation_sources'...`, { userId, channelId, externalGroupId });
-  const source = await automationService.getSourceByExternalId(userId, channelId, externalGroupId, supabase);
-  
-  if (!source) {
-    console.warn(`${logPrefix} [SKIP] Motivo: Nenhuma fonte ATIVA encontrada para este conjunto.`);
-    console.warn(`${logPrefix} [DEBUG] Tentativa de busca falhou para:`, { 
-      user_id: userId, 
-      channel_id: channelId, 
-      external_group_id: externalGroupId, 
-      is_active: true 
-    });
-    console.warn(`${logPrefix} [TIP] Certifique-se de que o grupo está cadastrado em 'automation_sources' com o ID exato acima.`);
-    return { skipped: 'not_a_source', details: { userId, channelId, externalGroupId } };
-  }
-
-  console.log(`${logPrefix} [STEP] ✓ Fonte ID: ${source.id} ("${source.name}")`);
-
-  const links = extractShopeeLinks(body);
-  if (links.length === 0) {
-    console.log(`${logPrefix} [SKIP] Motivo: Nenhum link Shopee identificado na mensagem.`);
-    return { skipped: 'no_shopee_links', bodyPreview: body?.substring(0, 50) };
-  }
-
-  console.log(`${logPrefix} [STEP] ✓ Identificados ${links.length} links Shopee. Extraindo conexões enriquecidas...`);
-
-  const connections = await marketplaceService.getEnrichedConnections(userId, supabase);
-  console.log(`${logPrefix} [STEP] Buscando rotas de destino ativas para Source ${source.id}...`);
-  const routes = await automationService.getRoutesBySourceId(source.id, supabase);
-  
-  if (routes.length === 0) {
-    console.warn(`${logPrefix} [SKIP] Motivo: Fonte encontrada, mas não possui ROTAS DE DESTINO ativas.`);
-    await automationService.logEvent({
-      source_id: source.id,
-      user_id: userId,
-      status: 'filtered',
-      event_type: 'no_routes_configured',
-      details: { channelId, externalGroupId, sourceId: source.id }
-    }, supabase);
-    return { skipped: 'no_routes_configured', sourceId: source.id };
-  }
-
-  console.log(`${logPrefix} [STEP] ✓ Encontradas ${routes.length} rotas de destino.`);
-
-  const results = [];
-  const adminEntry = supabase;
-
-  // Buscar IDs remotos dos destinos para o Anti-loop
-  const { data: routeDestinations } = await adminEntry
-    .from('groups')
-    .select('id, remote_id')
-    .in('id', routes.map(r => r.target_id));
-
-  console.log(`${logPrefix} [STEP] Iniciando iteração sobre os links...`);
-
-  for (const rawUrl of links) {
-    const normalized = normalizeShopeeUrl(rawUrl);
-    console.log(`${logPrefix} [ITEM] Processando link: ${rawUrl}`);
+    // Camada 0: Dedupe de Mensagem (Evita duplo processamento de eventos do provedor)
+    console.log(`${logPrefix} [STEP] Verificando duplicidade de mensagem...`);
+    const isMessageDuplicate = await automationService.checkAndMarkMessageDedupe(channelId, messageId, supabase);
+    console.log(`${logPrefix} [STEP] ✓ Duplicidade: ${isMessageDuplicate}`);
     
-    /* 
-    // Camada 1: Dedupe de Ingestão (DESATIVADO TEMPORARIAMENTE)
-    const isDuplicate = await automationService.checkAndMarkDedupe(userId, normalized, externalGroupId, supabase);
-    if (isDuplicate) {
-      console.log(`${logPrefix} [ITEM] [DEDUPE] Ignorado: URL já processada neste grupo de origem.`);
+    if (isMessageDuplicate) {
+      console.log(`${logPrefix} [SKIP] Motivo: Mensagem já processada (Message-Level Dedupe).`);
+      return { skipped: 'msg_dedupe', details: { channelId, messageId } };
+    }
+
+    console.log(`${logPrefix} Data:`, { userId, channelId, externalGroupId, isFromMe, bodyPreview: body?.substring(0, 50) });
+
+    if (isFromMe) {
+      console.log(`${logPrefix} [SKIP] Motivo: Mensagem enviada pelo próprio número (Self-sent).`);
+      return { skipped: 'self_sent', reason: 'isFromMe is true' };
+    }
+    
+    console.log(`${logPrefix} [STEP] Buscando fonte em 'automation_sources'...`, { userId, channelId, externalGroupId });
+    const source = await automationService.getSourceByExternalId(userId, channelId, externalGroupId, supabase);
+    
+    if (!source) {
+      console.warn(`${logPrefix} [SKIP] Motivo: Nenhuma fonte ATIVA encontrada para este conjunto.`);
+      return { skipped: 'not_a_source', details: { userId, channelId, externalGroupId } };
+    }
+
+    console.log(`${logPrefix} [STEP] ✓ Fonte ID: ${source.id} ("${source.name}")`);
+
+    const links = extractShopeeLinks(body);
+    if (links.length === 0) {
+      console.log(`${logPrefix} [SKIP] Motivo: Nenhum link Shopee identificado na mensagem.`);
+      return { skipped: 'no_shopee_links', bodyPreview: body?.substring(0, 50) };
+    }
+
+    console.log(`${logPrefix} [STEP] ✓ Identificados ${links.length} links Shopee. Extraindo conexões enriquecidas...`);
+
+    const connections = await marketplaceService.getEnrichedConnections(userId, supabase);
+    console.log(`${logPrefix} [STEP] ✓ Conexões recuperadas. Buscando rotas de destino ativas para Source ${source.id}...`);
+    
+    const routes = await automationService.getRoutesBySourceId(source.id, supabase);
+    
+    if (routes.length === 0) {
+      console.warn(`${logPrefix} [SKIP] Motivo: Fonte encontrada, mas não possui ROTAS DE DESTINO ativas.`);
       await automationService.logEvent({
         source_id: source.id,
         user_id: userId,
         status: 'filtered',
-        event_type: 'ingest_dedupe',
-        details: { url: normalized, messageId }
+        event_type: 'no_routes_configured',
+        details: { channelId, externalGroupId, sourceId: source.id }
       }, supabase);
-      continue;
+      return { skipped: 'no_routes_configured', sourceId: source.id };
     }
-    */
 
-    try {
-      console.log(`${logPrefix} [ITEM] Convertendo link e buscando metadados...`);
-      const snapshots = await processLinks([rawUrl], connections, 'auto');
-      const snapshot = snapshots[0];
+    console.log(`${logPrefix} [STEP] ✓ Encontradas ${routes.length} rotas de destino.`);
 
+    const results = [];
+    const adminEntry = supabase;
 
-      if (!snapshot) {
-        console.error(`${logPrefix} [ITEM] [ERROR] Falha ao capturar metadados do produto (Snapshot nulo).`);
-        await automationService.logEvent({
-          source_id: source.id,
-          user_id: userId,
-          status: 'error',
-          event_type: 'fetch_failed',
-          details: { url: normalized, messageId }
-        }, supabase);
-        continue;
-      }
+    // Buscar IDs remotos dos destinos para o Anti-loop
+    console.log(`${logPrefix} [STEP] Resolvendo destinos da rota...`);
+    const { data: routeDestinations } = await adminEntry
+      .from('groups')
+      .select('id, remote_id')
+      .in('id', routes.map(r => r.target_id));
 
-      // --- GUARDIÃO OPERACIONAL (FRENTE 1) ---
-      // Bloqueia itens que falharam na reafiliação ou no guardrail de metadados
-      const status = snapshot.factual.reaffiliation_status;
-      const errorMsg = snapshot.factual.reaffiliation_error || 'Falha desconhecida na validação factual';
+    console.log(`${logPrefix} [STEP] Iniciando iteração sobre os links...`);
+
+    for (const rawUrl of links) {
+      const normalized = normalizeShopeeUrl(rawUrl);
+      console.log(`${logPrefix} [ITEM] Processando link: ${rawUrl}`);
       
-      if (status === 'blocked' || status === 'failed') {
-        console.warn(`${logPrefix} [ITEM] [HARD-LOCK] Bloqueado! Status: ${status} | Motivo: ${errorMsg}`);
-        await automationService.logEvent({
-          source_id: source.id,
-          user_id: userId,
-          status: 'filtered',
-          event_type: 'operational_lock',
-          details: { 
-            url: normalized, 
-            status, 
-            error: errorMsg,
-            messageId 
-          }
-        }, supabase);
-        continue;
-      }
+      try {
+        console.log(`${logPrefix} [ITEM] Convertendo link e buscando metadados...`);
+        const snapshots = await processLinks([rawUrl], connections, 'auto');
+        const snapshot = snapshots[0];
 
-      console.log(`${logPrefix} [ITEM] ✓ Produto: "${snapshot.factual.title}" | Preço: ${snapshot.factual.currentPriceFactual}`);
+        if (!snapshot) {
+          console.error(`${logPrefix} [ITEM] [ERROR] Falha ao capturar metadados do produto (Snapshot nulo).`);
+          await automationService.logEvent({
+            source_id: source.id,
+            user_id: userId,
+            status: 'error',
+            event_type: 'fetch_failed',
+            details: { url: normalized, messageId }
+          }, supabase);
+          continue;
+        }
 
-      // Processar cada rota individualmente
-      for (const route of routes) {
-        console.log(`${logPrefix} [ITEM] -> Avaliando Rota: ${route.id} (Destino: ${route.target_id})`);
+        // --- GUARDIÃO OPERACIONAL (FRENTE 1) ---
+        const status = snapshot.factual.reaffiliation_status;
+        const errorMsg = snapshot.factual.reaffiliation_error || 'Falha desconhecida na validação factual';
         
-        // 1. Anti-loop
-        const destInfo = routeDestinations?.find(d => d.id === route.target_id);
-        if (destInfo?.remote_id === externalGroupId) {
-          console.log(`${logPrefix} [ITEM] [ANTI-LOOP] Ignorado: Destino é o mesmo da Origem.`);
+        if (status === 'blocked' || status === 'failed') {
+          console.warn(`${logPrefix} [ITEM] [HARD-LOCK] Bloqueado! Status: ${status} | Motivo: ${errorMsg}`);
           await automationService.logEvent({
             source_id: source.id,
             user_id: userId,
             status: 'filtered',
-            event_type: 'anti_loop',
-            details: { url: normalized, targetId: route.target_id, messageId }
+            event_type: 'operational_lock',
+            details: { url: normalized, status, error: errorMsg, messageId }
           }, supabase);
           continue;
         }
 
-        // 2. Motor de Regras: Filtros
-        if (!applyFilters(snapshot, body, route.filters)) {
-          console.log(`${logPrefix} [ITEM] [FILTERED] Ignorado: Rejeitado pelas regras da rota.`);
-          await automationService.logEvent({
-            source_id: source.id,
-            user_id: userId,
-            status: 'filtered',
-            event_type: 'rule_rejected',
-            details: { url: normalized, targetId: route.target_id, filters: route.filters, messageId }
-          }, supabase);
-          continue;
-        }
+        console.log(`${logPrefix} [ITEM] ✓ Produto: "${snapshot.factual.title}" | Preço: ${snapshot.factual.currentPriceFactual}`);
 
-        /*
-        // 3. Camada 2: Dedupe de Destino (DESATIVADO TEMPORARIAMENTE)
-        const isDestDuplicate = await automationService.checkAndMarkDestinationDedupe(userId, normalized, route.target_id, supabase);
-        if (isDestDuplicate) {
-          console.log(`${logPrefix} [ITEM] [DEDUPE-DEST] Ignorado: URL já enviada recentemente para este destino.`);
-          await automationService.logEvent({
-            source_id: source.id,
-            user_id: userId,
-            status: 'filtered',
-            event_type: 'dest_dedupe',
-            details: { url: normalized, targetId: route.target_id, messageId }
-          }, supabase);
-          continue;
-        }
-        */
-
-        // 4. Composição e Geração de Job
-        const finalMessage = route.template_config?.body 
-          ? fillTemplate(route.template_config.body, snapshot.factual, source.name)
-          : snapshot.copy.messageText;
-
-        const campaignDto = {
-          name: `AUTO: ${snapshot.factual.title.substring(0, 30)}...`,
-          items: [{
-            product_id: undefined, // UUID interno não disponível no momento
-            product_name: snapshot.factual.title,
-            custom_text: finalMessage,
-            affiliate_url: snapshot.factual.finalLinkToSend,
-            image_url: snapshot.factual.image,
-            external_product_id: snapshot.factual.itemId?.toString(),
-            installments: snapshot.factual.installments
-          }],
-          destinations: [{
-            type: route.target_type,
-            id: route.target_id
-          }]
-        };
-
-        console.log(`${logPrefix} [ITEM] [CAMPAIGN-DTO] Preparado:`, {
-          items: campaignDto.items.length,
-          destinations: campaignDto.destinations.length,
-          target_type: route.target_type,
-          target_id: route.target_id
-        });
-
-        const campaign = await campaignService.create(userId, campaignDto, supabase);
-
-        console.log(`${logPrefix} [ITEM] [SUCCESS] ★ Campanha #${campaign.id} criada.`);
-        
-        await automationService.logEvent({
-          source_id: source.id,
-          user_id: userId,
-          status: 'processed',
-          event_type: 'job_created',
-          details: { 
-            url: normalized, 
-            targetId: route.target_id, 
-            targetType: route.target_type,
-            campaignId: campaign.id 
+        // Processar cada rota individualmente
+        for (const route of routes) {
+          console.log(`${logPrefix} [ITEM] -> Avaliando Rota: ${route.id} (Destino: ${route.target_id})`);
+          
+          const destInfo = routeDestinations?.find(d => d.id === route.target_id);
+          if (destInfo?.remote_id === externalGroupId) {
+            console.log(`${logPrefix} [ITEM] [ANTI-LOOP] Ignorado: Destino é o mesmo da Origem.`);
+            await automationService.logEvent({
+              source_id: source.id,
+              user_id: userId,
+              status: 'filtered',
+              event_type: 'anti_loop',
+              details: { url: normalized, targetId: route.target_id, messageId }
+            }, supabase);
+            continue;
           }
-        }, supabase);
 
-        results.push({ url: normalized, routeId: route.id, campaignId: campaign.id });
+          if (!applyFilters(snapshot, body, route.filters)) {
+            console.log(`${logPrefix} [ITEM] [FILTERED] Ignorado: Rejeitado pelas regras da rota.`);
+            await automationService.logEvent({
+              source_id: source.id,
+              user_id: userId,
+              status: 'filtered',
+              event_type: 'rule_rejected',
+              details: { url: normalized, targetId: route.target_id, filters: route.filters, messageId }
+            }, supabase);
+            continue;
+          }
+
+          const finalMessage = route.template_config?.body 
+            ? fillTemplate(route.template_config.body, snapshot.factual, source.name)
+            : snapshot.copy.messageText;
+
+          const campaignDto = {
+            name: `AUTO: ${snapshot.factual.title.substring(0, 30)}...`,
+            items: [{
+              product_id: undefined, 
+              product_name: snapshot.factual.title,
+              custom_text: finalMessage,
+              affiliate_url: snapshot.factual.finalLinkToSend,
+              image_url: snapshot.factual.image,
+              external_product_id: snapshot.factual.itemId?.toString(),
+              installments: snapshot.factual.installments
+            }],
+            destinations: [{
+              type: route.target_type,
+              id: route.target_id
+            }]
+          };
+
+          console.log(`${logPrefix} [ITEM] [STEP] Criando campanha via campaignService...`);
+          const campaign = await campaignService.create(userId, campaignDto, supabase);
+
+          console.log(`${logPrefix} [ITEM] [SUCCESS] ★ Campanha #${campaign.id} criada.`);
+          
+          await automationService.logEvent({
+            source_id: source.id,
+            user_id: userId,
+            status: 'processed',
+            event_type: 'job_created',
+            details: { url: normalized, targetId: route.target_id, targetType: route.target_type, campaignId: campaign.id }
+          }, supabase);
+
+          results.push({ url: normalized, routeId: route.id, campaignId: campaign.id });
+        }
+
+      } catch (err: any) {
+        console.error(`${logPrefix} [ITEM] [EXCEPTION] Erro crítico no processamento do item:`, err);
       }
-
-    } catch (err: any) {
-      console.error(`${logPrefix} [ITEM] [EXCEPTION] Erro crítico:`, err);
-      await automationService.logEvent({
-        source_id: source.id,
-        user_id: userId,
-        status: 'error',
-        event_type: 'exception',
-        details: { url: normalized, error: err.message }
-      }, supabase);
     }
-  }
 
-  console.log(`${logPrefix} >>> FINALIZADO. Itens processados: ${results.length}`);
-  return { processed: results.length, details: results };
+    console.log(`${logPrefix} >>> FINALIZADO. Itens processados: ${results.length}`);
+    return { processed: results.length, details: results };
+
+  } catch (error: any) {
+    console.error(`${logPrefix} [CRITICAL-EXCEPTION] Falha fatal no processInboundAutomation:`, error);
+    throw error;
+  }
 }

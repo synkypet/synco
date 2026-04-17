@@ -217,23 +217,22 @@ export async function POST(request: Request) {
            console.warn(`[WEBHOOK-WARNING] [${requestId}] Contexto incompleto capturado:`, automPayload);
         }
 
-        // Execução Direta: Elimina o risco de ECONNRESET / Socket Hang Up
-        // Rodamos de forma assíncrona (não-bloqueante para responder o webhook rápido)
-        (async () => {
-          try {
-            console.log(`[WEBHOOK] [${requestId}] [DIRECT] Iniciando processamento core...`);
-            const result = await processInboundAutomation(automPayload);
-            
-            if (result && !result.skipped) {
-              console.log(`[WEBHOOK] [${requestId}] [DIRECT] Processamento concluído. Acionando worker...`);
-              await triggerWorker({ requestId });
-            } else {
-              console.log(`[WEBHOOK] [${requestId}] [DIRECT] Processamento finalizado (Skipped: ${result?.skipped || 'none'}).`);
-            }
-          } catch (err: any) {
-            console.error(`[WEBHOOK-ERROR] [${requestId}] Erro no processamento core direto:`, err.message);
+        // ─── Automação de Entrada ──────────────────────────────────────────
+        // [OPERAÇÃO EMERGÊNCIAL] Await direto para garantir estabilidade no Vercel.
+        // Isso aumenta a latência de resposta do webhook mas garante conclusão do processamento.
+        try {
+          console.log(`[WEBHOOK] [${requestId}] [DIRECT-AWAIT] Iniciando processamento core (Patch de Estabilização)...`);
+          const result = await processInboundAutomation(automPayload);
+          
+          if (result && !result.skipped) {
+            console.log(`[WEBHOOK] [${requestId}] [DIRECT-AWAIT] Processamento concluído. Acionando worker...`);
+            await triggerWorker({ requestId });
+          } else {
+            console.log(`[WEBHOOK] [${requestId}] [DIRECT-AWAIT] Processamento finalizado (Skipped: ${result?.skipped || 'none'}).`);
           }
-        })();
+        } catch (err: any) {
+          console.error(`[WEBHOOK-ERROR-FATAL] [${requestId}] Falha crítica no processamento core:`, err.message);
+        }
 
         break;
       }
