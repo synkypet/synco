@@ -44,6 +44,15 @@ export interface FactualData {
   offerLink?: string | null;
   finalLinkToSend: string;
   fetchedAt: string;
+
+  // ─── Rastreabilidade e Reafiliação (Fase 1) ──────────────────────────────
+  incoming_url: string;
+  resolved_url?: string;
+  canonical_url: string;
+  generated_affiliate_url?: string;
+  redirect_chain?: string[];
+  reaffiliation_status: string;
+  reaffiliation_error?: string;
 }
 
 export interface GeneratedCopy {
@@ -72,6 +81,10 @@ const adapters: MarketplaceAdapter[] = [
  */
 export function detectMarketplace(url: string): Marketplace {
   const lower = url.toLowerCase();
+  
+  // Priorizar subdomínios específicos de redirecionamento Shopee
+  if (lower.includes('s.shopee.com.br')) return 'Shopee';
+  
   if (lower.includes('shopee.com.br') || lower.includes('shope.ee')) return 'Shopee';
   if (lower.includes('amazon.com.br')) return 'Amazon';
   if (lower.includes('mercadolivre.com.br')) return 'Mercado Livre';
@@ -141,8 +154,17 @@ export function buildProductSnapshot(opts: {
   metadata: any;
   affiliateUrl: string;
   tone: string;
+  reaffiliation?: {
+    incoming_url: string;
+    resolved_url?: string;
+    canonical_url: string;
+    generated_affiliate_url?: string;
+    redirect_chain?: string[];
+    reaffiliation_status: string;
+    reaffiliation_error?: string;
+  }
 }): ProductSnapshot {
-  const { id, originalUrl, metadata, affiliateUrl, tone } = opts;
+  const { id, originalUrl, metadata, affiliateUrl, tone, reaffiliation } = opts;
   
   const price = metadata.currentPriceFactual || metadata.currentPrice || null;
   const originalPrice = metadata.originalPrice || null;
@@ -159,7 +181,7 @@ export function buildProductSnapshot(opts: {
     itemId: metadata.itemId,
     shopId: metadata.shopId,
     shopName: metadata.shopName,
-    title: metadata.name || 'Produto sem título',
+    title: metadata.name || (reaffiliation?.reaffiliation_status === 'blocked' ? 'PRODUTO BLOQUEADO' : 'Produto sem título'),
     image: metadata.imageUrl || null,
     installments: metadata.installments || null,
     
@@ -182,12 +204,21 @@ export function buildProductSnapshot(opts: {
 
     commissionRate,
     commissionRatePercent: commissionRate !== null ? `${(commissionRate * 100).toFixed(2)}%` : null,
-    affiliateLink: affiliateUrl,
-    shortLink: affiliateUrl.includes('s.shopee') || affiliateUrl.includes('shope.ee') ? affiliateUrl : null,
+    affiliateLink: reaffiliation?.generated_affiliate_url || affiliateUrl,
+    shortLink: (reaffiliation?.generated_affiliate_url || affiliateUrl).includes('s.shopee') || (reaffiliation?.generated_affiliate_url || affiliateUrl).includes('shope.ee') ? (reaffiliation?.generated_affiliate_url || affiliateUrl) : null,
     productLink: metadata.productLink || null,
     offerLink: metadata.offerLink || null,
-    finalLinkToSend: affiliateUrl,
-    fetchedAt: metadata.fetchedAt || new Date().toISOString()
+    finalLinkToSend: reaffiliation?.generated_affiliate_url || affiliateUrl,
+    fetchedAt: metadata.fetchedAt || new Date().toISOString(),
+
+    // Rastreabilidade (Fase 1)
+    incoming_url: reaffiliation?.incoming_url || originalUrl,
+    resolved_url: reaffiliation?.resolved_url,
+    canonical_url: reaffiliation?.canonical_url || originalUrl,
+    generated_affiliate_url: reaffiliation?.generated_affiliate_url,
+    redirect_chain: reaffiliation?.redirect_chain || [],
+    reaffiliation_status: reaffiliation?.reaffiliation_status || 'not_needed',
+    reaffiliation_error: reaffiliation?.reaffiliation_error
   };
 
   return {
@@ -199,7 +230,7 @@ export function buildProductSnapshot(opts: {
       generatedAt: new Date().toISOString()
     },
     metadata: {
-      source: metadata.metadata_failed ? 'fallback' : 'api',
+      source: (metadata.metadata_failed || factual.reaffiliation_status === 'blocked') ? 'fallback' : 'api',
       isFrozen: true
     }
   };
@@ -234,29 +265,46 @@ export async function processLinks(
         const snapshot = buildProductSnapshot({
           id,
           originalUrl: link,
-          metadata: result.metadata,
+          metadata: result.metadata || { 
+            name: result.reaffiliation_status === 'blocked' ? 'PRODUTO BLOQUEADO' : `Produto ${marketplace} (Tracking)`,
+            metadata_failed: true 
+          },
           affiliateUrl: result.affiliateUrl,
-          tone
+          tone,
+          reaffiliation: {
+            incoming_url: result.incoming_url,
+            resolved_url: result.resolved_url,
+            canonical_url: result.canonical_url,
+            generated_affiliate_url: result.generated_affiliate_url,
+            redirect_chain: result.redirect_chain,
+            reaffiliation_status: result.reaffiliation_status,
+            reaffiliation_error: result.reaffiliation_error
+          }
         });
 
-        // ─── Refinamento por IA (Se disponível) ────────────────────────────────
-        try {
-          const refinedBlurb = await refineOfferCopy({
-            productName: snapshot.factual.title,
-            price: snapshot.factual.priceFormatted,
-            originalPrice: snapshot.factual.originalPriceFormatted,
-            pixPrice: snapshot.factual.estimatedPixPriceFormatted,
-            installments: snapshot.factual.installments,
-            link: snapshot.factual.finalLinkToSend,
-            highlights: [] 
-          });
-          
-          // RE-CONSTRUIR a mensagem final usando o blurb refinado
-          snapshot.copy.messageText = buildMessageFromSnapshot(snapshot.factual, refinedBlurb);
-          snapshot.copy.toneUsed = 'ai-refined';
-        } catch (aiError) {
-          console.error(`linkProcessor: AI Refinement failed for ${link}:`, aiError);
-          // O messageText já contém o fallback determinístico do buildProductSnapshot
+        // ─── Refinamento por IA (Apenas se NÃO estiver bloqueado) ─────────────
+        if (snapshot.factual.reaffiliation_status !== 'blocked' && snapshot.factual.reaffiliation_status !== 'failed') {
+          try {
+            const refinedBlurb = await refineOfferCopy({
+              productName: snapshot.factual.title,
+              price: snapshot.factual.priceFormatted,
+              originalPrice: snapshot.factual.originalPriceFormatted,
+              pixPrice: snapshot.factual.estimatedPixPriceFormatted,
+              installments: snapshot.factual.installments,
+              link: snapshot.factual.finalLinkToSend,
+              highlights: [] 
+            });
+            
+            // RE-CONSTRUIR a mensagem final usando o blurb refinado
+            snapshot.copy.messageText = buildMessageFromSnapshot(snapshot.factual, refinedBlurb);
+            snapshot.copy.toneUsed = 'ai-refined';
+          } catch (aiError) {
+            console.error(`linkProcessor: AI Refinement failed for ${link}:`, aiError);
+            // O messageText já contém o fallback determinístico do buildProductSnapshot
+          }
+        } else {
+          console.warn(`linkProcessor: Skipping AI Refinement for ${link} because it is BLOCKED or FAILED.`);
+          snapshot.copy.messageText = `⚠️ Item Bloqueado: ${snapshot.factual.reaffiliation_error || 'Falha na reaffiliação'}`;
         }
 
         results.push(snapshot);
@@ -265,9 +313,15 @@ export async function processLinks(
         results.push(buildProductSnapshot({
           id,
           originalUrl: link,
-          metadata: { name: `Produto ${marketplace} (Tracking)`, metadata_failed: true },
+          metadata: { name: `Erro no Processamento: ${marketplace}`, metadata_failed: true },
           affiliateUrl: link,
-          tone
+          tone,
+          reaffiliation: {
+            incoming_url: link,
+            canonical_url: link,
+            reaffiliation_status: 'failed',
+            reaffiliation_error: error instanceof Error ? error.message : String(error)
+          }
         }));
       }
     } else {
@@ -276,7 +330,12 @@ export async function processLinks(
         originalUrl: link,
         metadata: { name: `Original ${marketplace}`, metadata_failed: true },
         affiliateUrl: link,
-        tone
+        tone,
+        reaffiliation: {
+            incoming_url: link,
+            canonical_url: link,
+            reaffiliation_status: 'not_needed'
+        }
       }));
     }
   }
