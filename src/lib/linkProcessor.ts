@@ -98,51 +98,46 @@ function findAdapter(url: string): MarketplaceAdapter | null {
 
 /**
  * Construtor central de mensagens baseadas no snapshot factual.
- * FOCADO EM PREÇO FACTUAL COM ESTIMATIVA PIX OPCIONAL.
- * Padroniza o visual do WhatsApp para automação e envio rápido.
+ * FOCADO EM PREÇO FACTUAL (DE/POR). TOTALMENTE DETERMINÍSTICO.
  */
-export function buildMessageFromSnapshot(factual: FactualData, blurb?: string): string {
+export function buildMessageFromSnapshot(factual: FactualData): string {
   // 1. Título
   const title = factual.title;
-  const emoji = '🛍️'; // Emoji padrão de oferta
+  const emoji = '🛍️';
 
-  // 2. Preços (Padronização obrigatória)
-  const pixPrice = factual.estimatedPixPriceFormatted;
-  const priceFactual = factual.priceFormatted;
+  // 2. Preços (Lógica De/Por Factual)
+  const priceMin = factual.price;
+  const priceMax = factual.originalPrice;
+  const priceMinFormatted = factual.priceFormatted;
+  const priceMaxFormatted = factual.originalPriceFormatted;
 
-  let mainPriceLine = '';
-  if (pixPrice) {
-    mainPriceLine = `🔥 Por: *${pixPrice} no Pix*`;
-  } else if (priceFactual) {
-    mainPriceLine = `🔥 Por: *${priceFactual}*`;
+  let priceLine = '';
+  
+  // Regra: Mostrar "De" apenas se existir priceMax, for factual e maior que priceMin
+  if (priceMax && priceMin && priceMax > priceMin) {
+    priceLine = `de ${priceMaxFormatted}\n💥 Por: ${priceMinFormatted}`;
+  } else if (priceMinFormatted) {
+    priceLine = `💥 Por: ${priceMinFormatted}`;
+  } else {
+    priceLine = `💥 Por: Preço sob consulta`;
   }
 
-  // 3. Parcelamento
-  const installmentsLine = factual.installments ? `💳 ou *${factual.installments} sem juros*` : '';
-  
-  // 4. Link & CTA
+  // 3. Link & CTA
   const link = factual.finalLinkToSend;
 
-  // 5. Blurb/IA Fallback
-  const finalBlurb = blurb || 'Oportunidade para garantir seu produto! Confira os detalhes dessa oferta.';
-
-  // 6. Montagem Final (Respeitando linhas em branco e respiro visual)
+  // 4. Montagem Final (Respeitando linhas em branco e respiro visual)
   const lines = [
     `${emoji} ${title}`,
     '',
-    finalBlurb,
+    priceLine,
     '',
-    mainPriceLine,
-    installmentsLine,
-    '',
-    '🛒 Compre aqui:',
+    '📦 Compre aqui:',
     link,
     '',
     '⚠️ Promoção sujeita a alteração a qualquer momento.'
-  ].filter(line => line !== null);
+  ];
 
-  // Garantir que não existam 3+ quebras de linha seguidas
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return lines.join('\n').trim();
 }
 
 /**
@@ -301,35 +296,12 @@ export async function processLinks(
         }
       });
 
-      // 3. AI Refinement (Enrichment) - SOMENTE se estiver sucesso real
-      const isSuccess = snapshot.factual.reaffiliation_status === 'reaffiliated' || 
-                        snapshot.factual.reaffiliation_status === 'success' || 
-                        snapshot.factual.reaffiliation_status === 'not_needed';
-
-      if (isSuccess && !metadata?.metadata_failed) {
-        try {
-          const refinedBlurb = await refineOfferCopy({
-            productName: snapshot.factual.title,
-            price: snapshot.factual.priceFormatted,
-            originalPrice: snapshot.factual.originalPriceFormatted,
-            pixPrice: snapshot.factual.estimatedPixPriceFormatted,
-            installments: snapshot.factual.installments,
-            link: snapshot.factual.finalLinkToSend,
-            highlights: [] 
-          });
-          
-          // Re-construir a mensagem final usando o blurb refinado
-          snapshot.copy.messageText = buildMessageFromSnapshot(snapshot.factual, refinedBlurb);
-          snapshot.copy.toneUsed = 'ai-refined';
-        } catch (aiError: any) {
-          console.error(`linkProcessor: AI Refinement failed for ${link}:`, aiError.message);
-        }
+      // 3. Status Final e Logs (Sem IA)
+      if (snapshot.factual.reaffiliation_status === 'blocked' || snapshot.factual.reaffiliation_status === 'failed') {
+          console.warn(`[LINK-PROCESSOR] Item parado/falhou: ${snapshot.factual.reaffiliation_error}`);
+          snapshot.copy.messageText = `⚠️ ITEM PARADO: ${snapshot.factual.reaffiliation_error || 'Falha na validação factual'}`;
       } else {
-        console.warn(`linkProcessor: Skipping AI Refinement for ${link} (Status: ${snapshot.factual.reaffiliation_status})`);
-        // Em caso de erro, ajusta a mensagem final para indicar o erro operacional
-        if (snapshot.factual.reaffiliation_status === 'blocked' || snapshot.factual.reaffiliation_status === 'failed') {
-            snapshot.copy.messageText = `⚠️ ITEM PARADO: ${snapshot.factual.reaffiliation_error || 'Falha na validação factual'}`;
-        }
+          console.log(`[LINK-PROCESSOR] Processado com sucesso (Determinístico): ${snapshot.factual.title}`);
       }
 
       results.push(snapshot);

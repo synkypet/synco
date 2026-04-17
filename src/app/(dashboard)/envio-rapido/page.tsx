@@ -363,51 +363,54 @@ export default function EnvioRapidoPage() {
                 </div>
               </TactileCard>
 
-              <TactileCard className="p-6 border-none">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center shadow-skeuo-flat border border-purple-500/20">
-                    <Sparkles className="w-4 h-4 text-purple-400" />
+              {/* Vibe Engine (IA) Oculto por decisão de produto: Envio Rápido 100% Determinístico */}
+              {false && (
+                <TactileCard className="p-6 border-none">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center shadow-skeuo-flat border border-purple-500/20">
+                      <Sparkles className="w-4 h-4 text-purple-400" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-black text-[11px] uppercase tracking-[0.2em] font-headline italic text-white/90">
+                        Vibe Engine (IA)
+                      </span>
+                      <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
+                        Personalização de Tonalidade Operacional
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="font-black text-[11px] uppercase tracking-[0.2em] font-headline italic text-white/90">
-                      Vibe Engine (IA)
-                    </span>
-                    <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
-                      Personalização de Tonalidade Operacional
-                    </span>
-                  </div>
-                </div>
 
-                <div className="flex flex-wrap gap-3">
-                  {TONE_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setTone(opt.value)}
-                      className={cn(
-                        'flex flex-col items-start p-3 rounded-2xl border-none transition-all w-[140px] text-left relative overflow-hidden group',
-                        tone === opt.value
-                          ? 'bg-kinetic-orange/10 shadow-skeuo-pressed ring-1 ring-kinetic-orange/40'
-                          : 'bg-deep-void shadow-skeuo-pressed opacity-50 hover:opacity-80 active:scale-95'
-                      )}
-                    >
-                      {tone === opt.value && (
-                        <div className="absolute top-0 right-0 w-8 h-8 bg-kinetic-orange/20 blur-xl rounded-full" />
-                      )}
-                      <span
+                  <div className="flex flex-wrap gap-3">
+                    {TONE_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setTone(opt.value)}
                         className={cn(
-                          'text-[10px] font-black uppercase tracking-[0.2em] mb-1 font-headline italic',
-                          tone === opt.value ? 'text-kinetic-orange' : 'text-white/40'
+                          'flex flex-col items-start p-3 rounded-2xl border-none transition-all w-[140px] text-left relative overflow-hidden group',
+                          tone === opt.value
+                            ? 'bg-kinetic-orange/10 shadow-skeuo-pressed ring-1 ring-kinetic-orange/40'
+                            : 'bg-deep-void shadow-skeuo-pressed opacity-50 hover:opacity-80 active:scale-95'
                         )}
                       >
-                        {opt.label.split(' ')[1]}
-                      </span>
-                      <span className="text-[9px] font-bold text-white/20 leading-tight uppercase tracking-tighter">
-                        {opt.desc}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </TactileCard>
+                        {tone === opt.value && (
+                          <div className="absolute top-0 right-0 w-8 h-8 bg-kinetic-orange/20 blur-xl rounded-full" />
+                        )}
+                        <span
+                          className={cn(
+                            'text-[10px] font-black uppercase tracking-[0.2em] mb-1 font-headline italic',
+                            tone === opt.value ? 'text-kinetic-orange' : 'text-white/40'
+                          )}
+                        >
+                          {opt.label.split(' ')[1]}
+                        </span>
+                        <span className="text-[9px] font-bold text-white/20 leading-tight uppercase tracking-tighter">
+                          {opt.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </TactileCard>
+              )}
 
               {processedProducts.length > 0 && (
                 <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
@@ -473,28 +476,17 @@ export default function EnvioRapidoPage() {
                                   <Popover>
                                     <PopoverTrigger asChild>
                                       <div className="flex flex-col items-start gap-1 cursor-pointer group/price hover:bg-white/5 px-2 -ml-2 py-1 rounded-xl transition-all">
-                                        <div className="flex items-center gap-2">
-                                          {product.factual.originalPrice && product.factual.originalPrice > product.factual.currentPriceFactual! && (
-                                            <span className="text-[10px] line-through text-white/20 font-bold decoration-kinetic-orange/40">
-                                              {product.factual.originalPriceFormatted}
+                                          <div className="flex items-center gap-2">
+                                            {product.factual.originalPrice && product.factual.originalPrice > product.factual.currentPriceFactual! && (
+                                              <span className="text-[10px] line-through text-white/20 font-bold decoration-kinetic-orange/40">
+                                                {product.factual.originalPriceFormatted}
+                                              </span>
+                                            )}
+                                            <span className="text-[14px] font-black text-kinetic-orange shadow-glow-orange/10">
+                                              {product.factual.priceFormatted || 'Preço Indisponível'}
                                             </span>
-                                          )}
-                                          <span className="text-[14px] font-black text-kinetic-orange shadow-glow-orange/10">
-                                            {product.factual.priceFormatted || 'Preço Indisponível'}
-                                          </span>
-                                          <Info className="w-3 h-3 text-white/20 group-hover/price:text-kinetic-orange transition-colors" />
-                                        </div>
-                                        
-                                        {product.factual.estimatedPixPrice && (
-                                          <div className="flex items-center gap-1.5 bg-kinetic-orange/5 px-1.5 py-0.5 rounded-md border border-kinetic-orange/10">
-                                            <span className="text-[9px] font-black text-kinetic-orange/80 uppercase">
-                                              {product.factual.estimatedPixPriceFormatted}
-                                            </span>
-                                            <span className="text-[8px] font-bold text-white/40 uppercase tracking-tighter">
-                                              No Pix
-                                            </span>
+                                            <Info className="w-3 h-3 text-white/20 group-hover/price:text-kinetic-orange transition-colors" />
                                           </div>
-                                        )}
                                       </div>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-64 bg-deep-void border-none shadow-skeuo-elevated p-5 animate-in fade-in zoom-in duration-200 rounded-2xl ring-1 ring-white/5">
@@ -519,13 +511,6 @@ export default function EnvioRapidoPage() {
                                               <span className="text-[9px] uppercase text-white/20 font-black">Preço API</span>
                                               <span className="text-white/80">{product.factual.priceFormatted}</span>
                                             </div>
-                                            
-                                            {product.factual.estimatedPixPrice && (
-                                              <div className="flex justify-between items-baseline">
-                                                <span className="text-[9px] uppercase text-kinetic-orange/40 font-black">No Pix</span>
-                                                <span className="text-kinetic-orange/80">{product.factual.estimatedPixPriceFormatted}</span>
-                                              </div>
-                                            )}
 
                                             <div className="flex justify-between items-baseline pt-2 border-t border-white/5 text-kinetic-orange text-[12px] font-black">
                                               <span>COMISSÃO FINAL</span>
