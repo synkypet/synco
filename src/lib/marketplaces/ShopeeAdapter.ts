@@ -1,7 +1,7 @@
 // src/lib/marketplaces/ShopeeAdapter.ts
 // Adapter Shopee Pro — Fase 1: Auditoria e Normalização Factual.
 
-import { MarketplaceAdapter, ProductMetadata } from './BaseAdapter';
+import { MarketplaceAdapter, ProductMetadata, AffiliateResult } from './BaseAdapter';
 import { UserMarketplaceConnection } from '@/types/marketplace';
 import { ShopeeAffiliateClient } from '@/lib/shopee-affiliate/client';
 
@@ -10,31 +10,160 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
   canHandle(url: string): boolean {
     const lower = url.toLowerCase();
-    return lower.includes('shopee.com.br') || lower.includes('shope.ee');
+    return lower.includes('shopee.com.br') || lower.includes('shope.ee') || lower.includes('br.shp.ee');
   }
 
-  // ─── Limpeza e Resolução de URL ────────────────────────────────────────
+  // ─── Pré-processamento Explícito (Fase 1) ──────────────────────────────
 
-  async cleanUrl(url: string): Promise<string> {
+  /**
+   * Realiza o pré-processamento completo do link Shopee:
+   * classify -> resolve -> canonicalize -> re-affiliate
+   */
+  async preProcessIncomingLink(url: string, connection?: UserMarketplaceConnection): Promise<Partial<AffiliateResult>> {
+    const requestId = Math.random().toString(36).substring(7);
+    console.log(`[SHOPEE-PREPROCESS] [${requestId}] Início: ${url}`);
+    
+    // A. Classificar o link
+    const isShortS = url.includes('s.shopee.com.br');
+    const isShortLegacy = url.includes('shope.ee') || url.includes('br.shp.ee');
+    
+    if (isShortLegacy) {
+      console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link legacy shope.ee/br.shp.ee detectado.`);
+      return {
+        incoming_url: url,
+        reaffiliation_status: 'blocked',
+        reaffiliation_error: 'Links br.shp.ee não são suportados nesta fase.'
+      };
+    }
+
     let resolvedUrl = url;
+    let redirectChain: string[] = [url];
+    let status: 'not_needed' | 'resolved' | 'canonicalized' | 'reaffiliated' | 'blocked' | 'failed' = 'not_needed';
 
-    if (url.includes('shope.ee')) {
+    // B. Resolver o short link (apenas s.shopee.com.br)
+    if (isShortS) {
+      console.log(`[SHOPEE-PREPROCESS] [${requestId}] Resolvendo link curto...`);
       try {
-        const res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
-        resolvedUrl = res.url || url;
-      } catch {
-        resolvedUrl = url;
+        const resolution = await this.resolveShopeeShortLink(url);
+        resolvedUrl = resolution.resolvedUrl;
+        redirectChain = resolution.chain;
+        status = 'resolved';
+        console.log(`[SHOPEE-PREPROCESS] [${requestId}] Resolvido para: ${resolvedUrl}`);
+      } catch (error: any) {
+        console.error(`[SHOPEE-PREPROCESS] [${requestId}] Erro na resolução:`, error.message);
+        return {
+          incoming_url: url,
+          reaffiliation_status: 'failed',
+          reaffiliation_error: `Falha ao resolver link: ${error.message}`,
+          redirect_chain: redirectChain
+        };
       }
     }
 
+    // C. Canonicalizar a URL final
+    const canonicalUrl = await this.canonicalizeShopeeUrl(resolvedUrl);
+    if (status === 'resolved') status = 'canonicalized';
+    console.log(`[SHOPEE-PREPROCESS] [${requestId}] Canônico: ${canonicalUrl}`);
+
+    // D. Gerar novo link afiliado (Re-afiliação)
+    if (!connection?.shopee_app_id || !connection?.shopee_app_secret) {
+        console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Usuário não possui credenciais Shopee configuradas.`);
+        return {
+            incoming_url: url,
+            resolved_url: resolvedUrl,
+            canonical_url: canonicalUrl,
+            redirect_chain: redirectChain,
+            reaffiliation_status: 'blocked',
+            reaffiliation_error: 'Credenciais de afiliado Shopee ausentes para este usuário.'
+        };
+    }
+
     try {
-      const parsed = new URL(resolvedUrl);
-      const paramsToRemove = ['sp_atk', 'xptdk', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+      console.log(`[SHOPEE-PREPROCESS] [${requestId}] Gerando novo link de afiliado...`);
+      const generatedLink = await this.generateAffiliateLink(canonicalUrl, connection);
+      
+      // Validação de segurança: o adaptador não pode retornar o link original se as credenciais existem
+      if (!generatedLink || generatedLink === canonicalUrl) {
+        throw new Error('Falha técnica na geração do link de afiliado pela API');
+      }
+
+      console.log(`[SHOPEE-PREPROCESS] [${requestId}] Sucesso: ${generatedLink}`);
+      return {
+        incoming_url: url,
+        resolved_url: resolvedUrl,
+        canonical_url: canonicalUrl,
+        generated_affiliate_url: generatedLink,
+        redirect_chain: redirectChain,
+        reaffiliation_status: 'reaffiliated'
+      };
+    } catch (error: any) {
+      console.error(`[SHOPEE-PREPROCESS] [${requestId}] Erro na reafiliação:`, error.message);
+      return {
+        incoming_url: url,
+        resolved_url: resolvedUrl,
+        canonical_url: canonicalUrl,
+        redirect_chain: redirectChain,
+        reaffiliation_status: 'blocked',
+        reaffiliation_error: `Falha na reafiliação: ${error.message}`
+      };
+    }
+  }
+
+  /**
+   * Segue redirects manualmente para capturar a cadeia de redirecionamento.
+   */
+  private async resolveShopeeShortLink(url: string, maxRedirects = 10): Promise<{ resolvedUrl: string, chain: string[] }> {
+    let currentUrl = url;
+    const chain = [url];
+    let redirects = 0;
+
+    while (redirects < maxRedirects) {
+      const res = await fetch(currentUrl, { method: 'GET', redirect: 'manual' });
+      
+      // Redirect status codes: 301, 302, 303, 307, 308
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location');
+        if (location) {
+          const nextUrl = new URL(location, currentUrl).toString();
+          if (chain.includes(nextUrl)) break; // Evita loop infinito
+          currentUrl = nextUrl;
+          chain.push(currentUrl);
+          redirects++;
+          continue;
+        }
+      }
+      break;
+    }
+
+    return { resolvedUrl: currentUrl, chain };
+  }
+
+  /**
+   * Limpa a URL e normaliza o formato Shopee.
+   */
+  private async canonicalizeShopeeUrl(url: string): Promise<string> {
+    try {
+      const parsed = new URL(url);
+      
+      // Remover parâmetros de rastreamento comuns
+      const paramsToRemove = ['sp_atk', 'xptdk', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'smtt'];
       paramsToRemove.forEach(p => parsed.searchParams.delete(p));
+      
+      // Limpeza de ancoras e fragmentos desnecessários
+      parsed.hash = '';
+
       return parsed.toString();
     } catch {
-      return resolvedUrl;
+      return url;
     }
+  }
+
+  /**
+   * Legado para compatibilidade se algo ainda chamar diretamente
+   */
+  async cleanUrl(url: string): Promise<string> {
+    const pre = await this.preProcessIncomingLink(url);
+    return pre.canonical_url || url;
   }
 
   // ─── Helpers de Extração e Normalização ────────────────────────────────

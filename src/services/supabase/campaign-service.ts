@@ -114,7 +114,15 @@ export const campaignService = {
       affiliate_url: item.affiliate_url,
       image_url: item.image_url,
       external_product_id: item.external_product_id,
-      installments: item.installments
+      installments: item.installments,
+      // Rastreabilidade (Fase 1)
+      incoming_url: item.incoming_url,
+      resolved_url: item.resolved_url,
+      canonical_url: item.canonical_url,
+      generated_affiliate_url: item.generated_affiliate_url,
+      redirect_chain: item.redirect_chain || [],
+      reaffiliation_status: item.reaffiliation_status,
+      reaffiliation_error: item.reaffiliation_error
     }));
 
     const { data: insertedItems, error: itemsError } = await supabase
@@ -157,7 +165,10 @@ export const campaignService = {
           ? channelConfig.status === 'connected'
           : !!sessionId;
 
-        if (isConnected) {
+        const status = item.reaffiliation_status;
+        const isBlocked = status === 'blocked' || status === 'failed';
+
+        if (isConnected && !isBlocked) {
           const fallbackChannel = userChannels?.find(ch => 
             ch.id !== group.channel_id && 
             ch.config?.status === 'connected'
@@ -179,6 +190,8 @@ export const campaignService = {
             try_count: 0,
             fallback_channel_id: fallbackChannel?.id || null,
           });
+        } else if (isBlocked) {
+            console.warn(`[CAMPAIGN-SERVICE] Item ${item.id} pulado porque o status de reafiliação é: ${status}`);
         }
       });
     });
