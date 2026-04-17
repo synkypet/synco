@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import { Bot, X, Send, Sparkles, Loader2 } from 'lucide-react';
+import { DefaultChatTransport, UIMessage } from 'ai';
+import { Bot, X, Send, Sparkles, Loader2, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,20 @@ function getMessageText(msg: any): string {
     return '';
 }
 
+const INITIAL_MESSAGES = [
+    {
+        id: 'welcome-floating',
+        role: 'assistant' as const,
+        parts: [
+            {
+                type: 'text' as const,
+                text: `Olá! Eu sou o SYNKY. 🤖
+Posso te ajudar a gerar copys e analisar links de qualquer lugar do sistema. O que deseja fazer?`,
+            }
+        ],
+    }
+];
+
 const chatTransport = new DefaultChatTransport({
     api: '/api/ai/chat',
 });
@@ -28,10 +42,23 @@ const chatTransport = new DefaultChatTransport({
 export default function FloatingAIChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const scrollRef = React.useRef<HTMLDivElement>(null);
   
-  const { messages, status, sendMessage } = useChat({
+  const { messages, status, sendMessage, error } = useChat({
+    id: 'floating-synky-chat-unique-v2', // ID único para evitar conflitos
     transport: chatTransport,
+    messages: INITIAL_MESSAGES as any,
+    onError: (err) => {
+      console.error("[FloatingChat] Error:", err);
+    }
   });
+
+  // Auto-scroll robusto
+  React.useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, status, isOpen]);
 
   const isLoading = status === 'streaming' || status === 'submitted';
 
@@ -39,6 +66,7 @@ export default function FloatingAIChat() {
     e.preventDefault();
     const text = inputValue.trim();
     if (!text || isLoading) return;
+    
     setInputValue('');
     (sendMessage as any)({ text });
   };
@@ -80,7 +108,10 @@ export default function FloatingAIChat() {
         </div>
 
         {/* Mensagens */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-deep-void/40 custom-scrollbar min-h-0 flex flex-col">
+        <div 
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto p-4 space-y-4 bg-deep-void/40 custom-scrollbar min-h-0 flex flex-col"
+        >
           {messages.length === 0 && (
             <div className="flex-1 flex flex-col items-center justify-center text-center opacity-50 space-y-3">
                <Bot className="w-8 h-8 text-kinetic-orange" />
