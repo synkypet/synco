@@ -3,6 +3,7 @@
 import React, { useState, type ReactNode } from 'react';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import FloatingAIChat from '@/components/shared/FloatingAIChat';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* FloatingCartBar — será habilitado na Fase 2 */}
         {/* <FloatingCartBar /> */}
+
+        {/* Floating AI Chat (SYNKY) */}
+        <FloatingAIChat />
       </div>
   );
 }
