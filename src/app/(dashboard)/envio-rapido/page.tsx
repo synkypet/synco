@@ -67,6 +67,7 @@ export default function EnvioRapidoPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [isSaveListOpen, setIsSaveListOpen] = useState(false);
 
   const { data: savedLists, isLoading: loadingLists } = useDestinations(user?.id);
@@ -200,6 +201,7 @@ export default function EnvioRapidoPage() {
 
       const data = await res.json();
       setProcessedProducts(data.results);
+      setSelectedProductIds(data.results.map((p: any) => p.id));
       toast.success(`${data.results.length} link(s) processado(s) com sucesso!`);
     } catch (error) {
       console.error('Process error:', error);
@@ -212,6 +214,12 @@ export default function EnvioRapidoPage() {
   const handleToggleDestination = (id: string) => {
     setSelectedDestinations(prev =>
       prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleProduct = (id: string) => {
+    setSelectedProductIds(prev =>
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
     );
   };
 
@@ -247,9 +255,11 @@ export default function EnvioRapidoPage() {
       return;
     }
 
+    const selectedProducts = processedProducts.filter(p => selectedProductIds.includes(p.id));
+
     const campaignData = {
       name: `Envio Rápido - ${new Date().toLocaleDateString()}`,
-      items: processedProducts.map(p => ({
+      items: selectedProducts.map(p => ({
         product_id: p.id,
         product_name: p.factual.title,
         custom_text: p.copy.messageText || '',
@@ -436,7 +446,10 @@ export default function EnvioRapidoPage() {
                                 <img
                                   src={product.factual.image}
                                   alt=""
-                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                  className={cn(
+                                    "w-full h-full object-cover group-hover:scale-110 transition-transform duration-700",
+                                    !selectedProductIds.includes(product.id) && "grayscale opacity-50"
+                                  )}
                                 />
                             )}
                             <div className="absolute top-1.5 right-1.5">
@@ -447,14 +460,24 @@ export default function EnvioRapidoPage() {
                                 {product.factual.marketplace}
                               </Badge>
                             </div>
+                            <div className="absolute top-1.5 left-1.5">
+                              <Checkbox 
+                                checked={selectedProductIds.includes(product.id)}
+                                onCheckedChange={() => handleToggleProduct(product.id)}
+                                className="border-white/20 data-[state=checked]:bg-kinetic-orange data-[state=checked]:border-none"
+                              />
+                            </div>
                           </div>
                         </div>
 
                         <div className="flex-1 p-5 lg:p-6 space-y-4">
-                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                            <div className="flex-1 space-y-2">
                                 <div className="flex items-center gap-2 group/title">
-                                  <h4 className="text-[14px] font-black uppercase tracking-tight text-white/90 line-clamp-1 font-headline italic group-hover:text-kinetic-orange transition-colors">
+                                  <h4 className={cn(
+                                    "text-[14px] font-black uppercase tracking-tight line-clamp-1 font-headline italic transition-all",
+                                    selectedProductIds.includes(product.id) 
+                                      ? "text-white/90 group-hover:text-kinetic-orange" 
+                                      : "text-white/20"
+                                  )}>
                                     {product.factual.title}
                                   </h4>
                                   <Button
@@ -708,7 +731,7 @@ export default function EnvioRapidoPage() {
                                 </p>
                                 <div className="flex items-center gap-2 mt-1">
                                   <span className="text-[9px] text-white/20 font-bold uppercase">
-                                    {(group as any).members_count} Membros • Ativo
+                                    Ativo
                                   </span>
                                 </div>
                               </div>
@@ -739,7 +762,7 @@ export default function EnvioRapidoPage() {
               {activeCampaignId ? (
                 <BroadcastMonitor 
                   campaignId={activeCampaignId}
-                  productsCount={processedProducts.length}
+                  productsCount={selectedProductIds.length}
                   groupsCount={selectedDestinations.length}
                   onNewCampaign={() => {
                     setActiveCampaignId(null);
@@ -755,11 +778,11 @@ export default function EnvioRapidoPage() {
 
                   <div className="space-y-4 mb-8">
                     <div className="flex justify-between items-center text-[10px] bg-white/5 p-3 rounded-xl border border-white/5">
-                      <span className="text-white/30 font-bold uppercase tracking-widest">Payloads Gerados:</span>
-                      <span className="font-black text-white/80 italic">{processedProducts.length} ITENS</span>
+                      <span className="text-white/30 font-bold uppercase tracking-widest">Produtos Selecionados:</span>
+                      <span className="font-black text-white/80 italic">{selectedProductIds.length} ITENS</span>
                     </div>
                     <div className="flex justify-between items-center text-[10px] bg-white/5 p-3 rounded-xl border border-white/5">
-                      <span className="text-white/30 font-bold uppercase tracking-widest">Endpoints (Canais):</span>
+                      <span className="text-white/30 font-bold uppercase tracking-widest">Grupos de Destino:</span>
                       <span className="font-black text-white/80 italic">{selectedDestinations.length} DESTINOS</span>
                     </div>
                     <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent w-full my-2" />
@@ -769,7 +792,7 @@ export default function EnvioRapidoPage() {
                       </span>
                       <div className="flex flex-col items-end">
                         <span className="font-black text-kinetic-orange text-2xl shadow-glow-orange-intense font-headline italic leading-none">
-                          {processedProducts.length * selectedDestinations.length}
+                          {selectedProductIds.length * selectedDestinations.length}
                         </span>
                         <span className="text-[8px] font-bold text-white/10 uppercase tracking-tighter mt-1">
                           mensagens em fila
@@ -781,7 +804,7 @@ export default function EnvioRapidoPage() {
                   <KineticButton
                     className="w-full h-15 font-black uppercase tracking-[0.2em] text-[11px] font-headline italic rounded-2xl shadow-glow-orange-intense transition-all hover:scale-[1.02] active:scale-[0.98]"
                     disabled={
-                      isSending || processedProducts.length === 0 || selectedDestinations.length === 0
+                      isSending || selectedProductIds.length === 0 || selectedDestinations.length === 0
                     }
                     onClick={handleSend}
                   >
