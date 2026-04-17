@@ -10,3 +10,29 @@ CREATE EXTENSION IF NOT EXISTS "pg_net";         -- Se for usar webhooks nativos
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";      -- Para hashing e criptografia
 
 -- Adicione outras conforme necessário:
+[
+  {
+    "extname": "pg_graphql",
+    "extversion": "1.5.11"
+  },
+  {
+    "extname": "pg_stat_statements",
+    "extversion": "1.11"
+  },
+  {
+    "extname": "pgcrypto",
+    "extversion": "1.3"
+  },
+  {
+    "extname": "plpgsql",
+    "extversion": "1.0"
+  },
+  {
+    "extname": "supabase_vault",
+    "extversion": "0.3.1"
+  },
+  {
+    "extname": "uuid-ossp",
+    "extversion": "1.1"
+  }
+]

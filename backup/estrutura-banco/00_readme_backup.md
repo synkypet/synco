@@ -12,16 +12,16 @@ O objetivo deste pacote é permitir que um desenvolvedor consiga subir uma estru
 Estes arquivos foram gerados automaticamente a partir das migrations do projeto, mas podem exigir revisão se houver alterações manuais feitas diretamente no Dashboard do Supabase.
 - `01_schema_context.sql`: Contém as definições de `CREATE TABLE` das entidades principais.
 
-### 2. Documentação Estrutural
-- `02_tables_notes.md`: Resumo funcional das tabelas para facilitar o entendimento da arquitetura.
+### 2. Snapshots Estruturais (Estado Atual - JSON)
+Estes arquivos foram preenchidos com exportações reais do Supabase (Snapshot). Eles fornecem a referência exata das configurações de produção:
+- `03_policies.sql`: Políticas de RLS exportadas.
+- `04_functions.sql`: Definições de funções e lógicas de banco.
+- `05_triggers.sql`: Gatilhos de automação vinculados.
+- `06_indexes.sql`: Mapeamento de todos os índices de performance.
+- `07_extensions.sql`: Lista de extensões ativas e versões.
 
-### 3. Arquivos Manuais (Dependem do Usuário)
-Estes arquivos são placeholders. Você deve copiar o conteúdo correspondente do **Supabase SQL Editor** ou **Database Settings** para completá-los:
-- `03_policies.sql`: Políticas de Row Level Security (RLS).
-- `04_functions.sql`: Funções PostgreSQL e RPCs.
-- `05_triggers.sql`: Gatilhos de automação (ex: sync de webhooks).
-- `06_indexes.sql`: Índices de performance.
-- `07_extensions.sql`: Extensões necessárias (ex: `uuid-ossp`, `pg_net`).
+### 3. Documentação e Contexto
+- `02_tables_notes.md`: Resumo funcional revisado de TODAS as tabelas do sistema.
 
 ## Como usar este backup
 Para recriar o banco:

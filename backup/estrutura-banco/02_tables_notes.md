@@ -20,4 +20,12 @@ Este documento descreve a finalidade das principais tabelas do sistema para fins
 
 ## Monitoramento (Sources e Routes)
 - **`automation_sources`**: Grupos de origem que o sistema monitora em busca de links.
-- **`automation_routes`**: Regras de roteamento. Define de qual "Source" para qual destino (Grupo ou Lista) os links devem ser encaminhados, incluindo filtros e templates.
+- **`automation_routes`**: Regras de roteamento. Define de qual "Source" para qual destino (Grupo ou Lista) os links devem ser encaminhados.
+- **`automation_dedupe`**: Tabela técnica de controle de mensagens repetidas.
+- **`automation_logs`**: Observabilidade do pipeline de automação.
+
+## Outros Componentes
+- **`maintenance_locks`**: Gestão de concorrência para evitar que dois workers processem a mesma fila simultaneamente.
+- **`contacts`**: Cache de contatos e membros de grupos sincronizados.
+- **`templates`**: Biblioteca de mensagens predefinidas do usuário.
+- **`user_marketplace_secrets`**: Credenciais de API para integração com marketplaces (AppID, Secret).
