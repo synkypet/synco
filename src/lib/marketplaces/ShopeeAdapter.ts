@@ -143,6 +143,14 @@ export class ShopeeAdapter extends MarketplaceAdapter {
    */
   private async canonicalizeShopeeUrl(url: string): Promise<string> {
     try {
+      // 1. Tentar extrair IDs primeiro para canonicalização agressiva
+      const { shopId, itemId } = this.extractIds(url);
+      
+      if (shopId && itemId) {
+        // Formato universal e mais robusto para enrichment e persistência
+        return `https://shopee.com.br/product/${shopId}/${itemId}`;
+      }
+
       const parsed = new URL(url);
       
       // Remover parâmetros de rastreamento comuns
@@ -169,11 +177,19 @@ export class ShopeeAdapter extends MarketplaceAdapter {
   // ─── Helpers de Extração e Normalização ────────────────────────────────
 
   private extractIds(url: string) {
-    const match = url.match(/-i\.(\d+)\.(\d+)/) || url.match(/\/product\/(\d+)\/(\d+)/);
-    return {
-      shopId: match ? match[1] : null,
-      itemId: match ? match[2] : null
-    };
+    // 1. Padrão slug-i.shopId.itemId
+    const legacyMatch = url.match(/-i\.(\d+)\.(\d+)/);
+    if (legacyMatch) return { shopId: legacyMatch[1], itemId: legacyMatch[2] };
+
+    // 2. Padrão /product/shopId/itemId
+    const productMatch = url.match(/\/product\/(\d+)\/(\d+)/);
+    if (productMatch) return { shopId: productMatch[1], itemId: productMatch[2] };
+
+    // 3. Padrão /{slug}/{shopId}/{itemId} (Comum em redirects de short links)
+    const slugIdMatch = url.match(/\/([^\/?]+)\/(\d+)\/(\d+)/);
+    if (slugIdMatch) return { shopId: slugIdMatch[2], itemId: slugIdMatch[3] };
+
+    return { shopId: null, itemId: null };
   }
 
   private extractKeyword(url: string): string {
@@ -223,7 +239,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     const nameFallback = keyword ? keyword.charAt(0).toUpperCase() + keyword.slice(1) : 'Produto Shopee';
 
     const hasCredentials = connection?.shopee_app_id && connection?.shopee_app_secret;
-    if (!hasCredentials) return this.fallback(nameFallback);
+    if (!hasCredentials) return this.fallback(nameFallback, 'Missing credentials');
 
     try {
       const client = new ShopeeAffiliateClient({
@@ -237,7 +253,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       ]);
 
       const allNodes = [...exactNodes, ...keywordNodes];
-      if (allNodes.length === 0) return this.fallback(nameFallback);
+      if (allNodes.length === 0) return this.fallback(nameFallback, 'No nodes found in API');
 
       const ranked = allNodes
         .map(node => ({
@@ -283,6 +299,16 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       const installments = currentPriceFactual > 50 
         ? `3x de R$ ${installmentsVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
         : null;
+
+      // Validação de qualidade mínima (Hard Guardrail)
+      const hasImage = !!winner.imageUrl && winner.imageUrl.length > 10;
+      const hasRealTitle = !!winner.productName && winner.productName.length > 5 && winner.productName !== nameFallback;
+      const isGoodMatch = ranked[0].score >= 80; // Pelo menos itemId ou shopId bateram
+
+      if (!hasImage || !hasRealTitle || !isGoodMatch) {
+         console.warn(`[SHOPEE ADAPTER] Metadata insuficiente para ${url}. Image: ${hasImage}, Title: ${hasRealTitle}, Score: ${ranked[0].score}`);
+         return this.fallback(winner.productName || nameFallback, 'Insufficient quality');
+      }
 
       console.log('--- [SHOPEE PRO AUDIT] ---');
       console.log(`Vencedor: ${winner.productName}`);
@@ -334,7 +360,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
     } catch (error: any) {
       console.error('[SHOPEE ADAPTER] Erro:', error.message);
-      return this.fallback(nameFallback);
+      return this.fallback(nameFallback, error.message);
     }
   }
 
@@ -352,7 +378,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     }
   }
 
-  private fallback(name: string): ProductMetadata {
+  private fallback(name: string, reason?: string): ProductMetadata {
     return {
       name,
       originalPrice: 0,
@@ -364,7 +390,8 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       discountPercent: 0,
       imageUrl: '',
       marketplace: 'Shopee',
-      metadata_failed: true
+      metadata_failed: true,
+      metadata_error: reason
     };
   }
 }

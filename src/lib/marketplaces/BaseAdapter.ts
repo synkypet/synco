@@ -10,6 +10,7 @@ export interface ProductMetadata {
   imageUrl: string;
   marketplace: string;
   metadata_failed?: boolean;
+  metadata_error?: string;
   commissionRate?: number;
   commissionValue?: number;
   
