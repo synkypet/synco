@@ -157,8 +157,10 @@ export const campaignService = {
 
     insertedItems.forEach(item => {
       uniqueGroups.forEach(group => {
-        const channelConfig = (group.channels as any)?.config || {};
-        const channelType = (group.channels as any)?.type || 'whatsapp';
+        // Suporte tanto para objeto único quanto para array (formato padrão do Supabase em joins)
+        const channelData = Array.isArray(group.channels) ? group.channels[0] : group.channels;
+        const channelConfig = (channelData as any)?.config || {};
+        const channelType = (channelData as any)?.type || 'whatsapp';
         const sessionId = channelConfig.sessionId || channelConfig.bot_id || null;
 
         const isConnected = channelType === 'telegram' 

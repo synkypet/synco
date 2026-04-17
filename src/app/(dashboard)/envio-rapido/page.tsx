@@ -282,7 +282,18 @@ export default function EnvioRapidoPage() {
         product_name: p.factual.title,
         custom_text: p.copy.messageText || '',
         image_url: p.factual.image || undefined,
-        affiliate_url: p.factual.finalLinkToSend
+        affiliate_url: p.factual.finalLinkToSend || p.factual.originalUrl,
+        
+        // --- FÓRMULA OPERACIONAL (Fase 1: Rastreabilidade) ---
+        incoming_url: p.factual.incoming_url,
+        resolved_url: p.factual.resolved_url,
+        canonical_url: p.factual.canonical_url,
+        generated_affiliate_url: p.factual.generated_affiliate_url,
+        redirect_chain: p.factual.redirect_chain,
+        reaffiliation_status: p.factual.reaffiliation_status,
+        reaffiliation_error: p.factual.reaffiliation_error,
+        external_product_id: p.factual.itemId?.toString(),
+        installments: p.factual.installments
       })),
       destinations: selectedDestinations.map(id => ({
         id,
