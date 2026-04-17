@@ -374,20 +374,19 @@ export class WasenderClient {
     // O wasender muitas vezes volta sucesso no HTTP mas erro no JSON
     const data = await res.json();
     
-    // Sucesso Real: Presença de identificador de mensagem
+    // Sucesso Real: Baseado no campo success ou presença de identificador
     // O Wasender pode retornar status 'pending', 'accepted', 'sent', etc.
-    // Se ele nos devolveu um ID, ele assumiu a responsabilidade pelo envio.
-    const hasId = !!(data?.message_id || data?.id || data?.data?.id || data?.messageId);
+    const hasId = !!(data?.message_id || data?.id || data?.data?.id || data?.messageId || data?.data?.msgId);
 
-    if (!res.ok || !hasId) {
-      const errorMsg = data.message || data.error || JSON.stringify(data.errors) || 'Unknown Error (No ID returned)';
+    if (!res.ok || data.success === false) {
+      const errorMsg = data.message || data.error || JSON.stringify(data.errors) || 'Unknown Error';
       console.error(`[WASENDER-CLIENT] [SEND-FAILURE] Status: ${res.status} | Content: ${JSON.stringify(data)}`);
       throw new Error(`Failed to send message: ${errorMsg}`);
     }
 
-    // Normalizar retorno para garantir id no topo
+    // Normalizar retorno para garantir id no topo (usado pelo worker/monitor)
     if (!data.id && hasId) {
-        data.id = data.message_id || data.data?.id || data.messageId;
+        data.id = data.message_id || data.data?.id || data.messageId || data.data?.msgId;
     }
 
     return data;

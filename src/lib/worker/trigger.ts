@@ -20,32 +20,22 @@ export async function triggerWorker(options: TriggerOptions = {}): Promise<boole
 
   // --- RESOLUÇÃO DE URL CENTRALIZADA (FRENTE 3) ---
   const vercelEnv = process.env.VERCEL_ENV || process.env.NEXT_PUBLIC_VERCEL_ENV;
-  const officialAppUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  const officialAppUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://synco-six.vercel.app';
   
   let finalBaseUrl = '';
 
   if (vercelEnv === 'production') {
     // 1. Prioridade absoluta para Produção: URL oficial configurada
-    finalBaseUrl = officialAppUrl || '';
+    finalBaseUrl = officialAppUrl;
   } else if (vercelEnv === 'preview') {
-    // 2. Prioridade para Preview: Host da requisição atual ou VERCEL_URL da branch
-    finalBaseUrl = baseUrl || (host ? `${host.includes('localhost') ? 'http' : 'https'}://${host}` : '') || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
+    // 2. Em Preview, preferimos a URL oficial se disponível para evitar 401
+    // Mas se o host vier na opção (ex: manual dashboard), usamos o host.
+    finalBaseUrl = officialAppUrl || baseUrl || (host ? `${host.includes('localhost') ? 'http' : 'https'}://${host}` : '') || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
   }
 
-  // 3. Fallback final (Localhost ou variáveis persistentes)
+  // 3. Fallback final
   if (!finalBaseUrl) {
-    if (baseUrl) {
-      finalBaseUrl = baseUrl;
-    } else if (host) {
-      const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
-      finalBaseUrl = `${protocol}://${host}`;
-    } else if (officialAppUrl) {
-      finalBaseUrl = officialAppUrl;
-    } else if (process.env.VERCEL_URL) {
-      finalBaseUrl = `https://${process.env.VERCEL_URL}`;
-    } else {
-      finalBaseUrl = 'http://localhost:3000';
-    }
+    finalBaseUrl = officialAppUrl || 'https://synco-six.vercel.app';
   }
 
   const workerUrl = `${finalBaseUrl}/api/send-jobs/process`;

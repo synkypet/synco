@@ -24,7 +24,7 @@ export class WhatsAppProvider implements ChannelProvider {
     try {
       console.log(`[WHATSAPP-PROVIDER] [${new Date().toISOString()}] final payload mode: text-only | dest: ${destination}`);
       const data = await WasenderClient.sendMessage(apiKey, destination, text);
-      const messageId = data?.message_id || data?.id || data?.data?.id || null;
+      const messageId = data?.message_id || data?.id || data?.data?.id || data?.data?.msgId || null;
       return {
         success: true,
         messageId: messageId?.toString() || null,
@@ -49,7 +49,7 @@ export class WhatsAppProvider implements ChannelProvider {
       console.log(`[WHATSAPP-PROVIDER] [${new Date().toISOString()}] final payload mode: image+caption | dest: ${destination}`);
       
       const data = await WasenderClient.sendMessage(apiKey, destination, caption, mediaUrl);
-      const messageId = data?.message_id || data?.id || data?.data?.id || null;
+      const messageId = data?.message_id || data?.id || data?.data?.id || data?.data?.msgId || null;
       
       return {
         success: true,
