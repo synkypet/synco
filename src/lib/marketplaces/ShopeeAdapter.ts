@@ -65,6 +65,37 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     if (status === 'resolved') status = 'canonicalized';
     console.log(`[SHOPEE-PREPROCESS] [${requestId}] Canônico: ${canonicalUrl}`);
 
+    // --- CLASSIFICAÇÃO DE TIPO DE LINK (FRENTE 2) ---
+    // Valida se o link resultante é de fato um produto enriquecível ou uma página institucional/promo
+    const { shopId, itemId } = this.extractIds(canonicalUrl);
+    const isProduct = !!(shopId && itemId);
+
+    if (!isProduct) {
+        console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link não é de produto.`);
+        
+        let reason = 'Link Shopee não é produto (capa/promo/categoria)';
+        const lowerUrl = canonicalUrl.toLowerCase();
+        
+        if (lowerUrl.includes('/cart')) {
+          reason = 'Link Shopee não é produto (carrinho)';
+        } else if (lowerUrl.includes('/voucher-wallet') || lowerUrl.includes('/user/voucher')) {
+          reason = 'Link Shopee não é produto (cupom)';
+        } else if (lowerUrl.includes('/m/')) {
+          reason = 'Link Shopee não é produto (landing promocional)';
+        } else if (lowerUrl.includes('/events/')) {
+          reason = 'Link Shopee não é produto (evento promocional)';
+        }
+
+        return {
+            incoming_url: url,
+            resolved_url: resolvedUrl,
+            canonical_url: canonicalUrl,
+            redirect_chain: redirectChain,
+            reaffiliation_status: 'blocked',
+            reaffiliation_error: reason
+        };
+    }
+
     // D. Gerar novo link afiliado (Re-afiliação)
     if (!connection?.shopee_app_id || !connection?.shopee_app_secret) {
         console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Usuário não possui credenciais Shopee configuradas.`);
