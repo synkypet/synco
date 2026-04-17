@@ -181,7 +181,7 @@ export function buildProductSnapshot(opts: {
     itemId: metadata.itemId,
     shopId: metadata.shopId,
     shopName: metadata.shopName,
-    title: metadata.name || (reaffiliation?.reaffiliation_status === 'blocked' ? 'PRODUTO BLOQUEADO' : 'Produto sem título'),
+    title: metadata.name || (reaffiliation?.reaffiliation_status === 'blocked' || reaffiliation?.reaffiliation_status === 'failed' ? 'PRODUTO BLOQUEADO' : 'Produto sem título'),
     image: metadata.imageUrl || null,
     installments: metadata.installments || null,
     
@@ -251,80 +251,91 @@ export async function processLinks(
     const id = `proc_${Date.now()}_${results.length}`;
     const marketplace = detectMarketplace(link);
     const adapter = findAdapter(link);
+    
+    let metadata = null;
+    let preResult = null;
+    let connection = null;
 
-    if (adapter) {
-      try {
+    try {
+      if (adapter) {
+        // Encontrar conexão do usuário para este marketplace
         const dbMarketplaceName = marketplace.toLowerCase().trim();
-        const connection = userConnections.find(c => {
+        connection = userConnections.find(c => {
           const connName = (c.marketplace_name || "").toLowerCase().trim();
           return connName === dbMarketplaceName || connName.includes(dbMarketplaceName);
         });
 
-        const result: AffiliateResult = await adapter.process(link, connection);
-
-        const snapshot = buildProductSnapshot({
-          id,
-          originalUrl: link,
-          metadata: result.metadata || { 
-            name: result.reaffiliation_status === 'blocked' ? 'PRODUTO BLOQUEADO' : `Produto ${marketplace} (Tracking)`,
-            metadata_failed: true 
-          },
-          affiliateUrl: result.affiliateUrl,
-          tone,
-          reaffiliation: {
-            incoming_url: result.incoming_url,
-            resolved_url: result.resolved_url,
-            canonical_url: result.canonical_url,
-            generated_affiliate_url: result.generated_affiliate_url,
-            redirect_chain: result.redirect_chain,
-            reaffiliation_status: result.reaffiliation_status,
-            reaffiliation_error: result.reaffiliation_error
-          }
-        });
-
-        // ─── Refinamento por IA (Apenas se NÃO estiver bloqueado) ─────────────
-        if (snapshot.factual.reaffiliation_status !== 'blocked' && snapshot.factual.reaffiliation_status !== 'failed') {
-          try {
-            const refinedBlurb = await refineOfferCopy({
-              productName: snapshot.factual.title,
-              price: snapshot.factual.priceFormatted,
-              originalPrice: snapshot.factual.originalPriceFormatted,
-              pixPrice: snapshot.factual.estimatedPixPriceFormatted,
-              installments: snapshot.factual.installments,
-              link: snapshot.factual.finalLinkToSend,
-              highlights: [] 
-            });
+        // A. Pré-processamento (Fase 1: Reafiliação)
+        preResult = await adapter.preProcessIncomingLink(link, connection);
+        
+        // B. Enrichment (Metadata) - Somente se não estiver bloqueado/falhado
+        const canEnrich = preResult.reaffiliation_status !== 'blocked' && preResult.reaffiliation_status !== 'failed';
+        if (canEnrich) {
+            const targetUrl = preResult.canonical_url || link;
+            metadata = await adapter.fetchMetadata(targetUrl, connection);
             
-            // RE-CONSTRUIR a mensagem final usando o blurb refinado
-            snapshot.copy.messageText = buildMessageFromSnapshot(snapshot.factual, refinedBlurb);
-            snapshot.copy.toneUsed = 'ai-refined';
-          } catch (aiError) {
-            console.error(`linkProcessor: AI Refinement failed for ${link}:`, aiError);
-            // O messageText já contém o fallback determinístico do buildProductSnapshot
-          }
-        } else {
-          console.warn(`linkProcessor: Skipping AI Refinement for ${link} because it is BLOCKED or FAILED.`);
-          snapshot.copy.messageText = `⚠️ Item Bloqueado: ${snapshot.factual.reaffiliation_error || 'Falha na reaffiliação'}`;
+            // C. Validação de Metadados (Metadata Guardrail)
+            if (metadata?.metadata_failed) {
+                console.warn(`[LINK-PROCESSOR] Meta Guardrail: Falha de qualidade para ${link}: ${metadata.metadata_error}`);
+                preResult.reaffiliation_status = 'failed';
+                preResult.reaffiliation_error = metadata.metadata_error || 'Metadados insuficientes';
+            }
         }
-
-        results.push(snapshot);
-      } catch (error) {
-        console.error(`linkProcessor: Failed to process ${link}:`, error);
-        results.push(buildProductSnapshot({
-          id,
-          originalUrl: link,
-          metadata: { name: `Erro no Processamento: ${marketplace}`, metadata_failed: true },
-          affiliateUrl: link,
-          tone,
-          reaffiliation: {
-            incoming_url: link,
-            canonical_url: link,
-            reaffiliation_status: 'failed',
-            reaffiliation_error: error instanceof Error ? error.message : String(error)
-          }
-        }));
       }
-    } else {
+
+      // 2. Construção do Snapshot inicial (Factual/Deterministico)
+      const snapshot = buildProductSnapshot({
+        id,
+        originalUrl: link,
+        metadata: metadata || {},
+        affiliateUrl: preResult?.generated_affiliate_url || link,
+        tone,
+        reaffiliation: {
+          incoming_url: link,
+          resolved_url: preResult?.resolved_url,
+          canonical_url: preResult?.canonical_url || link,
+          generated_affiliate_url: preResult?.generated_affiliate_url,
+          redirect_chain: preResult?.redirect_chain,
+          reaffiliation_status: preResult?.reaffiliation_status || 'not_needed',
+          reaffiliation_error: preResult?.reaffiliation_error
+        }
+      });
+
+      // 3. AI Refinement (Enrichment) - SOMENTE se estiver sucesso real
+      const isSuccess = snapshot.factual.reaffiliation_status === 'reaffiliated' || 
+                        snapshot.factual.reaffiliation_status === 'success' || 
+                        snapshot.factual.reaffiliation_status === 'not_needed';
+
+      if (isSuccess && !metadata?.metadata_failed) {
+        try {
+          const refinedBlurb = await refineOfferCopy({
+            productName: snapshot.factual.title,
+            price: snapshot.factual.priceFormatted,
+            originalPrice: snapshot.factual.originalPriceFormatted,
+            pixPrice: snapshot.factual.estimatedPixPriceFormatted,
+            installments: snapshot.factual.installments,
+            link: snapshot.factual.finalLinkToSend,
+            highlights: [] 
+          });
+          
+          // Re-construir a mensagem final usando o blurb refinado
+          snapshot.copy.messageText = buildMessageFromSnapshot(snapshot.factual, refinedBlurb);
+          snapshot.copy.toneUsed = 'ai-refined';
+        } catch (aiError: any) {
+          console.error(`linkProcessor: AI Refinement failed for ${link}:`, aiError.message);
+        }
+      } else {
+        console.warn(`linkProcessor: Skipping AI Refinement for ${link} (Status: ${snapshot.factual.reaffiliation_status})`);
+        // Em caso de erro, ajusta a mensagem final para indicar o erro operacional
+        if (snapshot.factual.reaffiliation_status === 'blocked' || snapshot.factual.reaffiliation_status === 'failed') {
+            snapshot.copy.messageText = `⚠️ ITEM PARADO: ${snapshot.factual.reaffiliation_error || 'Falha na validação factual'}`;
+        }
+      }
+
+      results.push(snapshot);
+
+    } catch (error: any) {
+      console.error(`linkProcessor: Critical failure processing ${link}:`, error.message);
       results.push(buildProductSnapshot({
         id,
         originalUrl: link,
