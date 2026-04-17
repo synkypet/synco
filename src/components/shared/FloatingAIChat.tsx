@@ -135,6 +135,16 @@ export default function FloatingAIChat() {
                 <div className="w-1.5 h-1.5 bg-kinetic-orange/80 rounded-full animate-bounce" />
              </div>
           )}
+          {error && (
+            <div className="max-w-[90%] rounded-xl p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-[11px] mr-auto flex flex-col gap-1">
+              <p className="font-bold flex items-center gap-1">
+                <X className="w-3 h-3" /> ERRO DE CONEXÃO / COTA
+              </p>
+              <p className="opacity-80">
+                A API do Gemini parece ter atingido o limite de cota ou está offline. Tente novamente em alguns instantes.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Input */}
