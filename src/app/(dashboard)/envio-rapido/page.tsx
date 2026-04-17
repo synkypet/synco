@@ -471,28 +471,30 @@ export default function EnvioRapidoPage() {
                         </div>
 
                         <div className="flex-1 p-5 lg:p-6 space-y-4">
-                                <div className="flex items-center gap-2 group/title">
-                                  <h4 className={cn(
-                                    "text-[14px] font-black uppercase tracking-tight line-clamp-1 font-headline italic transition-all",
-                                    selectedProductIds.includes(product.id) 
-                                      ? "text-white/90 group-hover:text-kinetic-orange" 
-                                      : "text-white/20"
-                                  )}>
-                                    {product.factual.title}
-                                  </h4>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 px-3 rounded-lg bg-white/5 hover:bg-kinetic-orange/20 hover:text-kinetic-orange flex items-center gap-2 transition-all opacity-0 group-hover/title:opacity-100 border border-white/5"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(product.factual.finalLinkToSend);
-                                      toast.success('Link original copiado para a área de transferência');
-                                    }}
-                                  >
-                                    <Copy className="w-3 h-3 text-kinetic-orange" />
-                                    <span className="text-[8px] font-black uppercase tracking-widest">COPIAR LINK</span>
-                                  </Button>
-                                </div>
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center gap-2 group/title">
+                                <h4 className={cn(
+                                  "text-[14px] font-black uppercase tracking-tight line-clamp-1 font-headline italic transition-all",
+                                  selectedProductIds.includes(product.id) 
+                                    ? "text-white/90 group-hover:text-kinetic-orange" 
+                                    : "text-white/20"
+                                )}>
+                                  {product.factual.title}
+                                </h4>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-3 rounded-lg bg-white/5 hover:bg-kinetic-orange/20 hover:text-kinetic-orange flex items-center gap-2 transition-all opacity-0 group-hover/title:opacity-100 border border-white/5"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(product.factual.finalLinkToSend);
+                                    toast.success('Link original copiado para a área de transferência');
+                                  }}
+                                >
+                                  <Copy className="w-3 h-3 text-kinetic-orange" />
+                                  <span className="text-[8px] font-black uppercase tracking-widest">COPIAR LINK</span>
+                                </Button>
+                              </div>
 
                               <div className="flex flex-wrap items-center gap-3">
                                 {product.metadata.source !== 'fallback' && product.factual.price && product.factual.price > 0 ? (
