@@ -73,7 +73,15 @@ export async function POST(request: Request) {
     // 2. Identificar Canais com Jobs Pendentes
     const { count: totalPendingInitial } = await supabase.from('send_jobs').select('*', { count: 'exact', head: true }).eq('status', 'pending');
 
-    const CHANNELS_PER_BATCH = 15;
+    const CHANNELS_PER_BATCH = 8; // Reduzido para maior segurança em serverless (FRENTE 4)
+    const WORKER_DEADLINE_MS = 45000; // 45 segundos de teto operacional
+    const startTime = Date.now();
+
+    // Controle de profundidade de retrigger (Anti-loop 508)
+    const incomingDepth = parseInt(request.headers.get('x-worker-depth') || '0', 10);
+    const currentDepth = incomingDepth;
+    const MAX_DEPTH = 3;
+
     const { data: recentPendingJobs, error: sampleError } = await supabase
       .from('send_jobs')
       .select('channel_id')
@@ -85,20 +93,28 @@ export async function POST(request: Request) {
 
     const activeChannelIds = [...new Set((recentPendingJobs || []).map(j => j.channel_id))].slice(0, CHANNELS_PER_BATCH);
 
-    console.log(`[WORKER-STATS] [${requestId}] Total Pending: ${totalPendingInitial}, Active Channels found: ${activeChannelIds.length}`);
+    console.log(`[WORKER-STATS] [${requestId}] Depth: ${currentDepth}, Pending: ${totalPendingInitial}, Batch: ${activeChannelIds.length}`);
 
     if (activeChannelIds.length === 0) {
-      return NextResponse.json({ processed: 0, message: 'No pending jobs' });
+      return NextResponse.json({ processed: 0, message: 'No pending jobs', depth: currentDepth });
     }
 
     const results: any[] = [];
     let processedAny = false;
-    let minRemainingMs = Infinity;
     let pacingSkipCount = 0;
     let lockedSkipCount = 0;
+    let deadlineReached = false;
 
     // 3. Processamento Serial por Canal
     for (const channelId of activeChannelIds) {
+      // Check de Deadline operacional
+      const elapsed = Date.now() - startTime;
+      if (elapsed > WORKER_DEADLINE_MS) {
+        console.warn(`[WORKER-DEADLINE] [${requestId}] Atingido limite de 45s. Encerrando batch prematuramente.`);
+        deadlineReached = true;
+        break;
+      }
+
       const { data: hasLock } = await supabase.rpc('claim_channel_lock', {
         p_channel_id: channelId,
         p_worker_id: requestId,
@@ -120,7 +136,6 @@ export async function POST(request: Request) {
 
         if (!pacing.isPaced) {
           pacingSkipCount++;
-          minRemainingMs = Math.min(minRemainingMs, pacing.remainingMs);
           logJob('INFO', 'N/A', { action: 'pacing_skip', channelId, remaining_cooldown_ms: pacing.remainingMs }, requestId);
           continue;
         }
@@ -175,49 +190,45 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Agendamento do Próximo Ciclo (Auto-Retrigger)
+    // 4. Agendamento do Próximo Ciclo (Auto-Retrigger Controlado)
     const { count: finalPendingCount } = await supabase.from('send_jobs').select('*', { count: 'exact', head: true }).eq('status', 'pending');
 
-    console.log(`[WORKER-BATCH-RESULT] [${requestId}] Processed: ${results.length}, Pacing Skips: ${pacingSkipCount}, Locked Skips: ${lockedSkipCount}, Still Pending: ${finalPendingCount}`);
+    console.log(`[WORKER-BATCH-RESULT] [${requestId}] Processed: ${results.length}, Pending: ${finalPendingCount}, Deadline: ${deadlineReached}`);
 
     if (finalPendingCount && finalPendingCount > 0) {
       let shouldRetrigger = false;
-      let triggerMode: 'await' | 'fire-forget' = 'fire-forget';
+      let stopReason = '';
 
-      if (processedAny) {
-        // Se processamos algo, continuamos drenando imediatamente.
-        // MUDANÇA: Usamos fire-forget para não acumular execução na Vercel (evitar timeout em cadeia).
-        shouldRetrigger = true;
-        triggerMode = 'fire-forget';
-      } else if (pacingSkipCount > 0 && minRemainingMs !== Infinity) {
-        // Nada enviado, apenas pulado por pacing. Aguardar o cooldown restante (com limite seguro)
-        const waitMs = Math.min(minRemainingMs, MAX_SLEEP_MS);
-        console.log(`[WORKER-WAIT] [${requestId}] Nada elegível no momento. Aguardando ${waitMs}ms de cooldown...`);
-        await sleep(waitMs);
-        shouldRetrigger = true;
-        triggerMode = 'fire-forget';
-      } else {
-        console.log(`[WORKER-IDLE] [${requestId}] Jobs pendentes mas nenhum elegível (todos bloqueados). Aguardando Heartbeat.`);
+      if (currentDepth >= MAX_DEPTH) {
         shouldRetrigger = false;
+        stopReason = 'MAX_DEPTH_REACHED';
+      } else if (deadlineReached) {
+        // Se parou por deadline, forçamos um retrigger imediato para o próximo batch continuar
+        shouldRetrigger = true;
+      } else if (processedAny) {
+        // Se processou algo nesta rodada, continua drenando
+        shouldRetrigger = true;
+      } else {
+        // Se não processou nada (ex: tudo em cooldown/lock), não re-dispara.
+        // O Heartbeat cuidará de retomar no futuro. Isso evita loops de 508.
+        shouldRetrigger = false;
+        stopReason = 'CONGESTION_IDLE';
       }
 
       if (shouldRetrigger) {
-        console.log(`[WORKER-DECISION] [${requestId}] Status: RETRIGGER (${triggerMode}).`);
+        console.log(`[WORKER-DECISION] [${requestId}] Status: RETRIGGER (Next Depth: ${currentDepth + 1}).`);
         
-        // Dispara o próximo ciclo de forma não-bloqueante.
-        // triggerWorker utiliza waitUntil internamente para garantir sobrevivência em serverless.
         triggerWorker({ 
           host, 
           requestId: `next-${requestId.slice(0,5)}`,
-          shouldAwait: false 
+          shouldAwait: false,
+          depth: currentDepth + 1,
+          source: 'autoretrigger'
         });
       } else {
-        console.log(`[WORKER-DECISION] [${requestId}] Status: STOP (Idle/Blocked).`);
+        console.log(`[WORKER-DECISION] [${requestId}] Status: STOP (${stopReason}).`);
       }
-    } else {
-        console.log(`[WORKER-DECISION] [${requestId}] Status: FINISHED (Queue empty).`);
     }
-
     return NextResponse.json({ 
       processed: results.length, 
       remaining: finalPendingCount || 0, 
