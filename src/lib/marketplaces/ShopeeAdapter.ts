@@ -65,6 +65,37 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     if (status === 'resolved') status = 'canonicalized';
     console.log(`[SHOPEE-PREPROCESS] [${requestId}] Canônico: ${canonicalUrl}`);
 
+    // --- CLASSIFICAÇÃO DE TIPO DE LINK (FRENTE 2) ---
+    // Valida se o link resultante é de fato um produto enriquecível ou uma página institucional/promo
+    const { shopId, itemId } = this.extractIds(canonicalUrl);
+    const isProduct = !!(shopId && itemId);
+
+    if (!isProduct) {
+        console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link não é de produto.`);
+        
+        let reason = 'Link Shopee não é produto (capa/promo/categoria)';
+        const lowerUrl = canonicalUrl.toLowerCase();
+        
+        if (lowerUrl.includes('/cart')) {
+          reason = 'Link Shopee não é produto (carrinho)';
+        } else if (lowerUrl.includes('/voucher-wallet') || lowerUrl.includes('/user/voucher')) {
+          reason = 'Link Shopee não é produto (cupom)';
+        } else if (lowerUrl.includes('/m/')) {
+          reason = 'Link Shopee não é produto (landing promocional)';
+        } else if (lowerUrl.includes('/events/')) {
+          reason = 'Link Shopee não é produto (evento promocional)';
+        }
+
+        return {
+            incoming_url: url,
+            resolved_url: resolvedUrl,
+            canonical_url: canonicalUrl,
+            redirect_chain: redirectChain,
+            reaffiliation_status: 'blocked',
+            reaffiliation_error: reason
+        };
+    }
+
     // D. Gerar novo link afiliado (Re-afiliação)
     if (!connection?.shopee_app_id || !connection?.shopee_app_secret) {
         console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Usuário não possui credenciais Shopee configuradas.`);
@@ -111,28 +142,71 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
   /**
    * Segue redirects manualmente para capturar a cadeia de redirecionamento.
+   * Implementa timeout de 5s e 1 retry controlado.
    */
   private async resolveShopeeShortLink(url: string, maxRedirects = 10): Promise<{ resolvedUrl: string, chain: string[] }> {
     let currentUrl = url;
     const chain = [url];
     let redirects = 0;
+    const MAX_RETRIES = 1;
+    const TIMEOUT_MS = 5000;
 
     while (redirects < maxRedirects) {
-      const res = await fetch(currentUrl, { method: 'GET', redirect: 'manual' });
-      
-      // Redirect status codes: 301, 302, 303, 307, 308
-      if (res.status >= 300 && res.status < 400) {
-        const location = res.headers.get('location');
-        if (location) {
-          const nextUrl = new URL(location, currentUrl).toString();
-          if (chain.includes(nextUrl)) break; // Evita loop infinito
-          currentUrl = nextUrl;
-          chain.push(currentUrl);
-          redirects++;
-          continue;
+      let attempts = 0;
+      let success = false;
+      let lastError: any = null;
+
+      while (attempts <= MAX_RETRIES && !success) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+        
+        try {
+          const res = await fetch(currentUrl, { 
+            method: 'GET', 
+            redirect: 'manual',
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeout);
+          success = true;
+
+          // Redirect status codes: 301, 302, 303, 307, 308
+          if (res.status >= 300 && res.status < 400) {
+            const location = res.headers.get('location');
+            if (location) {
+              const nextUrl = new URL(location, currentUrl).toString();
+              if (chain.includes(nextUrl)) break; // Evita loop infinito
+              currentUrl = nextUrl;
+              chain.push(currentUrl);
+              redirects++;
+              continue;
+            }
+          }
+          // Se não for redirect, saímos do loop de redirects
+          return { resolvedUrl: currentUrl, chain };
+
+        } catch (error: any) {
+          clearTimeout(timeout);
+          attempts++;
+          lastError = error;
+          
+          const isTimeout = error.name === 'AbortError';
+          const errorType = isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR';
+          
+          console.warn(`[SHOPEE-RESOLVE] [ATTEMPT:${attempts}] ${errorType} para ${currentUrl}: ${error.message}`);
+          
+          if (attempts <= MAX_RETRIES) {
+            console.log(`[SHOPEE-RESOLVE] Tentando novamente (${attempts}/${MAX_RETRIES})...`);
+            // Pequeno delay antes do retry
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         }
       }
-      break;
+
+      if (!success) {
+        const finalErrorType = lastError?.name === 'AbortError' ? 'TIMEOUT_PERMANENT' : 'FETCH_EXCEPTION';
+        throw new Error(`${finalErrorType}: ${lastError?.message || 'Erro desconhecido'}`);
+      }
     }
 
     return { resolvedUrl: currentUrl, chain };

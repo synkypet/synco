@@ -217,20 +217,6 @@ export async function POST(request: Request) {
            console.warn(`[WEBHOOK-WARNING] [${requestId}] Contexto incompleto capturado:`, automPayload);
         }
 
-        // Disparar o processamento de forma assíncrona para responder rápido ao webhook
-        const protocol = request.url.startsWith('https') ? 'https' : 'http';
-        const host = request.headers.get('host');
-        const baseUrl = `${protocol}://${host}`;
-
-        console.log(`[WEBHOOK] [${eventSource}] [${requestId}] Disparando Processamento E2E...`, {
-          target: `${baseUrl}/api/automations/process`,
-          payload: {
-            externalGroupId: automPayload.externalGroupId,
-            messageId: automPayload.messageId,
-            bodyLength: automPayload.body?.length
-          }
-        });
-
         // Execução Direta: Elimina o risco de ECONNRESET / Socket Hang Up
         // Rodamos de forma assíncrona (não-bloqueante para responder o webhook rápido)
         (async () => {
@@ -240,7 +226,7 @@ export async function POST(request: Request) {
             
             if (result && !result.skipped) {
               console.log(`[WEBHOOK] [${requestId}] [DIRECT] Processamento concluído. Acionando worker...`);
-              await triggerWorker({ requestId, baseUrl });
+              await triggerWorker({ requestId });
             } else {
               console.log(`[WEBHOOK] [${requestId}] [DIRECT] Processamento finalizado (Skipped: ${result?.skipped || 'none'}).`);
             }

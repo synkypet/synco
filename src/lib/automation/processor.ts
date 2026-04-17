@@ -191,14 +191,37 @@ export async function processInboundAutomation(payload: InboundPayload) {
       const snapshots = await processLinks([rawUrl], connections, 'auto');
       const snapshot = snapshots[0];
 
+
       if (!snapshot) {
-        console.error(`${logPrefix} [ITEM] [ERROR] Falha ao capturar metadados do produto.`);
+        console.error(`${logPrefix} [ITEM] [ERROR] Falha ao capturar metadados do produto (Snapshot nulo).`);
         await automationService.logEvent({
           source_id: source.id,
           user_id: userId,
           status: 'error',
           event_type: 'fetch_failed',
           details: { url: normalized, messageId }
+        }, supabase);
+        continue;
+      }
+
+      // --- GUARDIÃO OPERACIONAL (FRENTE 1) ---
+      // Bloqueia itens que falharam na reafiliação ou no guardrail de metadados
+      const status = snapshot.factual.reaffiliation_status;
+      const errorMsg = snapshot.factual.reaffiliation_error || 'Falha desconhecida na validação factual';
+      
+      if (status === 'blocked' || status === 'failed') {
+        console.warn(`${logPrefix} [ITEM] [HARD-LOCK] Bloqueado! Status: ${status} | Motivo: ${errorMsg}`);
+        await automationService.logEvent({
+          source_id: source.id,
+          user_id: userId,
+          status: 'filtered',
+          event_type: 'operational_lock',
+          details: { 
+            url: normalized, 
+            status, 
+            error: errorMsg,
+            messageId 
+          }
         }, supabase);
         continue;
       }
