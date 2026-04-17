@@ -1,0 +1,13 @@
+-- SYNCO — Funções e RPCs (PostgreSQL)
+-- Este arquivo armazena as lógicas de banco (PL/pgSQL).
+--
+-- INSTRUÇÕES:
+-- 1. Vá ao Supabase Dashboard -> Database -> Functions.
+-- 2. Copie o código fonte (procedimental) de funções críticas, como:
+--    - update_updated_at_column()
+--    - handle_new_user()
+--    - claim_channel_lock()
+--    - release_channel_lock()
+-- 3. Certifique-se de definir o "Security Definer" para funções que acessam auth.users.
+
+-- Cole abaixo suas funções:
