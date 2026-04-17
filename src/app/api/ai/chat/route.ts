@@ -67,7 +67,6 @@ export async function POST(req: Request) {
 
     const result = await streamText({
       model: google('gemini-flash-latest'),
-      maxSteps: 5, // Executa as ferramentas no servidor automaticamente
       system: `Você é o SYNCO Intelligence, o Cérebro Analítico da plataforma SYNCO (um SaaS de distribuição em massa pro WhatsApp).
       
 ENTENDIMENTO DO SISTEMA SYNCO:
