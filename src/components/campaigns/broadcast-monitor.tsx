@@ -38,7 +38,8 @@ export function BroadcastMonitor({ campaignId, onNewCampaign, productsCount, gro
     return Math.round((completed / stats.total) * 100);
   }, [stats]);
 
-  const isFinished = stats && stats.pending === 0 && stats.processing === 0;
+  const isFinished = stats && stats.total > 0 && stats.pending === 0 && stats.processing === 0;
+  const isEmpty = stats && stats.total === 0;
   const hasFailures = stats && stats.failed > 0;
 
   if (loadingStats && !stats) {
@@ -168,6 +169,22 @@ export function BroadcastMonitor({ campaignId, onNewCampaign, productsCount, gro
 
       {/* Final State & Action Zone */}
       <div className="space-y-4 pt-4 border-t border-white/5">
+        {isEmpty && !loadingStats && (
+          <div className="p-4 rounded-2xl flex items-center gap-4 bg-amber-500/10 border border-amber-500/20 animate-in fade-in">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-amber-500/20">
+              <AlertCircle className="w-5 h-5 text-amber-500" /> 
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase text-amber-500">
+                Nenhum Envio Gerado
+              </p>
+              <p className="text-[9px] font-bold text-white/40 uppercase mt-0.5">
+                Verifique se os canais estão conectados ou se os itens foram bloqueados.
+              </p>
+            </div>
+          </div>
+        )}
+
         {isFinished && (
           <div className={cn(
             "p-4 rounded-2xl flex items-center gap-4 animate-in fade-in slide-in-from-bottom-2",

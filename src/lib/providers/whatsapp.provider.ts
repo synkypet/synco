@@ -14,6 +14,8 @@ const PERMANENT_ERROR_PATTERNS = [
   'blocked',
   'must be a valid whatsapp jid', // 422 - JID inválido
   'the to must be',               // 422 - campo "to" inválido
+  'session_not_connected',        // Sessão deslogada/caída
+  'session not connected',
 ];
 
 export class WhatsAppProvider implements ChannelProvider {
@@ -96,7 +98,12 @@ export class WhatsAppProvider implements ChannelProvider {
       }
     }
     // Rate limit é temporário
-    if (msg.includes('rate limit') || msg.includes('retry_after') || msg.includes('too many') || msg.includes('every 5 seconds')) {
+    // Rate limit é temporário
+    if (msg.includes('rate limit') || msg.includes('retry_after') || msg.includes('too many') || msg.includes('every 5 seconds') || msg.includes('429')) {
+      return 'TEMPORARY';
+    }
+    // Timeout de rede ou 5xx costumam ser temporários
+    if (msg.includes('timeout') || msg.includes('deadline') || msg.includes('502') || msg.includes('503') || msg.includes('504')) {
       return 'TEMPORARY';
     }
     return 'TEMPORARY';

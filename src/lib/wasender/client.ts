@@ -371,13 +371,24 @@ export class WasenderClient {
       body: JSON.stringify(payload)
     });
 
-    // O wasender muitas vezes volta sucesso, mas message=..., precisamos checar res.json
+    // O wasender muitas vezes volta sucesso no HTTP mas erro no JSON
     const data = await res.json();
     
-    if (!res.ok || data.success === false) {
-      const errorMsg = data.message || JSON.stringify(data.errors) || 'Unknown Error';
+    // Sucesso Real: HTTP 2xx E campo success=true E presença de ID
+    const hasId = !!(data?.message_id || data?.id || data?.data?.id || data?.messageId);
+    const isExplicitSuccess = data.success === true || data.status === 'success' || data.status === 'sent';
+
+    if (!res.ok || !isExplicitSuccess || !hasId) {
+      const errorMsg = data.message || data.error || JSON.stringify(data.errors) || 'Unknown Error (No ID returned)';
+      console.error(`[WASENDER-CLIENT] [SEND-FAILURE] Status: ${res.status} | Msg: ${errorMsg}`);
       throw new Error(`Failed to send message: ${errorMsg}`);
     }
+
+    // Normalizar retorno para garantir id no topo
+    if (!data.id && hasId) {
+        data.id = data.message_id || data.data?.id || data.messageId;
+    }
+
     return data;
   }
 
