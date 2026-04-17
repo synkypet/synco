@@ -15,14 +15,9 @@ export async function POST(request: Request) {
 
     // ─── Fast-Trigger: Disparar o worker imediatamente para reduzir a latência ──────
     if (!result.skipped) {
-      const protocol = request.url.startsWith('https') ? 'https' : 'http';
-      const host = request.headers.get('host');
-      const baseUrl = `${protocol}://${host}`;
-      
-      // Utilizar o novo utilitário compartilhado
+      // Utilizar o novo utilitário compartilhado que resolve a URL base por ambiente
       await triggerWorker({ 
-        requestId, 
-        baseUrl 
+        requestId 
       });
     }
 
