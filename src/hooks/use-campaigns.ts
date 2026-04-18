@@ -102,6 +102,33 @@ export function useQueuePosition(campaignId?: string, hasPending?: boolean) {
   });
 }
 
+export function useDispatchQuickSend() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userId, campaignData }: { userId: string; campaignData: any }) => {
+      const res = await fetch('/api/quick-send/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, campaignData }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Erro ao despachar envio manual');
+      }
+      return res.json() as Promise<Campaign>;
+    },
+    onSuccess: (data: Campaign) => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      toast.success(`Broadcasting [MANUAL] iniciado: ${data.id.slice(0, 8)}`);
+    },
+    onError: (error: any) => {
+      console.error('Error in Quick Send dispatch:', error);
+      toast.error('Erro no despacho manual: ' + error.message);
+    }
+  });
+}
+
 export function useCancelPending() {
   const queryClient = useQueryClient();
 

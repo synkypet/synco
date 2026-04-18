@@ -23,7 +23,7 @@ import { SaveListDialog } from '@/components/destinations/SaveListDialog';
 import { DestinationList } from '@/types/destination-list';
 import { Group } from '@/types/group';
 import { useChannels } from '@/hooks/use-channels';
-import { useCreateCampaign } from '@/hooks/use-campaigns';
+import { useDispatchQuickSend } from '@/hooks/use-campaigns';
 import { BroadcastMonitor } from '@/components/campaigns/broadcast-monitor';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -56,7 +56,7 @@ const TONE_OPTIONS = [
 export default function EnvioRapidoPage() {
   const { user } = useAuth();
   const { data: groups, isLoading: loadingDestinations } = useGroups(user?.id);
-  const { mutate: createCampaign, isPending: isSending } = useCreateCampaign();
+  const { mutate: dispatchQuickSend, isPending: isSending } = useDispatchQuickSend();
   const router = useRouter();
 
   // Radar Integration
@@ -301,8 +301,8 @@ export default function EnvioRapidoPage() {
       }))
     };
 
-    createCampaign(
-      { userId: user?.id as string, dto: campaignData },
+    dispatchQuickSend(
+      { userId: user?.id as string, campaignData },
       {
         onSuccess: (data) => {
           setIsSuccess(true);
@@ -310,8 +310,8 @@ export default function EnvioRapidoPage() {
           toast.success(`Broadcasting iniciado: ${data.id.slice(0, 8)}`);
         },
         onError: error => {
-          console.error('Erro ao criar campanha:', error);
-          toast.error('Erro ao realizar o envio.');
+          console.error('Erro ao criar campanha manual:', error);
+          toast.error('Erro ao realizar o envio manual.');
         }
       }
     );

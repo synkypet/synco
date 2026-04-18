@@ -232,6 +232,21 @@ export const campaignService = {
     return campaign as Campaign;
   },
 
+  /**
+   * Wrapper especializado para o Envio Rápido (UI).
+   * Garante isolamento de contexto e prefixo operacional.
+   */
+  async createQuickSendCampaign(userId: string, dto: CreateCampaignDTO, client?: SupabaseClient): Promise<Campaign> {
+    console.log(`[CAMPAIGN-SERVICE] [QUICK-SEND] Iniciando criação de despacho manual para user ${userId}...`);
+    
+    const manualDto: CreateCampaignDTO = {
+      ...dto,
+      name: `🚀 [MANUAL] ${dto.name || new Date().toLocaleDateString()}`
+    };
+
+    return this.create(userId, manualDto, client);
+  },
+
   async getById(id: string, userId: string): Promise<Campaign | null> {
     const supabase = createClient();
     const { data, error } = await supabase
