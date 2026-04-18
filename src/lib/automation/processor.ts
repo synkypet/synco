@@ -72,7 +72,8 @@ function applyFilters(snapshot: ProductSnapshot, originalBody: string, filters?:
  * Extrai links da Shopee de um texto.
  */
 function extractShopeeLinks(text: string): string[] {
-  const shopeeRegex = /https?:\/\/(?:[a-zA-Z0-9-]+\.)?shopee\.com\.br\/[^\s]+|https?:\/\/shope\.ee\/[^\s]+/gi;
+  // Regex expandida para incluir br.shp.ee, s.shopee.com.br e shope.ee
+  const shopeeRegex = /https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:shopee\.com\.br|shope\.ee|br\.shp\.ee)\/[^\s]+/gi;
   const matches = text.match(shopeeRegex);
   return matches ? [...new Set(matches)] : [];
 }
@@ -126,13 +127,17 @@ export async function processInboundAutomation(payload: InboundPayload) {
 
     console.log(`${logPrefix} [STEP] ✓ Fonte ID: ${source.id} ("${source.name}")`);
 
+    // Detecção robusta de links Shopee (incluindo Mobile e texto misto)
+    console.log(`${logPrefix} [STEP] Extraindo links do texto...`);
     const links = extractShopeeLinks(body);
+    
     if (links.length === 0) {
       console.log(`${logPrefix} [SKIP] Motivo: Nenhum link Shopee identificado na mensagem.`);
+      console.log(`${logPrefix} [DEBUG] Texto recebido: "${body.substring(0, 100)}${body.length > 100 ? '...' : ''}"`);
       return { skipped: 'no_shopee_links', bodyPreview: body?.substring(0, 50) };
     }
 
-    console.log(`${logPrefix} [STEP] ✓ Identificados ${links.length} links Shopee. Extraindo conexões enriquecidas...`);
+    console.log(`${logPrefix} [STEP] ✓ Identificados ${links.length} links Shopee:`, links);
 
     const connections = await marketplaceService.getEnrichedConnections(userId, supabase);
     console.log(`${logPrefix} [STEP] ✓ Conexões recuperadas. Buscando rotas de destino ativas para Source ${source.id}...`);
