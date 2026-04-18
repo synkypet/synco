@@ -21,12 +21,12 @@ export class ShopeeAdapter extends MarketplaceAdapter {
    */
   async preProcessIncomingLink(url: string, connection?: UserMarketplaceConnection): Promise<Partial<AffiliateResult>> {
     const requestId = Math.random().toString(36).substring(7);
-    
+
     // A. Classificar o link
     const isShortS = url.includes('s.shopee.com.br');
     const isShortMobile = url.includes('br.shp.ee');
     const isShortLegacy = url.includes('shope.ee');
-    
+
     // shope.ee legacy continua bloqueado por enquanto (raro)
     if (isShortLegacy) {
       console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link legacy shope.ee detectado.`);
@@ -73,48 +73,48 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     const isProduct = !!(shopId && itemId);
 
     if (!isProduct) {
-        console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link não é de produto.`);
-        
-        let reason = 'Link Shopee não é produto (capa/promo/categoria)';
-        const lowerUrl = canonicalUrl.toLowerCase();
-        
-        if (lowerUrl.includes('/cart')) {
-          reason = 'Link Shopee não é produto (carrinho)';
-        } else if (lowerUrl.includes('/voucher-wallet') || lowerUrl.includes('/user/voucher')) {
-          reason = 'Link Shopee não é produto (cupom)';
-        } else if (lowerUrl.includes('/m/')) {
-          reason = 'Link Shopee não é produto (landing promocional)';
-        } else if (lowerUrl.includes('/events/')) {
-          reason = 'Link Shopee não é produto (evento promocional)';
-        }
+      console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link não é de produto.`);
 
-        return {
-            incoming_url: url,
-            resolved_url: resolvedUrl,
-            canonical_url: canonicalUrl,
-            redirect_chain: redirectChain,
-            reaffiliation_status: 'blocked',
-            reaffiliation_error: reason
-        };
+      let reason = 'Link Shopee não é produto (capa/promo/categoria)';
+      const lowerUrl = canonicalUrl.toLowerCase();
+
+      if (lowerUrl.includes('/cart')) {
+        reason = 'Link Shopee não é produto (carrinho)';
+      } else if (lowerUrl.includes('/voucher-wallet') || lowerUrl.includes('/user/voucher')) {
+        reason = 'Link Shopee não é produto (cupom)';
+      } else if (lowerUrl.includes('/m/')) {
+        reason = 'Link Shopee não é produto (landing promocional)';
+      } else if (lowerUrl.includes('/events/')) {
+        reason = 'Link Shopee não é produto (evento promocional)';
+      }
+
+      return {
+        incoming_url: url,
+        resolved_url: resolvedUrl,
+        canonical_url: canonicalUrl,
+        redirect_chain: redirectChain,
+        reaffiliation_status: 'blocked',
+        reaffiliation_error: reason
+      };
     }
 
     // D. Gerar novo link afiliado (Re-afiliação)
     if (!connection?.shopee_app_id || !connection?.shopee_app_secret) {
-        console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Usuário não possui credenciais Shopee configuradas.`);
-        return {
-            incoming_url: url,
-            resolved_url: resolvedUrl,
-            canonical_url: canonicalUrl,
-            redirect_chain: redirectChain,
-            reaffiliation_status: 'blocked',
-            reaffiliation_error: 'Credenciais de afiliado Shopee ausentes para este usuário.'
-        };
+      console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Usuário não possui credenciais Shopee configuradas.`);
+      return {
+        incoming_url: url,
+        resolved_url: resolvedUrl,
+        canonical_url: canonicalUrl,
+        redirect_chain: redirectChain,
+        reaffiliation_status: 'blocked',
+        reaffiliation_error: 'Credenciais de afiliado Shopee ausentes para este usuário.'
+      };
     }
 
     try {
       console.log(`[SHOPEE-PREPROCESS] [${requestId}] Gerando novo link de afiliado...`);
       const generatedLink = await this.generateAffiliateLink(canonicalUrl, connection);
-      
+
       // Validação de segurança: o adaptador não pode retornar o link original se as credenciais existem
       if (!generatedLink || generatedLink === canonicalUrl) {
         throw new Error('Falha técnica na geração do link de afiliado pela API');
@@ -161,14 +161,14 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       while (attempts <= MAX_RETRIES && !success) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
-        
+
         try {
-          const res = await fetch(currentUrl, { 
-            method: 'GET', 
+          const res = await fetch(currentUrl, {
+            method: 'GET',
             redirect: 'manual',
             signal: controller.signal
           });
-          
+
           clearTimeout(timeout);
           success = true;
 
@@ -191,12 +191,12 @@ export class ShopeeAdapter extends MarketplaceAdapter {
           clearTimeout(timeout);
           attempts++;
           lastError = error;
-          
+
           const isTimeout = error.name === 'AbortError';
           const errorType = isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR';
-          
+
           console.warn(`[SHOPEE-RESOLVE] [ATTEMPT:${attempts}] ${errorType} para ${currentUrl}: ${error.message}`);
-          
+
           if (attempts <= MAX_RETRIES) {
             console.log(`[SHOPEE-RESOLVE] Tentando novamente (${attempts}/${MAX_RETRIES})...`);
             // Pequeno delay antes do retry
@@ -221,18 +221,18 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     try {
       // 1. Tentar extrair IDs primeiro para canonicalização agressiva
       const { shopId, itemId } = this.extractIds(url);
-      
+
       if (shopId && itemId) {
         // Formato universal e mais robusto para enrichment e persistência
         return `https://shopee.com.br/product/${shopId}/${itemId}`;
       }
 
       const parsed = new URL(url);
-      
+
       // Remover parâmetros de rastreamento comuns
       const paramsToRemove = ['sp_atk', 'xptdk', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'smtt'];
       paramsToRemove.forEach(p => parsed.searchParams.delete(p));
-      
+
       // Limpeza de ancoras e fragmentos desnecessários
       parsed.hash = '';
 
@@ -339,9 +339,9 @@ export class ShopeeAdapter extends MarketplaceAdapter {
         .sort((a, b) => b.score - a.score);
 
       const winner = ranked[0].node;
-      
+
       // ─── Auditoria e Decisão de Preço ──────────────────────────────────
-      
+
       // Captura de Brutos
       const rawPrice = winner.price || "0";
       const rawPriceMin = winner.priceMin || rawPrice;
@@ -352,7 +352,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       // Valores Normalizados
       const normPrice = this.normalizeValue(rawPrice);
       const normPriceMin = this.normalizeValue(rawPriceMin);
-      
+
       // Decisão do Preço Factual
       let currentPriceFactual = normPriceMin || normPrice;
       let currentPriceSource: 'api.priceMin' | 'api.price' | 'fallback' = normPriceMin ? 'api.priceMin' : 'api.price';
@@ -372,8 +372,8 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
       // Heurística Parcelamento (Se preço > 50, assume 3x para o template)
       const installmentsVal = currentPriceFactual / 3;
-      const installments = currentPriceFactual > 50 
-        ? `3x de R$ ${installmentsVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+      const installments = currentPriceFactual > 50
+        ? `3x de R$ ${installmentsVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         : null;
 
       // Validação de qualidade mínima (Hard Guardrail)
@@ -382,8 +382,8 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       const isGoodMatch = ranked[0].score >= 80; // Pelo menos itemId ou shopId bateram
 
       if (!hasImage || !hasRealTitle || !isGoodMatch) {
-         console.warn(`[SHOPEE ADAPTER] Metadata insuficiente para ${url}. Image: ${hasImage}, Title: ${hasRealTitle}, Score: ${ranked[0].score}`);
-         return this.fallback(winner.productName || nameFallback, 'Insufficient quality');
+        console.warn(`[SHOPEE ADAPTER] Metadata insuficiente para ${url}. Image: ${hasImage}, Title: ${hasRealTitle}, Score: ${ranked[0].score}`);
+        return this.fallback(winner.productName || nameFallback, 'Insufficient quality');
       }
 
       console.log('--- [SHOPEE PRO AUDIT] ---');
@@ -403,7 +403,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
         installments,
         marketplace: 'Shopee',
         shopName: winner.shopName || 'Shopee',
-        
+
         // Novos Campos de Auditoria Fase 1
         rawPrice,
         rawPriceMin: String(rawPriceMin || "0"),
@@ -420,13 +420,13 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
         sellerCommissionRate: parseFloat(String(winner.sellerCommissionRate || "0")),
         shopeeCommissionRate: parseFloat(String(winner.shopeeCommissionRate || "0")),
-        
+
         estimatedPixPrice,
         estimatedPixSource,
 
         commissionRate: parseFloat(String(rawCommissionRate)),
         commissionValue: commissionValueFactual,
-        
+
         itemId: String(winner.itemId || itemId || ''),
         shopId: String(winner.shopId || shopId || ''),
         productLink: winner.productLink,
