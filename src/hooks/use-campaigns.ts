@@ -68,6 +68,16 @@ export function useCampaignStats(campaignId?: string, createdAt?: string) {
   });
 }
 
+export function useCampaignDestinationStats(campaignId: string | undefined, isActive: boolean = false) {
+  return useQuery({
+    queryKey: ['campaign-destination-stats', campaignId],
+    queryFn: () => campaignId ? campaignService.getDestinationStats(campaignId) : null,
+    enabled: !!campaignId,
+    staleTime: 0,
+    refetchInterval: isActive ? 3000 : false,
+  });
+}
+
 export function useCampaignJobs(campaignId: string | undefined, page: number = 1) {
   return useQuery({
     queryKey: ['campaign-jobs', campaignId, page],

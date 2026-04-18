@@ -310,6 +310,51 @@ export const campaignService = {
     return stats;
   },
 
+  async getDestinationStats(campaignId: string) {
+    const supabase = createClient();
+    
+    const { data, error } = await supabase
+      .from('send_jobs')
+      .select('status, destination, destination_name')
+      .eq('campaign_id', campaignId);
+
+    if (error) throw error;
+
+    // Agregação em memória (eficiente para o volume do MVP)
+    const grouped = new Map<string, any>();
+
+    data.forEach(job => {
+      const id = job.destination;
+      if (!grouped.has(id)) {
+        grouped.set(id, {
+          id,
+          name: job.destination_name || 'Desconhecido',
+          total: 0,
+          completed: 0,
+          failed: 0,
+          pending: 0,
+          processing: 0,
+        });
+      }
+
+      const entry = grouped.get(id);
+      entry.total++;
+      
+      if (job.status === 'sent' || job.status === 'completed') entry.completed++;
+      else if (job.status === 'failed') entry.failed++;
+      else if (job.status === 'processing') entry.processing++;
+      else entry.pending++;
+    });
+
+    return Array.from(grouped.values()).map(dest => ({
+      ...dest,
+      progress: Math.round(( (dest.completed + dest.failed) / dest.total) * 100),
+      status: dest.total === dest.completed + dest.failed 
+        ? (dest.failed > 0 ? 'failed' : 'completed') 
+        : (dest.processing > 0 ? 'processing' : 'pending')
+    }));
+  },
+
   async getJobsPaginated(campaignId: string, page: number = 1, pageSize: number = 20) {
     const supabase = createClient();
     const from = (page - 1) * pageSize;

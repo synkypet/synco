@@ -14,7 +14,7 @@ import {
   RefreshCw,
   LayoutList
 } from 'lucide-react';
-import { useCampaignStats, useCampaignJobs } from '@/hooks/use-campaigns';
+import { useCampaignStats, useCampaignJobs, useCampaignDestinationStats } from '@/hooks/use-campaigns';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,10 @@ interface BroadcastMonitorProps {
 
 export function BroadcastMonitor({ campaignId, onNewCampaign, productsCount, groupsCount }: BroadcastMonitorProps) {
   const { data: stats, isLoading: loadingStats } = useCampaignStats(campaignId);
+  
+  const isFinished = stats && stats.total > 0 && stats.pending === 0 && stats.processing === 0;
+  
+  const { data: destStats, isLoading: loadingDestStats } = useCampaignDestinationStats(campaignId, !isFinished);
   const { data: jobsResponse, isLoading: loadingJobs } = useCampaignJobs(campaignId, 1);
   
   const jobs = jobsResponse?.jobs || [];
@@ -38,7 +42,6 @@ export function BroadcastMonitor({ campaignId, onNewCampaign, productsCount, gro
     return Math.round((completed / stats.total) * 100);
   }, [stats]);
 
-  const isFinished = stats && stats.total > 0 && stats.pending === 0 && stats.processing === 0;
   const isEmpty = stats && stats.total === 0;
   const hasFailures = stats && stats.failed > 0;
 
@@ -113,6 +116,62 @@ export function BroadcastMonitor({ campaignId, onNewCampaign, productsCount, gro
              <span className="text-[8px] font-black text-white/30 uppercase mb-1">Pendente</span>
              <span className="text-xs font-black text-white/60">{stats?.pending || 0}</span>
            </div>
+        </div>
+      </div>
+
+      {/* Destination Performance Area */}
+      <div className="space-y-4 mb-10 animate-in fade-in slide-in-from-left-2 duration-500">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[10px] font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
+            📊 Desempenho por Destino
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 gap-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
+          {destStats?.map((dest: any) => (
+            <div 
+              key={dest.id} 
+              className={cn(
+                "p-4 rounded-2xl border-none shadow-skeuo-flat transition-all",
+                dest.status === 'completed' ? "bg-green-500/5 opacity-60" : "bg-white/5"
+              )}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={cn(
+                    "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-skeuo-pressed",
+                    dest.status === 'completed' ? "bg-green-500/20" : "bg-deep-void/60"
+                  )}>
+                    {dest.status === 'pending' && <Clock className="w-3.5 h-3.5 text-white/20" />}
+                    {dest.status === 'processing' && <Loader2 className="w-3.5 h-3.5 text-kinetic-orange animate-spin" />}
+                    {dest.status === 'completed' && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
+                    {dest.status === 'failed' && <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
+                  </div>
+                  <span className="text-[10px] font-black text-white/90 uppercase truncate">{dest.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black text-white/30">{dest.completed}/{dest.total}</span>
+                  <span className="text-[10px] font-black text-kinetic-orange font-headline italic">{dest.progress}%</span>
+                </div>
+              </div>
+              
+              <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden shadow-skeuo-pressed">
+                <div 
+                  className={cn(
+                    "h-full transition-all duration-700 rounded-full shadow-glow-orange",
+                    dest.status === 'completed' ? "bg-green-500/60" : "bg-kinetic-orange"
+                  )}
+                  style={{ width: `${dest.progress}%` }}
+                />
+              </div>
+            </div>
+          ))}
+          
+          {destStats?.length === 0 && !loadingDestStats && (
+            <div className="py-8 text-center opacity-20 bg-deep-void/40 rounded-2xl border-none shadow-skeuo-pressed">
+              <span className="text-[9px] font-black uppercase tracking-widest">Calculando vetores de destino...</span>
+            </div>
+          )}
         </div>
       </div>
 
