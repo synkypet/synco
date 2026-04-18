@@ -21,18 +21,19 @@ export class ShopeeAdapter extends MarketplaceAdapter {
    */
   async preProcessIncomingLink(url: string, connection?: UserMarketplaceConnection): Promise<Partial<AffiliateResult>> {
     const requestId = Math.random().toString(36).substring(7);
-    console.log(`[SHOPEE-PREPROCESS] [${requestId}] Início: ${url}`);
     
     // A. Classificar o link
     const isShortS = url.includes('s.shopee.com.br');
-    const isShortLegacy = url.includes('shope.ee') || url.includes('br.shp.ee');
+    const isShortMobile = url.includes('br.shp.ee');
+    const isShortLegacy = url.includes('shope.ee');
     
+    // shope.ee legacy continua bloqueado por enquanto (raro)
     if (isShortLegacy) {
-      console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link legacy shope.ee/br.shp.ee detectado.`);
+      console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link legacy shope.ee detectado.`);
       return {
         incoming_url: url,
         reaffiliation_status: 'blocked',
-        reaffiliation_error: 'Links br.shp.ee não são suportados nesta fase.'
+        reaffiliation_error: 'Links shope.ee não são suportados nesta fase.'
       };
     }
 
@@ -40,21 +41,22 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     let redirectChain: string[] = [url];
     let status: 'not_needed' | 'resolved' | 'canonicalized' | 'reaffiliated' | 'blocked' | 'failed' = 'not_needed';
 
-    // B. Resolver o short link (apenas s.shopee.com.br)
-    if (isShortS) {
-      console.log(`[SHOPEE-PREPROCESS] [${requestId}] Resolvendo link curto...`);
+    // B. Resolver o short link (s.shopee ou br.shp.ee)
+    if (isShortS || isShortMobile) {
+      const typeLabel = isShortS ? 'S.SHOPEE' : 'BR.SHP.EE (MOBILE)';
+      console.log(`[SHOPEE-PREPROCESS] [${requestId}] [${typeLabel}] Detectado. Iniciando resolução de URL...`);
       try {
         const resolution = await this.resolveShopeeShortLink(url);
         resolvedUrl = resolution.resolvedUrl;
         redirectChain = resolution.chain;
         status = 'resolved';
-        console.log(`[SHOPEE-PREPROCESS] [${requestId}] Resolvido para: ${resolvedUrl}`);
+        console.log(`[SHOPEE-PREPROCESS] [${requestId}] [${typeLabel}] Resolvido com sucesso para: ${resolvedUrl}`);
       } catch (error: any) {
-        console.error(`[SHOPEE-PREPROCESS] [${requestId}] Erro na resolução:`, error.message);
+        console.error(`[SHOPEE-PREPROCESS] [${requestId}] [${typeLabel}] Falha na resolução:`, error.message);
         return {
           incoming_url: url,
           reaffiliation_status: 'failed',
-          reaffiliation_error: `Falha ao resolver link: ${error.message}`,
+          reaffiliation_error: `Falha ao resolver link curto (${typeLabel}): ${error.message}`,
           redirect_chain: redirectChain
         };
       }
