@@ -45,6 +45,17 @@ export function BroadcastMonitor({ campaignId, onNewCampaign, productsCount, gro
   const isEmpty = stats && stats.total === 0;
   const hasFailures = stats && stats.failed > 0;
 
+  // Mapeamento amigável de status por destino
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Na fila';
+      case 'processing': return 'Em andamento';
+      case 'completed': return 'Concluído';
+      case 'failed': return 'Falha';
+      default: return 'Desconhecido';
+    }
+  };
+
   if (loadingStats && !stats) {
     return (
       <TactileCard className="p-8 flex flex-col items-center justify-center min-h-[400px] border-none">
@@ -89,7 +100,7 @@ export function BroadcastMonitor({ campaignId, onNewCampaign, productsCount, gro
         </div>
       </div>
 
-      {/* Progress Bar Area */}
+      {/* Progress Bar Area Geral */}
       <div className="space-y-4 mb-10">
         <div className="flex justify-between items-end">
           <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Progresso Geral</span>
@@ -119,113 +130,89 @@ export function BroadcastMonitor({ campaignId, onNewCampaign, productsCount, gro
         </div>
       </div>
 
-      {/* Destination Performance Area */}
-      <div className="space-y-4 mb-10 animate-in fade-in slide-in-from-left-2 duration-500">
+      {/* Evolved Queue Area: Per Destination Progress */}
+      <div className="space-y-4 mb-8">
         <div className="flex items-center justify-between px-1">
           <span className="text-[10px] font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
-            📊 Desempenho por Destino
+            <LayoutList className="w-3 h-3" /> Fila por Destino
           </span>
+          <span className="text-[9px] font-bold text-white/20 uppercase">Tempo Real</span>
         </div>
         
-        <div className="grid grid-cols-1 gap-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
-          {destStats?.map((dest: any) => (
+        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+          {loadingDestStats && !destStats ? (
+            <div className="py-12 flex flex-col items-center justify-center opacity-40">
+              <Loader2 className="w-5 h-5 animate-spin mb-2" />
+              <span className="text-[9px] font-black uppercase tracking-widest">Calculando filas...</span>
+            </div>
+          ) : destStats?.map((dest: any) => (
             <div 
               key={dest.id} 
               className={cn(
-                "p-4 rounded-2xl border-none shadow-skeuo-flat transition-all",
-                dest.status === 'completed' ? "bg-green-500/5 opacity-60" : "bg-white/5"
+                "p-4 bg-deep-void/60 rounded-2xl border-none shadow-skeuo-pressed group hover:bg-deep-void/80 transition-all",
+                dest.status === 'completed' && "opacity-60 grayscale-[0.5]"
               )}
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={cn(
-                    "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-skeuo-pressed",
-                    dest.status === 'completed' ? "bg-green-500/20" : "bg-deep-void/60"
+                    "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-skeuo-flat border-none",
+                    dest.status === 'processing' ? "bg-kinetic-orange/20" : 
+                    dest.status === 'completed' ? "bg-green-500/10" : "bg-black/20"
                   )}>
-                    {dest.status === 'pending' && <Clock className="w-3.5 h-3.5 text-white/20" />}
-                    {dest.status === 'processing' && <Loader2 className="w-3.5 h-3.5 text-kinetic-orange animate-spin" />}
-                    {dest.status === 'completed' && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
-                    {dest.status === 'failed' && <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
+                    {dest.status === 'pending' && <Clock className="w-4 h-4 text-white/20" />}
+                    {dest.status === 'processing' && <Loader2 className="w-4 h-4 text-kinetic-orange animate-spin" />}
+                    {dest.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                    {dest.status === 'failed' && <AlertCircle className="w-4 h-4 text-red-500" />}
                   </div>
-                  <span className="text-[10px] font-black text-white/90 uppercase truncate">{dest.name}</span>
+                  
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[11px] font-black text-white/90 uppercase truncate leading-none mb-1">
+                      {dest.name}
+                    </span>
+                    <span className={cn(
+                      "text-[8px] font-black uppercase tracking-widest",
+                      dest.status === 'processing' ? "text-kinetic-orange" : 
+                      dest.status === 'completed' ? "text-green-500/80" : "text-white/20"
+                    )}>
+                      {getStatusLabel(dest.status)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black text-white/30">{dest.completed}/{dest.total}</span>
-                  <span className="text-[10px] font-black text-kinetic-orange font-headline italic">{dest.progress}%</span>
+
+                <div className="flex flex-col items-end">
+                   <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black text-white/40 uppercase">
+                        {dest.completed}/{dest.total} Sent
+                      </span>
+                      <span className="text-xs font-black text-kinetic-orange font-headline italic">
+                        {dest.progress}%
+                      </span>
+                   </div>
                 </div>
               </div>
-              
-              <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden shadow-skeuo-pressed">
-                <div 
-                  className={cn(
-                    "h-full transition-all duration-700 rounded-full shadow-glow-orange",
-                    dest.status === 'completed' ? "bg-green-500/60" : "bg-kinetic-orange"
-                  )}
-                  style={{ width: `${dest.progress}%` }}
-                />
+
+              {/* Sub-Progress Bar per Destino */}
+              <div className="relative h-1.5 w-full bg-black/40 rounded-full overflow-hidden shadow-skeuo-pressed">
+                  <div 
+                    className={cn(
+                      "h-full transition-all duration-1000 rounded-full",
+                      dest.status === 'completed' ? "bg-green-500/40" : 
+                      dest.status === 'failed' ? "bg-red-500/60" : "bg-kinetic-orange shadow-glow-orange"
+                    )}
+                    style={{ width: `${dest.progress}%` }}
+                  />
               </div>
             </div>
           ))}
           
           {destStats?.length === 0 && !loadingDestStats && (
-            <div className="py-8 text-center opacity-20 bg-deep-void/40 rounded-2xl border-none shadow-skeuo-pressed">
-              <span className="text-[9px] font-black uppercase tracking-widest">Calculando vetores de destino...</span>
+            <div className="py-12 text-center opacity-20">
+              <span className="text-[10px] font-black uppercase tracking-widest">Nenhuma fila identificada</span>
             </div>
           )}
         </div>
       </div>
-
-      {/* Job List Area */}
-      <div className="space-y-4 mb-8">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-[10px] font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
-            <LayoutList className="w-3 h-3" /> Fila em Tempo Real
-          </span>
-          <span className="text-[9px] font-bold text-white/20 uppercase">Top 20 Ativos</span>
-        </div>
-        
-        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-          {jobs.map((job: any) => (
-            <div 
-              key={job.id} 
-              className="flex items-center justify-between p-3 bg-deep-void/60 rounded-xl border-none shadow-skeuo-pressed group hover:bg-deep-void/80 transition-all"
-            >
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] font-black text-white/80 uppercase truncate">
-                  {job.destination_name || 'Grupo Desconhecido'}
-                </span>
-                <span className="text-[8px] font-bold text-white/20 uppercase">
-                  Sessão: {job.session_id ? `ID ${job.session_id.slice(0,6)}` : 'N/A'}
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                {job.last_error && (
-                  <Badge variant="outline" className="text-[7px] border-red-500/30 text-red-400 bg-red-400/5 px-1.5 h-4">
-                    Erro: {job.last_error.slice(0, 15)}...
-                  </Badge>
-                )}
-                
-                <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-black/20 shadow-skeuo-flat border-none">
-                  {job.status === 'pending' && <Clock className="w-3 h-3 text-white/20" />}
-                  {job.status === 'processing' && <Loader2 className="w-3 h-3 text-kinetic-orange animate-spin" />}
-                  {job.status === 'sent' || job.status === 'completed' ? (
-                    <CheckCircle2 className="w-3 h-3 text-green-500" />
-                  ) : null}
-                  {job.status === 'failed' && <AlertCircle className="w-3 h-3 text-red-500" />}
-                </div>
-              </div>
-            </div>
-          ))}
-          
-          {jobs.length === 0 && !loadingJobs && (
-            <div className="py-8 text-center opacity-20">
-              <span className="text-[10px] font-black uppercase tracking-widest">Nenhum job em processamento</span>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Final State & Action Zone */}
       <div className="space-y-4 pt-4 border-t border-white/5">
         {isEmpty && !loadingStats && (
