@@ -210,37 +210,40 @@ export async function processInboundAutomation(payload: InboundPayload) {
 
         console.log(`${logPrefix} [ITEM] ✓ Produto: "${snapshot.factual.title}" | Preço: ${snapshot.factual.currentPriceFactual}`);
 
-        // --- INGESTÃO PARA O RADAR DE OFERTAS ---
-        try {
-          const originalPrice = snapshot.factual.originalPrice || snapshot.factual.currentPriceFactual || 0;
-          const currentPrice = snapshot.factual.currentPriceFactual || 0;
-          let discountPercent = 0;
-          if (originalPrice > currentPrice && originalPrice > 0) {
-            discountPercent = Math.round((1 - (currentPrice / originalPrice)) * 100);
-          }
-          const commissionRate = snapshot.factual.commissionRate || 0;
-          let opportunityScore = Math.round((discountPercent * 0.5) + (commissionRate * 100 * 0.5));
-          if (opportunityScore < 50) opportunityScore = Math.floor(Math.random() * 20) + 60; // Mock base para exibição visual
+        // --- INGESTÃO CONDICIONAL PARA O RADAR (Apenas comissão > 30%) ---
+        const commissionRate = snapshot.factual.commissionRate || 0;
+        if (commissionRate > 0.30) {
+          try {
+            const originalPrice = snapshot.factual.originalPrice || snapshot.factual.currentPriceFactual || 0;
+            const currentPrice = snapshot.factual.currentPriceFactual || 0;
+            let discountPercent = 0;
+            if (originalPrice > currentPrice && originalPrice > 0) {
+              discountPercent = Math.round((1 - (currentPrice / originalPrice)) * 100);
+            }
+            const opportunityScore = Math.min(100, Math.round((discountPercent * 0.4) + (commissionRate * 100 * 0.6)));
 
-          const insertedProduct = await productService.insertFromAutomation({
-            name: snapshot.factual.title,
-            marketplace: snapshot.factual.marketplace || 'Shopee',
-            original_url: snapshot.factual.originalUrl || rawUrl,
-            image_url: snapshot.factual.image || undefined,
-            current_price: currentPrice,
-            original_price: originalPrice,
-            discount_percent: discountPercent,
-            commission_percent: commissionRate * 100,
-            commission_value: snapshot.factual.commissionValueFactual || 0,
-            opportunity_score: Math.min(100, opportunityScore),
-            is_favorite: false,
-            already_sent: false,
-            free_shipping: false,
-            official_store: false,
-          }, supabase);
-          console.log(`${logPrefix} [ITEM] ✓ Produto inserido no Radar (ID: ${insertedProduct?.id}).`);
-        } catch (dbErr) {
-          console.error(`${logPrefix} [ITEM] Falha ao inserir no Radar:`, dbErr);
+            const insertedProduct = await productService.insertFromAutomation({
+              name: snapshot.factual.title,
+              marketplace: snapshot.factual.marketplace || 'Shopee',
+              original_url: snapshot.factual.originalUrl || rawUrl,
+              image_url: snapshot.factual.image || undefined,
+              current_price: currentPrice,
+              original_price: originalPrice,
+              discount_percent: discountPercent,
+              commission_percent: commissionRate * 100,
+              commission_value: snapshot.factual.commissionValueFactual || 0,
+              opportunity_score: opportunityScore,
+              is_favorite: false,
+              already_sent: false,
+              free_shipping: false,
+              official_store: false,
+            }, supabase);
+            console.log(`${logPrefix} [ITEM] ✓ Produto HIGH-COMMISSION (${(commissionRate * 100).toFixed(1)}%) inserido no Radar (ID: ${insertedProduct?.id}).`);
+          } catch (dbErr) {
+            console.error(`${logPrefix} [ITEM] Falha ao inserir no Radar:`, dbErr);
+          }
+        } else {
+          console.log(`${logPrefix} [ITEM] [RADAR-SKIP] Comissão ${(commissionRate * 100).toFixed(1)}% < 30%. Não salvo no Radar.`);
         }
 
         // Processar cada rota individualmente
