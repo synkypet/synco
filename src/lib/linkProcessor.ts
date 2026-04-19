@@ -123,7 +123,7 @@ export function buildMessageFromSnapshot(factual: FactualData): string {
   }
 
   if (hasPix) {
-    priceLines += `⚡ Por: ${priceCurrentFormatted} no Pix`;
+    priceLines += `🔥 Por: ${priceCurrentFormatted} no Pix`;
   } else if (priceCurrentFormatted) {
     priceLines += `💥 Por: ${priceCurrentFormatted}`;
   } else {
