@@ -105,36 +105,51 @@ export function buildMessageFromSnapshot(factual: FactualData): string {
   const title = factual.title;
   const emoji = '🛍️';
 
-  // 2. Preços (Lógica De/Por Factual)
-  const priceMin = factual.price;
-  const priceMax = factual.originalPrice;
-  const priceMinFormatted = factual.priceFormatted;
-  const priceMaxFormatted = factual.originalPriceFormatted;
-
-  let priceLine = '';
+  // 2. Extração de Preços (Priorizando Pix)
+  const hasPix = !!factual.estimatedPixPrice && !!factual.estimatedPixPriceFormatted;
+  const priceCurrent = hasPix ? factual.estimatedPixPrice : factual.price;
+  const priceCurrentFormatted = hasPix ? factual.estimatedPixPriceFormatted : factual.priceFormatted;
   
-  // Regra: Mostrar "De" apenas se existir priceMax, for factual e maior que priceMin
-  if (priceMax && priceMin && priceMax > priceMin) {
-    priceLine = `de ${priceMaxFormatted}\n💥 Por: ${priceMinFormatted}`;
-  } else if (priceMinFormatted) {
-    priceLine = `💥 Por: ${priceMinFormatted}`;
-  } else {
-    priceLine = `💥 Por: Preço sob consulta`;
+  const priceOriginal = factual.originalPrice;
+  const priceOriginalFormatted = factual.originalPriceFormatted;
+
+  const showOriginal = !!(priceOriginal && priceOriginalFormatted && priceCurrent && priceOriginal > priceCurrent);
+
+  // 3. Montagem das Linhas de Preço
+  let priceLines = '';
+  
+  if (showOriginal) {
+    priceLines += `~De: ${priceOriginalFormatted}~\n`;
   }
 
-  // 3. Link & CTA
+  if (hasPix) {
+    priceLines += `⚡ Por: ${priceCurrentFormatted} no Pix`;
+  } else if (priceCurrentFormatted) {
+    priceLines += `💥 Por: ${priceCurrentFormatted}`;
+  } else {
+    priceLines += `💥 Por: Preço sob consulta`;
+  }
+
+  // 4. Link & CTA
   const link = factual.finalLinkToSend;
 
-  // 4. Montagem Final (Respeitando linhas em branco e respiro visual)
+  // 5. Notas de Rodapé (Opcionais)
+  const footerNotes: string[] = [];
+  if (hasPix) {
+    footerNotes.push('*Valor Pix estimado.');
+  }
+
+  // 6. Montagem Final (Respeitando linhas em branco e respiro visual)
   const lines = [
     `${emoji} ${title}`,
     '',
-    priceLine,
+    priceLines,
     '',
     '📦 Compre aqui:',
     link,
     '',
-    '⚠️ Promoção sujeita a alteração a qualquer momento.'
+    '⚠️ Promoção sujeita a alteração a qualquer momento.',
+    ...footerNotes
   ];
 
   return lines.join('\n').trim();
