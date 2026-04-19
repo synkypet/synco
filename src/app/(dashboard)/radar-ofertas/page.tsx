@@ -54,9 +54,30 @@ export default function RadarOfertasPage() {
   const { toggleProduct, isSelected, count: cartCount, selectedProducts, clearProducts } = useSelectedProducts();
   const toggleFavoriteMutation = useToggleFavorite();
   
+  // Memoize combined filters
+  const combinedFilters = React.useMemo(() => {
+    let finalFilters = { ...filters };
+
+    // Apply offerType rules
+    if (offerType === 'opportunities') finalFilters.minDiscount = 20;
+    else if (offerType === 'high_commission') { finalFilters.sortBy = 'commission_percent'; finalFilters.sortOrder = 'desc'; }
+    else if (offerType === 'low_price') { finalFilters.sortBy = 'current_price'; finalFilters.sortOrder = 'asc'; }
+    else if (offerType === 'coupons') finalFilters.has_coupon = true;
+    else if (offerType === 'favorites') finalFilters.favorites_only = true;
+
+    // Explicit Dropdown SortBy overrides (if they deviate from the default score_desc)
+    if (sortBy === 'score_desc') { finalFilters.sortBy = 'opportunity_score'; finalFilters.sortOrder = 'desc'; }
+    else if (sortBy === 'commission_desc') { finalFilters.sortBy = 'commission_percent'; finalFilters.sortOrder = 'desc'; }
+    else if (sortBy === 'commission_asc') { finalFilters.sortBy = 'commission_percent'; finalFilters.sortOrder = 'asc'; }
+    else if (sortBy === 'price_asc') { finalFilters.sortBy = 'current_price'; finalFilters.sortOrder = 'asc'; }
+    else if (sortBy === 'price_desc') { finalFilters.sortBy = 'current_price'; finalFilters.sortOrder = 'desc'; }
+
+    return finalFilters;
+  }, [filters, offerType, sortBy]);
+
   // Data Fetching
   const { data: products, isLoading, isError, error } = useProducts({
-    ...filters,
+    ...combinedFilters,
     marketplace: marketplace === 'all' ? undefined : marketplace,
     search: search || undefined,
   });
