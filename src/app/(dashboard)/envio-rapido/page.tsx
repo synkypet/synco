@@ -65,6 +65,7 @@ export default function EnvioRapidoPage() {
   const [linksInput, setLinksInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedProducts, setProcessedProducts] = useState<ProductSnapshot[]>([]);
+  const [autoStartFlag, setAutoStartFlag] = useState(false);
   const [tone, setTone] = useState('auto');
   // generatedTexts removido: agora usamos o campo messageText dentro do snapshot
   const [selectedDestinations, setSelectedDestinations] = useState<string[]>([]);
@@ -90,8 +91,9 @@ export default function EnvioRapidoPage() {
       const urls = selectedProducts.map(p => p.original_url).filter(Boolean).join('\n');
       if (urls) {
         setLinksInput(urls);
-        toast.info(`${selectedProducts.length} oferta(s) carregada(s) do Radar! Clique em "Iniciar Extração".`, {
-          duration: 5000,
+        setAutoStartFlag(true);
+        toast.info(`Extraindo ${selectedProducts.length} oferta(s) do Radar...`, {
+          duration: 3000,
           position: 'top-center'
         });
       }
@@ -228,6 +230,13 @@ export default function EnvioRapidoPage() {
       setIsProcessing(false);
     }
   };
+
+  useEffect(() => {
+    if (autoStartFlag && linksInput && !isProcessing) {
+      setAutoStartFlag(false);
+      handleProcess();
+    }
+  }, [autoStartFlag, linksInput, isProcessing]);
 
   const handleToggleDestination = (id: string) => {
     setSelectedDestinations(prev =>

@@ -61,6 +61,22 @@ export const productService = {
     return data as Product[];
   },
 
+  async insertFromAutomation(productData: Partial<Product>, client?: any): Promise<Product | null> {
+    const supabase = client || createClient();
+    const { data, error } = await supabase
+      .from('products')
+      .insert([productData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error inserting product from automation:', error);
+      return null;
+    }
+
+    return data as Product;
+  },
+
   async getById(id: string): Promise<Product | null> {
     const supabase = createClient();
     const { data, error } = await supabase
