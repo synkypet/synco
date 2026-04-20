@@ -41,7 +41,9 @@ export async function GET(request: Request) {
     const adapter = new ShopeeAdapter();
     const strategies = [
       { sortType: 1, label: 'Top Sales', limit: 20 },
-      { sortType: 3, label: 'Hot Products', limit: 20 }
+      { sortType: 3, label: 'Hot Products', limit: 20 },
+      { sortType: 4, label: 'Relevance', limit: 20 },
+      { sortType: 5, label: 'Recommendations', limit: 20 }
     ];
 
     let totalDiscovered = 0;
@@ -59,10 +61,22 @@ export async function GET(request: Request) {
       totalDiscovered += products.length;
 
       for (const p of products) {
-        // Calcular Score de Oportunidade básico
-        const discountBonus = Math.min(30, (p.discountPercent || 0) * 0.5);
-        const commissionBonus = Math.min(50, (p.commissionRate || 0) * 100 * 3);
-        const score = Math.round(20 + discountBonus + commissionBonus);
+        // --- NOVO CÁLCULO DE INTELIGÊNCIA (ROI SCORING) ---
+        // Referência: ROI = (Comissão / Preço) * 100
+        // Bias: log10(Preço Original / Preço Atual) -> Premia descontos reais
+        
+        const currentPrice = p.currentPriceFactual || 0.01; // Evitar div/0
+        const originalPrice = p.originalPrice || currentPrice;
+        const commissionValue = p.commissionValueFactual || 0;
+        
+        const roi = (commissionValue / currentPrice) * 100;
+        const discountRatio = originalPrice / currentPrice;
+        const scaleBias = Math.log10(discountRatio * 10) || 1; // Bias positivo se houver desconto
+        
+        // Score Final: ROI balanceado pelo viés de escala e desconto
+        // Valor base 40 + ROI amplificado
+        const rawScore = 40 + (roi * scaleBias * 5);
+        const finalScore = Math.min(100, Math.round(rawScore));
 
         // Inserir no banco
         const { error } = await supabase
@@ -78,7 +92,7 @@ export async function GET(request: Request) {
             commission_value: p.commissionValueFactual,
             image_url: p.imageUrl,
             original_url: p.productLink || p.offerLink,
-            opportunity_score: Math.min(100, score),
+            opportunity_score: finalScore,
             // Tags de controle Radar
             is_radar: true,
             external_id: `${p.shopId}_${p.itemId}`

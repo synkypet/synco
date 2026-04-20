@@ -5,6 +5,7 @@ import { MarketplaceAdapter, ProductMetadata, AffiliateResult } from './BaseAdap
 import { UserMarketplaceConnection } from '@/types/marketplace';
 import { ShopeeAffiliateClient } from '@/lib/shopee-affiliate/client';
 import { getCategoryName } from './shopee/categories';
+import { cleanProductName } from './shopee/cleaner';
 
 export class ShopeeAdapter extends MarketplaceAdapter {
   readonly name = 'Shopee';
@@ -395,8 +396,10 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       console.log(`Commission Factual: ${commissionValueFactual} (Source: ${commissionSource})`);
       console.log('--------------------------');
 
+      const cleanTitle = cleanProductName(winner.productName || nameFallback);
+
       return {
-        name: winner.productName || nameFallback,
+        name: cleanTitle,
         originalPrice: this.normalizeValue(winner.priceMax) || currentPriceFactual,
         currentPrice: currentPriceFactual,
         discountPercent: parseFloat(winner.priceDiscountRate || "0"),
@@ -485,9 +488,10 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       return nodes.map(node => {
         const factualPrice = this.normalizeValue(node.priceMin || node.price);
         const commissionAmt = this.normalizeValue(node.commission);
+        const cleanTitle = cleanProductName(node.productName);
         
         return {
-          name: node.productName,
+          name: cleanTitle,
           originalPrice: this.normalizeValue(node.priceMax) || factualPrice,
           currentPrice: factualPrice,
           currentPriceFactual: factualPrice,
