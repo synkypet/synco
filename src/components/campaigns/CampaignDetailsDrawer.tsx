@@ -66,11 +66,22 @@ export function CampaignDetailsDrawer({ isOpen, onClose, campaign }: CampaignDet
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                 <h2 className="text-xl font-black uppercase tracking-tight font-headline text-white">{campaign.name || 'Envio Rápido'}</h2>
-                 <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-1">
-                   {new Date(campaign.created_at || '').toLocaleString()}
-                 </p>
+              <div className="flex items-start gap-4">
+                 {campaign.items && campaign.items.length === 1 && (
+                   <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/40 border border-white/5 shadow-skeuo-pressed shrink-0">
+                     {campaign.items[0].image_url ? (
+                       <img src={campaign.items[0].image_url} alt="" className="w-full h-full object-cover" />
+                     ) : (
+                       <Package size={20} className="w-full h-full p-4 text-white/10" />
+                     )}
+                   </div>
+                 )}
+                 <div className="flex flex-col gap-1 min-w-0">
+                    <h2 className="text-xl font-black uppercase tracking-tight font-headline text-white line-clamp-2 leading-tight">{campaign.name || 'Envio Rápido'}</h2>
+                    <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-1">
+                      {new Date(campaign.created_at || '').toLocaleString()}
+                    </p>
+                 </div>
               </div>
 
               {/* Quick Stats Grid */}

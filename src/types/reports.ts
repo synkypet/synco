@@ -5,6 +5,7 @@ export interface OperationalSummary {
   total_failed: number;
   total_pending: number;
   active_groups_count: number;
+  total_groups: number;
   estimated_reach: number;
 }
 

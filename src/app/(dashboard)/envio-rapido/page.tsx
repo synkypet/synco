@@ -343,12 +343,6 @@ export default function EnvioRapidoPage() {
           >
             🚀 Broadcast Operacional
           </TabsTrigger>
-          <TabsTrigger
-            value="test"
-            className="text-[10px] font-black uppercase tracking-[0.2em] px-8 h-full rounded-xl data-[state=active]:bg-kinetic-orange/10 data-[state=active]:text-kinetic-orange data-[state=active]:shadow-skeuo-pressed font-headline italic"
-          >
-            🔬 Telemetria / Teste
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="broadcast" className="mt-0">
@@ -871,7 +865,8 @@ export default function EnvioRapidoPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="test" className="mt-0">
+        {/* Aba de Telemetria oculta na Etapa 1. Lógica interna preservada. */}
+        {false && <TabsContent value="test" className="mt-0">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <TactileCard className="p-8 border-none ring-1 ring-white/5 space-y-6">
               <div className="flex items-center gap-3 mb-4">
@@ -1083,7 +1078,7 @@ export default function EnvioRapidoPage() {
               </TactileCard>
             </div>
           </div>
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
       <SaveListDialog 
         open={isSaveListOpen}

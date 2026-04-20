@@ -11,11 +11,34 @@ import {
 
 
 export const reportsService = {
-  async getOperationalSummary(): Promise<OperationalSummary> {
+  /**
+   * Helper to get common date filter logic
+   */
+  _getThresholdDate(days: number): string {
+    const date = new Date();
+    if (days === 1) { // Special case for "Today" - start of the day
+      date.setHours(0, 0, 0, 0);
+    } else {
+      date.setDate(date.getDate() - days);
+    }
+    return date.toISOString();
+  },
+
+  async getOperationalSummary(days: number = 7): Promise<OperationalSummary> {
     const supabase = createClient();
+    const thresholdDate = this._getThresholdDate(days);
+    
+    // Total groups count (global, showing as context)
+    const { count: total_groups, error: tgCountError } = await supabase
+      .from('groups')
+      .select('*', { count: 'exact', head: true });
+
+    if (tgCountError) throw tgCountError;
+
     const { data: destinations, error } = await supabase
       .from('campaign_destinations')
-      .select('status, destination_list_id');
+      .select('status, destination_list_id, created_at')
+      .gte('created_at', thresholdDate);
 
     if (error) throw error;
 
@@ -51,32 +74,36 @@ export const reportsService = {
       total_failed,
       total_pending,
       active_groups_count,
+      total_groups: total_groups || 0,
       estimated_reach
     };
   },
 
-  async getPerformanceCharts(): Promise<{ weekly: WeeklyData[], hourly: HourlyData[] }> {
+  async getPerformanceCharts(days: number = 7): Promise<{ weekly: WeeklyData[], hourly: HourlyData[] }> {
     const supabase = createClient();
+    const thresholdDate = this._getThresholdDate(days);
+
     const { data: destinations, error } = await supabase
       .from('campaign_destinations')
-      .select('status, sent_at')
+      .select('status, sent_at, created_at')
+      .gte('created_at', thresholdDate)
       .not('sent_at', 'is', null);
 
     if (error) throw error;
 
     // Weekly
-    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     const weeklyMap: Record<string, { enviados: number, pendentes: number, falhas: number }> = {};
-    days.forEach(d => weeklyMap[d] = { enviados: 0, pendentes: 0, falhas: 0 });
+    dayNames.forEach(d => weeklyMap[d] = { enviados: 0, pendentes: 0, falhas: 0 });
 
     destinations?.forEach(d => {
-      const day = days[new Date(d.sent_at!).getDay()];
+      const day = dayNames[new Date(d.sent_at!).getDay()];
       if (d.status === 'sent') weeklyMap[day].enviados += 1;
       if (d.status === 'failed') weeklyMap[day].falhas += 1;
       if (d.status === 'pending') weeklyMap[day].pendentes += 1;
     });
 
-    const weekly = days.map(day => ({ name: day, ...weeklyMap[day] }));
+    const weekly = dayNames.map(day => ({ name: day, ...weeklyMap[day] }));
 
     // Hourly
     const hourlyMap: Record<string, number> = {};
@@ -97,12 +124,14 @@ export const reportsService = {
     return { weekly, hourly };
   },
 
-  async getTopGroups(): Promise<TopGroupData[]> {
-    // This is a bit more complex manually on client, but for phase 5A controlled scope it works
+  async getTopGroups(days: number = 7): Promise<TopGroupData[]> {
     const supabase = createClient();
+    const thresholdDate = this._getThresholdDate(days);
+
     const { data: destinations, error } = await supabase
       .from('campaign_destinations')
-      .select('destination_list_id, status')
+      .select('destination_list_id, status, created_at')
+      .gte('created_at', thresholdDate)
       .eq('status', 'sent');
 
     if (error) throw error;
@@ -133,13 +162,16 @@ export const reportsService = {
       .slice(0, 6);
   },
 
-  async getOperationalHistory(): Promise<OperationalHistoryItem[]> {
+  async getOperationalHistory(limit: number = 10, days: number = 7): Promise<OperationalHistoryItem[]> {
     const supabase = createClient();
+    const thresholdDate = this._getThresholdDate(days);
+
     const { data: campaigns, error } = await supabase
       .from('campaigns')
       .select('*, campaign_destinations(status)')
+      .gte('created_at', thresholdDate)
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(limit);
 
     if (error) throw error;
 

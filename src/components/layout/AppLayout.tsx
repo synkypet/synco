@@ -1,9 +1,12 @@
 'use client';
 
-import React, { useState, type ReactNode } from 'react';
+import React, { useState, useEffect, type ReactNode } from 'react';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import FloatingAIChat from '@/components/shared/FloatingAIChat';
+import OnboardingTutorial from '@/components/shared/OnboardingTutorial';
+import { useAuth } from '@/contexts/AuthContext';
+import { AnimatePresence } from 'framer-motion';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,11 +27,37 @@ interface AppLayoutProps {
  * - FloatingCartBar será adicionado na Fase 2 (quando componentes shared forem migrados)
  */
 export default function AppLayout({ children }: AppLayoutProps) {
+  const { user, isLoading: authLoading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  // Detecção de primeiro acesso e Replay via metadata
+  useEffect(() => {
+    if (!authLoading && user) {
+      const isCompleted = user.user_metadata?.onboarding_completed;
+      if (isCompleted === undefined || isCompleted === false) {
+        // Delay curto para garantir que a UI base carregou
+        const timer = setTimeout(() => setShowTutorial(true), 1200);
+        return () => clearTimeout(timer);
+      } else {
+        setShowTutorial(false);
+      }
+    }
+  }, [user, authLoading]);
 
   return (
     <div className="min-h-screen bg-deep-void">
+        {/* Tutorial Layer */}
+        <AnimatePresence>
+          {showTutorial && user && (
+            <OnboardingTutorial 
+              isOpen={showTutorial} 
+              onClose={() => setShowTutorial(false)} 
+              userId={user.id}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Mobile overlay */}
         {mobileMenuOpen && (

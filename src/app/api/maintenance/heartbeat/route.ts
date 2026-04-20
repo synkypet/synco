@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { triggerWorker } from '@/lib/worker/trigger';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   const requestId = `heartbeat-${Math.random().toString(36).substring(7)}`;
   const supabase = createAdminClient();

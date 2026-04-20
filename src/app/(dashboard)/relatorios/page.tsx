@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    AreaChart, Area
+    AreaChart, Area, PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { 
     useOperationalSummary, 
@@ -35,16 +35,28 @@ const TYPE_LABELS: Record<string, string> = {
     monitoring: 'Monitoramento' 
 };
 
+const STATUS_COLORS = {
+    sent: '#10b981',
+    failed: '#ef4444',
+    pending: '#f59e0b'
+};
+
 export default function RelatoriosPage() {
     const [period, setPeriod] = useState('week');
     const [tab, setTab] = useState('overview');
 
-    const { data: summary, isLoading: isLoadingSummary } = useOperationalSummary();
-    const { data: charts, isLoading: isLoadingCharts } = usePerformanceCharts();
-    const { data: topGroups, isLoading: isLoadingTopGroups } = useTopGroups();
-    const { data: history, isLoading: isLoadingHistory } = useOperationalHistory();
+    const { data: summary, isLoading: isLoadingSummary } = useOperationalSummary(period);
+    const { data: charts, isLoading: isLoadingCharts } = usePerformanceCharts(period);
+    const { data: topGroups, isLoading: isLoadingTopGroups } = useTopGroups(period);
+    const { data: history, isLoading: isLoadingHistory } = useOperationalHistory(period);
 
     const isLoading = isLoadingSummary || isLoadingCharts || isLoadingTopGroups || isLoadingHistory;
+
+    const pieData = [
+        { name: 'Sucesso', value: summary?.total_sent || 0, color: STATUS_COLORS.sent },
+        { name: 'Falha', value: summary?.total_failed || 0, color: STATUS_COLORS.failed },
+        { name: 'Pendente', value: summary?.total_pending || 0, color: STATUS_COLORS.pending },
+    ].filter(d => d.value > 0);
 
     if (isLoading) {
         return (
@@ -54,7 +66,7 @@ export default function RelatoriosPage() {
         );
     }
 
-    const failureRate = summary && summary.total_sent > 0 
+    const failureRate = summary && (summary.total_sent + summary.total_failed) > 0 
         ? ((summary.total_failed / (summary.total_sent + summary.total_failed)) * 100).toFixed(1) 
         : '0';
 
@@ -121,9 +133,9 @@ export default function RelatoriosPage() {
                     <p className="text-2xl font-black text-primary">
                         {summary && summary.estimated_reach >= 1000 
                             ? `${(summary.estimated_reach / 1000).toFixed(1)}k` 
-                            : summary?.estimated_reach}
+                            : summary?.estimated_reach || 0}
                     </p>
-                    <p className="text-xs text-muted-foreground">Alcance estimado</p>
+                    <p className="text-xs text-muted-foreground">Alcance estimado (membros)</p>
                 </Card>
             </div>
 
@@ -131,7 +143,7 @@ export default function RelatoriosPage() {
             {tab === 'overview' && (
                 <div className="grid md:grid-cols-2 gap-4">
                     <Card className="p-5">
-                        <h3 className="font-semibold mb-4 text-sm">Envios por Dia (Semana)</h3>
+                        <h3 className="font-semibold mb-4 text-sm">Envios por Dia (Intervalo)</h3>
                         <ResponsiveContainer width="100%" height={220}>
                             <BarChart data={charts?.weekly}>
                                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
@@ -145,13 +157,33 @@ export default function RelatoriosPage() {
                     </Card>
 
                     <Card className="p-5">
-                        <h3 className="font-semibold mb-4 text-sm">Distribuição de Status</h3>
-                        <div className="flex items-center justify-center h-[220px]">
-                           <div className="text-center space-y-2 opacity-50">
-                              <PieChartIcon className="w-12 h-12 mx-auto text-muted-foreground" />
-                              <p className="text-xs">Gráfico circular será implementado em breve</p>
-                           </div>
-                        </div>
+                        <h3 className="font-semibold mb-1 text-sm">Distribuição de Status</h3>
+                        {pieData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height={220}>
+                                <PieChart>
+                                    <Pie
+                                        data={pieData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                    >
+                                        {pieData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '11px' }} />
+                                    <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-[220px] opacity-20">
+                                <PieChartIcon size={40} className="mb-2" />
+                                <p className="text-xs uppercase font-black tracking-widest">Sem dados no período</p>
+                            </div>
+                        )}
                     </Card>
                 </div>
             )}
@@ -178,7 +210,7 @@ export default function RelatoriosPage() {
                                 <div key={i} className="space-y-1.5">
                                     <div className="flex items-center justify-between text-xs">
                                         <span className="font-medium truncate max-w-[200px]">{g.name}</span>
-                                        <span className="font-bold text-primary">{g.membros.toLocaleString()}</span>
+                                        <span className="font-bold text-primary">{g.membros.toLocaleString()} membros</span>
                                     </div>
                                     <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                                         <div 
@@ -188,8 +220,11 @@ export default function RelatoriosPage() {
                                     </div>
                                 </div>
                             ))}
-                            {topGroups?.length === 0 && (
-                                <p className="text-xs text-muted-foreground text-center py-10">Nenhum dado disponível.</p>
+                            {(!topGroups || topGroups.length === 0) && (
+                                <div className="p-10 text-center rounded-2xl border border-dashed border-white/5 opacity-20">
+                                    <Users size={32} className="mx-auto mb-2" />
+                                    <p className="text-[10px] font-black uppercase tracking-widest">Nenhum grupo ativo no período</p>
+                                </div>
                             )}
                         </div>
                     </Card>
@@ -199,7 +234,7 @@ export default function RelatoriosPage() {
             {tab === 'timing' && (
                 <Card className="p-5">
                     <h3 className="font-semibold mb-1 text-sm">Frequência de Envios por Horário</h3>
-                    <p className="text-xs text-muted-foreground mb-6">Volume de envios realizados ao longo do dia</p>
+                    <p className="text-xs text-muted-foreground mb-6">Volume de envios realizados ao longo do dia (Período: {period})</p>
                     <ResponsiveContainer width="100%" height={280}>
                         <AreaChart data={charts?.hourly}>
                             <defs>
@@ -220,7 +255,7 @@ export default function RelatoriosPage() {
 
             {tab === 'history' && (
                 <Card className="p-5">
-                    <h3 className="font-semibold mb-4 text-sm">Histórico de Campanhas</h3>
+                    <h3 className="font-semibold mb-4 text-sm">Histórico de Campanhas (Métricas de Despacho)</h3>
                     <div className="space-y-2">
                         {history?.map((item, i) => (
                             <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-muted/40 hover:bg-muted/60 transition-colors">
@@ -236,8 +271,11 @@ export default function RelatoriosPage() {
                                 </div>
                             </div>
                         ))}
-                        {history?.length === 0 && (
-                            <p className="text-xs text-muted-foreground text-center py-10">Nenhuma campanha registrada no histórico.</p>
+                        {(!history || history.length === 0) && (
+                            <div className="p-16 text-center rounded-2xl border border-dashed border-white/5 opacity-20">
+                                <History size={32} className="mx-auto mb-2" />
+                                <p className="text-[10px] font-black uppercase tracking-widest">Nenhuma campanha registrada no intervalo</p>
+                            </div>
                         )}
                     </div>
                 </Card>
