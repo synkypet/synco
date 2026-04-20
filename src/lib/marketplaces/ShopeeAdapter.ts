@@ -4,6 +4,7 @@
 import { MarketplaceAdapter, ProductMetadata, AffiliateResult } from './BaseAdapter';
 import { UserMarketplaceConnection } from '@/types/marketplace';
 import { ShopeeAffiliateClient } from '@/lib/shopee-affiliate/client';
+import { getCategoryName } from './shopee/categories';
 
 export class ShopeeAdapter extends MarketplaceAdapter {
   readonly name = 'Shopee';
@@ -451,6 +452,63 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     } catch (error: any) {
       console.error('[SHOPEE ADAPTER] Erro ao gerar link:', error.message);
       return cleanUrl;
+    }
+  }
+
+  /**
+   * Descoberta ativa de produtos por estratégia (sortType).
+   * 1: Top Sales, 3: Hot, 5: Recommendation
+   */
+  async discoverProducts(options: { 
+    limit?: number; 
+    sortType?: number; 
+    connection: UserMarketplaceConnection 
+  }): Promise<ProductMetadata[]> {
+    const { limit = 20, sortType = 3, connection } = options;
+
+    if (!connection.shopee_app_id || !connection.shopee_app_secret) {
+      throw new Error('Connection missing App ID or Secret');
+    }
+
+    try {
+      const client = new ShopeeAffiliateClient({
+        appId: connection.shopee_app_id,
+        secret: connection.shopee_app_secret
+      });
+
+      const nodes = await client.searchProducts({ 
+        limit, 
+        sortType,
+        page: 1 
+      });
+
+      return nodes.map(node => {
+        const factualPrice = this.normalizeValue(node.priceMin || node.price);
+        const commissionAmt = this.normalizeValue(node.commission);
+        
+        return {
+          name: node.productName,
+          originalPrice: this.normalizeValue(node.priceMax) || factualPrice,
+          currentPrice: factualPrice,
+          currentPriceFactual: factualPrice,
+          currentPriceSource: 'api.price',
+          commissionValueFactual: commissionAmt,
+          commissionSource: 'api.commission',
+          discountPercent: parseFloat(node.priceDiscountRate || "0"),
+          imageUrl: node.imageUrl || '',
+          marketplace: 'Shopee',
+          shopName: node.shopName || 'Shopee',
+          category: getCategoryName(node.productCatIds || []),
+          itemId: String(node.itemId || ''),
+          shopId: String(node.shopId || ''),
+          productLink: node.productLink,
+          offerLink: node.offerLink,
+          fetchedAt: new Date().toISOString()
+        };
+      });
+    } catch (error: any) {
+      console.error(`[SHOPEE-DISCOVERY] Error with sortType ${sortType}:`, error.message);
+      return [];
     }
   }
 
