@@ -110,6 +110,24 @@ export function useDeleteAutomationSource() {
   });
 }
 
+export function useAllAutomationLogs(userId: string, limit: number = 50) {
+  return useQuery({
+    queryKey: ['automation-logs-all', userId, limit],
+    queryFn: () => automationService.listAllLogs(userId, limit),
+    enabled: !!userId,
+    refetchInterval: 5000
+  });
+}
+
+export function useAutomationSummary(userId: string) {
+  return useQuery({
+    queryKey: ['automation-summary', userId],
+    queryFn: () => automationService.getAutomationSummary(userId),
+    enabled: !!userId,
+    refetchInterval: 10000
+  });
+}
+
 export function useAutomationRecentCampaigns(sourceId: string) {
   return useQuery({
     queryKey: ['automation-recent-campaigns', sourceId],

@@ -11,7 +11,6 @@ import {
   BarChart3,
   Settings,
   Sparkles,
-  Store,
   Bot,
   List,
   DollarSign,
@@ -60,7 +59,6 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Descoberta',
     items: [
       { path: '/radar-ofertas', label: 'Radar de Ofertas', icon: Radar },
-      { path: '/marketplaces', label: 'Marketplaces', icon: Store },
     ],
   },
   {

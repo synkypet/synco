@@ -83,7 +83,10 @@ export async function GET(request: Request) {
                 affiliate_url: product.original_url,
                 current_price: product.current_price,
                 original_price: product.original_price,
-                external_product_id: product.id
+                external_product_id: product.id,
+                // Requisitos de Elegibilidade (Fase 2)
+                eligibility_status: 'eligible' as const,
+                eligibility_reasons: [] as string[]
               }],
               destinations: [{
                 type: route.target_type,

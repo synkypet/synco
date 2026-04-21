@@ -289,6 +289,52 @@ export const automationService = {
   },
 
   /**
+   * Busca logs de execução de TODAS as automações do usuário
+   */
+  async listAllLogs(userId: string, limit: number = 50, client?: SupabaseClient): Promise<any[]> {
+    const supabase = client || createClient();
+    const { data, error } = await supabase
+      .from('automation_logs')
+      .select(`
+        *,
+        source:automation_sources(name, source_type)
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error listing all logs:', error);
+      return [];
+    }
+    return data || [];
+  },
+
+  /**
+   * Obtém resumo de métricas factuais das automações
+   */
+  async getAutomationSummary(userId: string, client?: SupabaseClient): Promise<{ captured: number; processed: number; error: number }> {
+    const supabase = client || createClient();
+    
+    // Contagem simples por status
+    const { data: counts, error } = await supabase
+      .from('automation_logs')
+      .select('status')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error fetching automation summary:', error);
+      return { captured: 0, processed: 0, error: 0 };
+    }
+
+    return {
+      captured: counts.filter(c => c.status === 'captured').length,
+      processed: counts.filter(c => c.status === 'processed').length,
+      error: counts.filter(c => c.status === 'error').length
+    };
+  },
+
+  /**
    * Busca as últimas campanhas geradas por uma automação,
    * baseando-se nos logs de 'job_created'.
    */

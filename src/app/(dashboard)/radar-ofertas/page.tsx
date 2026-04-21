@@ -1,7 +1,9 @@
 // src/app/(dashboard)/radar-ofertas/page.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { KineticButton } from '@/components/ui/KineticButton';
@@ -50,13 +52,63 @@ export default function RadarOfertasPage() {
   const [filters, setFilters] = useState<ProductFilter>({});
   const [showFilters, setShowFilters] = useState(false);
 
+  // Garimpo Shopee State
+  const [garimpSearch, setGarimpSearch] = useState('');
+  const [isGarimping, setIsGarimping] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleGarimpShopee = useCallback(async () => {
+    if (!garimpSearch.trim() || isGarimping) return;
+    setIsGarimping(true);
+    try {
+      const res = await fetch('/api/radar/fetch-shopee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: garimpSearch.trim() })
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'SUCCESS') {
+        toast.success(`${data.items?.length || 0} produtos da Shopee adicionados ao Radar!`, { duration: 4000 });
+        queryClient.invalidateQueries({ queryKey: ['products'] });
+        setGarimpSearch('');
+      } else {
+        toast.error(data.error || 'Erro ao garimpar na Shopee');
+      }
+    } catch (err: any) {
+      toast.error('Falha de rede ao garimpar na Shopee');
+    } finally {
+      setIsGarimping(false);
+    }
+  }, [garimpSearch, isGarimping, queryClient]);
+
   // Context & Hooks
   const { toggleProduct, isSelected, count: cartCount, selectedProducts, clearProducts } = useSelectedProducts();
   const toggleFavoriteMutation = useToggleFavorite();
   
+  // Memoize combined filters
+  const combinedFilters = React.useMemo(() => {
+    let finalFilters = { ...filters };
+
+    // Apply offerType rules
+    if (offerType === 'opportunities') finalFilters.minDiscount = 20;
+    else if (offerType === 'high_commission') { finalFilters.sortBy = 'commission_percent'; finalFilters.sortOrder = 'desc'; }
+    else if (offerType === 'low_price') { finalFilters.sortBy = 'current_price'; finalFilters.sortOrder = 'asc'; }
+    else if (offerType === 'coupons') finalFilters.has_coupon = true;
+    else if (offerType === 'favorites') finalFilters.favorites_only = true;
+
+    // Explicit Dropdown SortBy overrides (if they deviate from the default score_desc)
+    if (sortBy === 'score_desc') { finalFilters.sortBy = 'opportunity_score'; finalFilters.sortOrder = 'desc'; }
+    else if (sortBy === 'commission_desc') { finalFilters.sortBy = 'commission_percent'; finalFilters.sortOrder = 'desc'; }
+    else if (sortBy === 'commission_asc') { finalFilters.sortBy = 'commission_percent'; finalFilters.sortOrder = 'asc'; }
+    else if (sortBy === 'price_asc') { finalFilters.sortBy = 'current_price'; finalFilters.sortOrder = 'asc'; }
+    else if (sortBy === 'price_desc') { finalFilters.sortBy = 'current_price'; finalFilters.sortOrder = 'desc'; }
+
+    return finalFilters;
+  }, [filters, offerType, sortBy]);
+
   // Data Fetching
   const { data: products, isLoading, isError, error } = useProducts({
-    ...filters,
+    ...combinedFilters,
     marketplace: marketplace === 'all' ? undefined : marketplace,
     search: search || undefined,
   });
@@ -222,6 +274,36 @@ export default function RadarOfertasPage() {
           />
         </div>
       )}
+
+      {/* Garimpar na Shopee — Busca manual direta na API */}
+      <div className="flex items-center gap-3 p-4 rounded-2xl bg-anthracite-surface shadow-skeuo-flat">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-lg">🛍️</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-white/60">Garimpar na Shopee</span>
+        </div>
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/20" />
+          <Input
+            placeholder="Ex: fone bluetooth, air fryer, smartwatch..."
+            className="pl-9 h-9 text-xs border-none bg-deep-void shadow-skeuo-pressed text-white/80 placeholder:text-white/15 focus-visible:ring-1 focus-visible:ring-kinetic-orange/50 rounded-xl w-full"
+            value={garimpSearch}
+            onChange={(e) => setGarimpSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleGarimpShopee()}
+            disabled={isGarimping}
+          />
+        </div>
+        <KineticButton 
+          className="h-9 px-5 text-[10px] shrink-0" 
+          onClick={handleGarimpShopee}
+          disabled={isGarimping || !garimpSearch.trim()}
+        >
+          {isGarimping ? (
+            <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Garimpando...</>
+          ) : (
+            <><Zap className="w-3.5 h-3.5 mr-1.5" /> Buscar</>
+          )}
+        </KineticButton>
+      </div>
 
       {/* Barra de Contexto Operacional — Base44 pattern */}
       <div className="flex items-center justify-between flex-wrap gap-3">

@@ -195,7 +195,7 @@ export default function GanhosPage() {
                     </div>
                     <div className={cn(
                       "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full inline-block mt-1",
-                      order.order_status === 'Completed' || order.order_status === 'Concluído' 
+                      order.order_status?.toLowerCase() === 'completed' || order.order_status?.toLowerCase() === 'concluído' 
                         ? "bg-emerald-500/10 text-emerald-500" 
                         : "bg-white/10 text-white/40"
                     )}>

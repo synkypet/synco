@@ -48,8 +48,12 @@ export const productService = {
       }
     }
 
-    // Default sorting
-    query = query.order('opportunity_score', { ascending: false });
+    // Dynamic sorting
+    if (filters?.sortBy) {
+      query = query.order(filters.sortBy, { ascending: filters.sortOrder === 'asc' });
+    } else {
+      query = query.order('opportunity_score', { ascending: false });
+    }
 
     const { data, error } = await query;
 

@@ -292,7 +292,6 @@ export default function EnvioRapidoPage() {
         custom_text: p.copy.messageText || '',
         image_url: p.factual.image || undefined,
         affiliate_url: p.factual.finalLinkToSend || p.factual.originalUrl,
-        
         // --- FÓRMULA OPERACIONAL (Fase 1: Rastreabilidade) ---
         incoming_url: p.factual.incoming_url,
         resolved_url: p.factual.resolved_url,
@@ -301,6 +300,11 @@ export default function EnvioRapidoPage() {
         redirect_chain: p.factual.redirect_chain,
         reaffiliation_status: p.factual.reaffiliation_status,
         reaffiliation_error: p.factual.reaffiliation_error,
+
+        // --- FÓRMULA OPERACIONAL (Fase 2: Elegibilidade Persistida) ---
+        eligibility_status: p.factual.eligibility.status,
+        eligibility_reasons: p.factual.eligibility.reasons,
+
         external_product_id: p.factual.itemId?.toString(),
         installments: p.factual.installments
       })),
@@ -342,12 +346,6 @@ export default function EnvioRapidoPage() {
             className="text-[10px] font-black uppercase tracking-[0.2em] px-8 h-full rounded-xl data-[state=active]:bg-kinetic-orange/10 data-[state=active]:text-kinetic-orange data-[state=active]:shadow-skeuo-pressed font-headline italic"
           >
             🚀 Broadcast Operacional
-          </TabsTrigger>
-          <TabsTrigger
-            value="test"
-            className="text-[10px] font-black uppercase tracking-[0.2em] px-8 h-full rounded-xl data-[state=active]:bg-kinetic-orange/10 data-[state=active]:text-kinetic-orange data-[state=active]:shadow-skeuo-pressed font-headline italic"
-          >
-            🔬 Telemetria / Teste
           </TabsTrigger>
         </TabsList>
 
@@ -467,17 +465,26 @@ export default function EnvioRapidoPage() {
                   </div>
 
                   {processedProducts.map(product => (
-                    <TactileCard key={product.id} className="p-0 overflow-hidden border-none group">
+                    <TactileCard 
+                      key={product.id} 
+                      className={cn(
+                        "p-0 overflow-hidden border-none group transition-all duration-300",
+                        !product.factual.eligibility.isEligible && "opacity-80 ring-1 ring-red-500/20"
+                      )}
+                    >
                       <div className="flex flex-col md:flex-row">
                         <div className="w-full md:w-36 bg-deep-void/50 p-4 flex flex-col items-center justify-center border-r border-white/5 bg-gradient-to-b from-transparent to-white/5 shrink-0">
-                          <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-skeuo-flat group-hover:shadow-glow-orange/20 transition-all duration-500 bg-deep-void relative border border-white/5">
+                          <div className={cn(
+                            "w-24 h-24 rounded-2xl overflow-hidden shadow-skeuo-flat transition-all duration-500 bg-deep-void relative border border-white/5",
+                            product.factual.eligibility.isEligible && "group-hover:shadow-glow-orange/20"
+                          )}>
                             {product.metadata.source === 'fallback' || !product.factual.image ? (
                               <div className="flex flex-col items-center justify-center h-full bg-anthracite-surface/40 rounded-xl">
                                 <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center mb-1.5 shadow-skeuo-pressed">
-                                  <Info className="w-4 h-4 text-white/10" />
+                                  <AlertCircle className="w-4 h-4 text-red-500/40" />
                                 </div>
-                                <span className="text-[7.5px] font-black uppercase tracking-widest text-white/20 text-center px-2 leading-tight">
-                                  SINAL DE IMAGEM AUSENTE
+                                <span className="text-[7.5px] font-black uppercase tracking-widest text-red-500/40 text-center px-2 leading-tight">
+                                  IMAGEM AUSENTE OU INVÁLIDA
                                 </span>
                               </div>
                             ) : (
@@ -502,7 +509,11 @@ export default function EnvioRapidoPage() {
                               <Checkbox 
                                 checked={selectedProductIds.includes(product.id)}
                                 onCheckedChange={() => handleToggleProduct(product.id)}
-                                className="border-white/20 data-[state=checked]:bg-kinetic-orange data-[state=checked]:border-none"
+                                disabled={!product.factual.eligibility.isEligible}
+                                className={cn(
+                                  "border-white/20 data-[state=checked]:bg-kinetic-orange data-[state=checked]:border-none",
+                                  !product.factual.eligibility.isEligible && "opacity-20 cursor-not-allowed"
+                                )}
                               />
                             </div>
                           </div>
@@ -520,6 +531,19 @@ export default function EnvioRapidoPage() {
                                 )}>
                                   {product.factual.title}
                                 </h4>
+
+                                {!product.factual.eligibility.isEligible && (
+                                  <Badge className="bg-red-500/10 text-red-500 border border-red-500/20 text-[9px] font-black uppercase tracking-widest font-headline italic">
+                                    ⚠️ Inelegível
+                                  </Badge>
+                                )}
+
+                                {product.factual.eligibility.status === 'warning' && (
+                                  <Badge className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[9px] font-black uppercase tracking-widest font-headline italic">
+                                    ⚡ Atenção
+                                  </Badge>
+                                )}
+
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -534,23 +558,40 @@ export default function EnvioRapidoPage() {
                                 </Button>
                               </div>
 
+                              {/* Motivos de Ineligibilidade/Aviso */}
+                              {product.factual.eligibility.reasons.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  {product.factual.eligibility.reasons.map((reason, idx) => (
+                                    <span key={idx} className={cn(
+                                      "text-[9px] font-bold uppercase tracking-tight px-2 py-0.5 rounded-md",
+                                      product.factual.eligibility.status === 'ineligible' 
+                                        ? "bg-red-500/5 text-red-500/60" 
+                                        : "bg-amber-500/5 text-amber-500/60"
+                                    )}>
+                                      • {reason}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
                               <div className="flex flex-wrap items-center gap-3">
                                 {product.metadata.source !== 'fallback' && product.factual.price && product.factual.price > 0 ? (
                                   <Popover>
                                     <PopoverTrigger asChild>
                                       <div className="flex flex-col items-start gap-1 cursor-pointer group/price hover:bg-white/5 px-2 -ml-2 py-1 rounded-xl transition-all">
-                                          <div className="flex items-center gap-2">
                                             {product.factual.originalPrice && product.factual.originalPrice > product.factual.currentPriceFactual! && (
-                                              <span className="text-[10px] line-through text-white/20 font-bold decoration-kinetic-orange/40">
-                                                {product.factual.originalPriceFormatted}
+                                              <span className="text-[10px] text-white/20 font-bold">
+                                                De: <span className="line-through decoration-kinetic-orange/40">{product.factual.originalPriceFormatted}</span>
                                               </span>
                                             )}
-                                            <span className="text-[14px] font-black text-kinetic-orange shadow-glow-orange/10">
-                                              {product.factual.priceFormatted || 'Preço Indisponível'}
-                                            </span>
-                                            <Info className="w-3 h-3 text-white/20 group-hover/price:text-kinetic-orange transition-colors" />
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-[11px] font-black text-kinetic-orange uppercase tracking-widest opacity-70">🔥 Por:</span>
+                                              <span className="text-[14px] font-black text-kinetic-orange shadow-glow-orange/10">
+                                                {product.factual.priceFormatted || 'Preço Indisponível'}
+                                              </span>
+                                            </div>
+                                            <Info className="w-3 h-3 absolute top-1 right-1 text-white/10 group-hover/price:text-kinetic-orange transition-colors" />
                                           </div>
-                                      </div>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-64 bg-deep-void border-none shadow-skeuo-elevated p-5 animate-in fade-in zoom-in duration-200 rounded-2xl ring-1 ring-white/5">
                                       <div className="space-y-4">
@@ -574,6 +615,7 @@ export default function EnvioRapidoPage() {
                                               <span className="text-[9px] uppercase text-white/20 font-black">Preço API</span>
                                               <span className="text-white/80">{product.factual.priceFormatted}</span>
                                             </div>
+
 
                                             <div className="flex justify-between items-baseline pt-2 border-t border-white/5 text-kinetic-orange text-[12px] font-black">
                                               <span>COMISSÃO FINAL</span>
@@ -844,7 +886,11 @@ export default function EnvioRapidoPage() {
                   <KineticButton
                     className="w-full h-15 font-black uppercase tracking-[0.2em] text-[11px] font-headline italic rounded-2xl shadow-glow-orange-intense transition-all hover:scale-[1.02] active:scale-[0.98]"
                     disabled={
-                      isSending || selectedProductIds.length === 0 || selectedDestinations.length === 0
+                      isSending || 
+                      selectedProductIds.length === 0 || 
+                      selectedDestinations.length === 0 ||
+                      // Trava Final UI: Não permitir se algum selecionado for inelegível (segurança extra)
+                      processedProducts.some(p => selectedProductIds.includes(p.id) && !p.factual.eligibility.isEligible)
                     }
                     onClick={handleSend}
                   >
@@ -871,7 +917,8 @@ export default function EnvioRapidoPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="test" className="mt-0">
+        {/* Aba de Telemetria oculta na Etapa 1. Lógica interna preservada. */}
+        {false && <TabsContent value="test" className="mt-0">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <TactileCard className="p-8 border-none ring-1 ring-white/5 space-y-6">
               <div className="flex items-center gap-3 mb-4">
@@ -1083,7 +1130,7 @@ export default function EnvioRapidoPage() {
               </TactileCard>
             </div>
           </div>
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
       <SaveListDialog 
         open={isSaveListOpen}

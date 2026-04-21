@@ -7,88 +7,165 @@ import {
   TopGroupData, 
   OperationalHistoryItem 
 } from '@/types/reports';
-
-
+import { groupService } from './group-service';
+import { 
+  format, 
+  subDays, 
+  startOfDay, 
+  endOfDay, 
+  eachDayOfInterval, 
+  parseISO,
+  isSameDay 
+} from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export const reportsService = {
-  async getOperationalSummary(): Promise<OperationalSummary> {
+  /**
+   * Helper to apply date filters consistently
+   */
+  _applyDateFilter(query: any, options: { days?: number, startDate?: string, endDate?: string }) {
+    if (options.startDate) {
+      // If endDate is missing, use current time
+      const end = options.endDate || new Date().toISOString();
+      return query.gte('created_at', options.startDate).lte('created_at', end);
+    }
+    
+    const days = options.days || 7;
+    const date = new Date();
+    if (days === 1) { // Today
+      date.setHours(0, 0, 0, 0);
+    } else {
+      date.setDate(date.getDate() - days);
+    }
+    return query.gte('created_at', date.toISOString());
+  },
+
+  async getOperationalSummary(userId: string, options: { days?: number, startDate?: string, endDate?: string } = { days: 7 }): Promise<OperationalSummary> {
     const supabase = createClient();
-    const { data: destinations, error } = await supabase
-      .from('campaign_destinations')
-      .select('status, destination_list_id');
-
-    if (error) throw error;
-
-    const total_sent = destinations?.filter(d => d.status === 'sent').length || 0;
-    const total_failed = destinations?.filter(d => d.status === 'failed').length || 0;
-    const total_pending = destinations?.filter(d => d.status === 'pending').length || 0;
-
-    // Get unique destination lists used
-    const listIds = [...new Set(destinations?.map(d => d.destination_list_id))];
     
-    // Fetch groups related to these lists to calculate reach
-    const { data: listGroups, error: lgError } = await supabase
-      .from('destination_list_groups')
-      .select('group_id')
-      .in('destination_list_id', listIds);
+    // 1. Core metric (Total groups) - CRITICAL
+    const activeGroups = await groupService.list(userId);
+    const total_active_groups = activeGroups.length;
+    const global_estimated_reach = activeGroups.reduce((acc, g) => acc + (g.members_count || 0), 0);
 
-    if (lgError) throw lgError;
+    // Initial counts
+    let total_sent = 0;
+    let total_failed = 0;
+    let total_pending = 0;
+    let active_groups_count = 0;
+    let active_campaigns_count = 0;
+    let monitorings_count = 0;
+    let active_automations_count = 0;
+    let destination_lists_count = 0;
 
-    const groupIds = [...new Set(listGroups?.map(lg => lg.group_id))];
-    
-    const { data: groups, error: gError } = await supabase
-      .from('groups')
-      .select('members_count')
-      .in('id', groupIds);
+    try {
+      // 2. Fetch Job stats from send_jobs (where status actually lives)
+      let jobQuery = supabase
+        .from('send_jobs')
+        .select('status, destination, created_at')
+        .eq('user_id', userId);
+      
+      jobQuery = this._applyDateFilter(jobQuery, options);
+      const { data: jobs, error: jobError } = await jobQuery;
+      
+      if (!jobError && jobs) {
+        total_sent = jobs.filter(j => j.status === 'completed' || j.status === 'sent').length;
+        total_failed = jobs.filter(j => j.status === 'failed').length;
+        total_pending = jobs.filter(j => j.status === 'pending' || j.status === 'processing').length;
+        
+        // Count unique destinations (groups) active in this period
+        const activeIds = [...new Set(jobs.map(j => j.destination))];
+        active_groups_count = activeIds.length;
+      }
 
-    if (gError) throw gError;
+      // 3. New Hero Metrics
+      const [jobsResult, automationsResult, listsResult] = await Promise.all([
+        supabase.from('send_jobs').select('campaign_id').in('status', ['pending', 'processing']),
+        supabase.from('automation_sources').select('source_type, is_active').eq('user_id', userId),
+        supabase.from('destination_lists').select('id', { count: 'exact', head: true }).eq('user_id', userId)
+      ]);
 
-    const active_groups_count = groupIds.length;
-    const estimated_reach = groups?.reduce((acc, g) => acc + (g.members_count || 0), 0) || 0;
+      if (!jobsResult.error && jobsResult.data) {
+        const uniqueCampaigns = [...new Set(jobsResult.data.map(j => j.campaign_id))];
+        active_campaigns_count = uniqueCampaigns.length;
+      }
+
+      if (!listsResult.error) destination_lists_count = listsResult.count || 0;
+      
+      if (!automationsResult.error && automationsResult.data) {
+        monitorings_count = automationsResult.data.filter(a => a.source_type === 'group_monitor').length;
+        active_automations_count = automationsResult.data.filter(a => a.is_active).length;
+      }
+
+    } catch (err) {
+      console.error('[REPORTS-SERVICE] Failed to fetch secondary metrics:', err);
+    }
 
     return {
       total_sent,
       total_failed,
       total_pending,
       active_groups_count,
-      estimated_reach
+      total_groups: total_active_groups,
+      estimated_reach: global_estimated_reach,
+      active_campaigns_count,
+      monitorings_count,
+      active_automations_count,
+      destination_lists_count
     };
   },
 
-  async getPerformanceCharts(): Promise<{ weekly: WeeklyData[], hourly: HourlyData[] }> {
+  async getPerformanceCharts(userId: string, options: { days?: number, startDate?: string, endDate?: string } = { days: 7 }): Promise<{ weekly: WeeklyData[], hourly: HourlyData[] }> {
     const supabase = createClient();
-    const { data: destinations, error } = await supabase
-      .from('campaign_destinations')
-      .select('status, sent_at')
-      .not('sent_at', 'is', null);
+
+    // 1. Resolve Interval
+    let start: Date;
+    let end: Date = new Date();
+
+    if (options.startDate && options.endDate) {
+      start = startOfDay(parseISO(options.startDate));
+      end = endOfDay(parseISO(options.endDate));
+    } else {
+      const days = options.days || 7;
+      start = startOfDay(subDays(new Date(), days - 1));
+      end = endOfDay(new Date());
+    }
+
+    // 2. Fetch Data
+    const { data: jobs, error } = await supabase
+      .from('send_jobs')
+      .select('status, created_at')
+      .eq('user_id', userId)
+      .not('status', 'eq', 'pending')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString());
 
     if (error) throw error;
 
-    // Weekly
-    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-    const weeklyMap: Record<string, { enviados: number, pendentes: number, falhas: number }> = {};
-    days.forEach(d => weeklyMap[d] = { enviados: 0, pendentes: 0, falhas: 0 });
-
-    destinations?.forEach(d => {
-      const day = days[new Date(d.sent_at!).getDay()];
-      if (d.status === 'sent') weeklyMap[day].enviados += 1;
-      if (d.status === 'failed') weeklyMap[day].falhas += 1;
-      if (d.status === 'pending') weeklyMap[day].pendentes += 1;
+    // 3. Generate Chronological Days
+    const dateInterval = eachDayOfInterval({ start, end });
+    const weekly = dateInterval.map(d => {
+      const dayJobs = jobs?.filter(j => isSameDay(parseISO(j.created_at!), d)) || [];
+      
+      return {
+        name: format(d, 'dd/MM', { locale: ptBR }),
+        enviados: dayJobs.filter(j => j.status === 'completed' || j.status === 'sent').length,
+        falhas: dayJobs.filter(j => j.status === 'failed').length,
+        pendentes: dayJobs.filter(j => j.status === 'pending' || j.status === 'processing').length,
+      };
     });
 
-    const weekly = days.map(day => ({ name: day, ...weeklyMap[day] }));
-
-    // Hourly
+    // 4. Hourly (Current day focus or context)
     const hourlyMap: Record<string, number> = {};
     for (let i = 0; i < 24; i++) {
-      const h = i.toString().padStart(2, '0') + 'h';
-      hourlyMap[h] = 0;
+      hourlyMap[i.toString().padStart(2, '0') + 'h'] = 0;
     }
 
-    destinations?.forEach(d => {
-      if (d.status === 'sent') {
-        const hour = new Date(d.sent_at!).getHours().toString().padStart(2, '0') + 'h';
-        hourlyMap[hour] += 1;
+    jobs?.forEach(d => {
+      // Solo contamos para hoy si es gráfico de hoy, o total si es periodo largo
+      if (d.status === 'completed' || d.status === 'sent') {
+        const hour = new Date(d.created_at!).getHours().toString().padStart(2, '0') + 'h';
+        if (hourlyMap[hour] !== undefined) hourlyMap[hour] += 1;
       }
     });
 
@@ -97,35 +174,28 @@ export const reportsService = {
     return { weekly, hourly };
   },
 
-  async getTopGroups(): Promise<TopGroupData[]> {
-    // This is a bit more complex manually on client, but for phase 5A controlled scope it works
+  async getTopGroups(userId: string, options: { days?: number, startDate?: string, endDate?: string } = { days: 7 }): Promise<TopGroupData[]> {
     const supabase = createClient();
-    const { data: destinations, error } = await supabase
-      .from('campaign_destinations')
-      .select('destination_list_id, status')
+
+    let jobQuery = supabase
+      .from('send_jobs')
+      .select('destination_name, status, created_at')
+      .eq('user_id', userId)
       .eq('status', 'sent');
+    
+    jobQuery = this._applyDateFilter(jobQuery, options);
+    const { data: jobs, error } = await jobQuery;
 
     if (error) throw error;
 
-    const listIds = destinations?.map(d => d.destination_list_id) || [];
-    
-    const { data: listGroups, error: lgError } = await supabase
-      .from('destination_list_groups')
-      .select('destination_list_id, group_id, groups(name, members_count)');
-
-    if (lgError) throw lgError;
-
     const groupStats: Record<string, { name: string, enviados: number, membros: number }> = {};
 
-    destinations?.forEach(d => {
-      const relatedGroups = listGroups?.filter(lg => lg.destination_list_id === d.destination_list_id);
-      relatedGroups?.forEach(lg => {
-        const g = lg.groups as any;
-        if (!groupStats[lg.group_id]) {
-          groupStats[lg.group_id] = { name: g.name, enviados: 0, membros: g.members_count };
-        }
-        groupStats[lg.group_id].enviados += 1;
-      });
+    jobs?.forEach(j => {
+      const name = j.destination_name || 'Desconhecido';
+      if (!groupStats[name]) {
+        groupStats[name] = { name, enviados: 0, membros: 0 };
+      }
+      groupStats[name].enviados += 1;
     });
 
     return Object.values(groupStats)
@@ -133,27 +203,91 @@ export const reportsService = {
       .slice(0, 6);
   },
 
-  async getOperationalHistory(): Promise<OperationalHistoryItem[]> {
+  async getOperationalHistory(userId: string, limit: number = 10, options: { days?: number, startDate?: string, endDate?: string } = { days: 7 }): Promise<OperationalHistoryItem[]> {
     const supabase = createClient();
-    const { data: campaigns, error } = await supabase
+
+    let query = supabase
       .from('campaigns')
-      .select('*, campaign_destinations(status)')
+      .select('*, send_jobs(status)')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(limit);
+    
+    query = this._applyDateFilter(query, options);
+
+    const { data: campaigns, error } = await query;
 
     if (error) throw error;
 
     return campaigns?.map(c => {
-      const dests = c.campaign_destinations || [];
+      const dests = (c as any).send_jobs || [];
       const sentCount = dests.filter((d: any) => d.status === 'sent').length;
+      const failedCount = dests.filter((d: any) => d.status === 'failed').length;
       
+      let status: 'success' | 'failed' | 'processing' | 'info' = 'info';
+      if (sentCount > 0 && failedCount === 0) status = 'success';
+      if (failedCount > 0) status = 'failed';
+      if (sentCount === 0 && failedCount === 0) status = 'processing';
+
       return {
+        id: c.id,
+        timestamp: c.created_at,
         date: new Date(c.created_at).toLocaleDateString('pt-BR'),
         event: c.name || `Campanha #${c.id.slice(0, 5)}`,
         type: 'campaign' as const,
+        status,
         envios: sentCount,
-        alcance: 0 // Reach calculation per campaign would require group joins, skipping for now as per "estimated" rule
+        alcance: 0
       };
     }) || [];
+  },
+
+  async getAutomationHistory(userId: string, limit: number = 10, options: { days?: number, startDate?: string, endDate?: string } = { days: 7 }): Promise<OperationalHistoryItem[]> {
+    const supabase = createClient();
+    
+    let query = supabase
+      .from('automation_logs')
+      .select('*, source:automation_sources(name, source_type)')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    
+    query = this._applyDateFilter(query, options);
+
+    const { data: logs, error } = await query;
+    if (error) throw error;
+
+    return logs?.map(log => ({
+      id: log.id,
+      timestamp: log.created_at,
+      date: new Date(log.created_at).toLocaleDateString('pt-BR'),
+      event: `${(log.source as any)?.name || 'Automação'}: ${this._formatEventType(log.event_type)}`,
+      type: (log.source as any)?.source_type === 'radar_offers' ? 'radar' : 'automation',
+      status: log.status === 'processed' || log.status === 'captured' ? 'success' : (log.status === 'error' ? 'failed' : 'info'),
+      metadata: log.details
+    })) || [];
+  },
+
+  async getUnifiedActivity(userId: string, limit: number = 20, options: { days?: number, startDate?: string, endDate?: string } = { days: 7 }): Promise<OperationalHistoryItem[]> {
+    const [campaigns, automations] = await Promise.all([
+      this.getOperationalHistory(userId, limit, options),
+      this.getAutomationHistory(userId, limit, options)
+    ]);
+
+    return [...campaigns, ...automations]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
+  },
+
+  _formatEventType(type: string): string {
+    const map: Record<string, string> = {
+      'job_created': 'Envio agendado',
+      'captured': 'Novas ofertas encontradas',
+      'filtered': 'Oferta filtrada por regra',
+      'error': 'Falha no processamento',
+      'ingest': 'Novo link detectado',
+      'processed': 'Processamento concluído'
+    };
+    return map[type] || type;
   }
 };
