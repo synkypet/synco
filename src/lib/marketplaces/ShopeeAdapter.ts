@@ -465,9 +465,10 @@ export class ShopeeAdapter extends MarketplaceAdapter {
   async discoverProducts(options: { 
     limit?: number; 
     sortType?: number; 
+    keyword?: string;
     connection: UserMarketplaceConnection 
   }): Promise<ProductMetadata[]> {
-    const { limit = 20, sortType = 3, connection } = options;
+    const { limit = 20, sortType = 3, keyword, connection } = options;
 
     if (!connection.shopee_app_id || !connection.shopee_app_secret) {
       throw new Error('Connection missing App ID or Secret');
@@ -482,6 +483,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       const nodes = await client.searchProducts({ 
         limit, 
         sortType,
+        keyword,
         page: 1 
       });
 

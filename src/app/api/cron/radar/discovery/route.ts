@@ -2,30 +2,29 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ShopeeAdapter } from '@/lib/marketplaces/ShopeeAdapter';
+import { productService } from '@/services/supabase/product-service';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Radar Discovery Engine (Ingestion)
- * Busca ofertas em alta na Shopee e injeta no banco para posterior processamento.
+ * Busca ofertas baseadas em Filtros de Usuário (Radar Pro) + Descoberta Global.
  */
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
-  // Proteção simples via Header ou allow-all se for interno
   if (process.env.NODE_ENV === 'production' && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     // return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const requestId = Math.random().toString(36).substring(7);
   const logPrefix = `[RADAR-DISCOVERY] [${requestId}]`;
-  console.log(`${logPrefix} Iniciando ciclo de descoberta ativa...`);
+  console.log(`${logPrefix} Iniciando ciclo de descoberta autônoma...`);
 
   try {
     const supabase = createAdminClient();
+    const adapter = new ShopeeAdapter();
 
-    // 1. Buscar a primeira conexão Shopee ativa disponível (Sistema-wide Discovery)
-    // Usamos o marketplaceService para garantir a descriptografia correta se necessário,
-    // ou buscamos diretamente se as chaves estiverem em texto plano (como no caso do Radar).
+    // 1. Buscar a conexão Shopee ativa principal
     const { data: connection } = await supabase
       .from('user_marketplaces')
       .select('*, marketplaces(name)')
@@ -34,108 +33,102 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     if (!connection) {
-      console.warn(`${logPrefix} Nenhuma conexão Shopee ativa encontrada para descoberta.`);
+      console.warn(`${logPrefix} Nenhuma conexão Shopee ativa encontrada.`);
       return NextResponse.json({ skipped: 'no_connections' });
     }
 
-    // Nota: Em um cenário real, o secret viria descriptografado. 
-    // Para o Radar, assumimos que as chaves globais do .env podem ser usadas como Fallback 
-    // se o usuário não tiver chaves próprias, ou usamos as chaves da conexão.
     const shopeeConnection = {
       ...connection,
       shopee_app_id: connection.shopee_app_id || process.env.SHOPEE_APP_ID,
       shopee_app_secret: (connection as any).shopee_app_secret || process.env.SHOPEE_APP_SECRET
     };
 
-    const adapter = new ShopeeAdapter();
-    const strategies = [
-      { sortType: 1, label: 'Top Sales', limit: 20 },
-      { sortType: 3, label: 'Hot Products', limit: 20 },
-      { sortType: 4, label: 'Relevance', limit: 20 },
-      { sortType: 5, label: 'Recommendations', limit: 20 }
-    ];
+    // 2. Buscar Automações de Radar Pro Ativas
+    const { data: activeRadars } = await supabase
+      .from('automation_sources')
+      .select('id, name, config, user_id')
+      .eq('source_type', 'radar_offers')
+      .eq('is_active', true);
 
-    let totalDiscovered = 0;
+    console.log(`${logPrefix} Encontradas ${activeRadars?.length || 0} automações de Radar Pro ativas.`);
+
+    // 3. Definir Tarefas de Descoberta (Filtros do Usuário + Global)
+    const discoveryTasks: { label: string; keyword?: string; sortType: number }[] = [];
+
+    // Adicionar tarefas baseadas nos termos configurados (ou nomes)
+    activeRadars?.forEach(radar => {
+      const keyword = (radar.config as any)?.searchTerm || radar.name;
+      discoveryTasks.push({ label: `Radar Pro: ${radar.name}`, keyword, sortType: 1 });
+    });
+
+    // Fallback: Estratégias Globais do Sistema
+    discoveryTasks.push({ label: 'System: Hot Products', sortType: 3 });
+    discoveryTasks.push({ label: 'System: Recommendations', sortType: 5 });
+
     let totalInserted = 0;
-
-    // 2. Buscar URLs já existentes para deduplicação manual
-    const { data: existingProducts } = await supabase
-      .from('products')
-      .select('original_url');
-    
+    const { data: existingProducts } = await supabase.from('products').select('original_url');
     const existingUrls = new Set((existingProducts || []).map(p => p.original_url));
 
-    for (const strategy of strategies) {
-      console.log(`${logPrefix} Executando estratégia: ${strategy.label}...`);
+    // 4. Executar Descoberta por Lote
+    for (const task of discoveryTasks) {
+      console.log(`${logPrefix} Executando: ${task.label}...`);
       
-      const products = await adapter.discoverProducts({
-        sortType: strategy.sortType,
-        limit: strategy.limit,
-        connection: shopeeConnection as any
-      });
+      try {
+        const products = await adapter.discoverProducts({
+          sortType: task.sortType,
+          keyword: task.keyword,
+          limit: 15,
+          connection: shopeeConnection as any
+        });
 
-      totalDiscovered += products.length;
+        for (const p of products) {
+          const url = p.productLink || p.offerLink;
+          if (!url || existingUrls.has(url)) continue;
 
-      for (const p of products) {
-        const url = p.productLink || p.offerLink;
-        
-        // Evitar duplicados
-        if (existingUrls.has(url)) continue;
+          // Cálculo Unificado de Oportunidade (ROI Operacional)
+          const finalScore = productService.calculateOpportunityScore(
+            p.currentPriceFactual || 0,
+            p.originalPrice || null,
+            p.commissionValueFactual || 0
+          );
 
-        // --- NOVO CÁLCULO DE INTELIGÊNCIA (ROI SCORING) ---
-        // Referência: ROI = (Comissão / Preço) * 100
-        // Bias: log10(Preço Original / Preço Atual) -> Premia descontos reais
-        
-        const currentPrice = p.currentPriceFactual || 0.01; // Evitar div/0
-        const originalPrice = p.originalPrice || currentPrice;
-        const commissionValue = p.commissionValueFactual || 0;
-        
-        const roi = (commissionValue / currentPrice) * 100;
-        const discountRatio = originalPrice / currentPrice;
-        const scaleBias = Math.log10(discountRatio * 10) || 1; // Bias positivo se houver desconto
-        
-        // Score Final: ROI balanceado pelo viés de escala e desconto
-        // Valor base 40 + ROI amplificado
-        const rawScore = 40 + (roi * scaleBias * 5);
-        const finalScore = Math.min(100, Math.round(rawScore));
+          // Inserção com Deduplicação Layer 1
+          const { error } = await supabase
+            .from('products')
+            .insert({
+              name: p.name,
+              marketplace: 'Shopee',
+              category: task.keyword ? `[PRO] ${task.keyword}` : `[RADAR] ${p.category}`,
+              current_price: p.currentPriceFactual,
+              original_price: p.originalPrice,
+              discount_percent: p.discountPercent,
+              commission_percent: (p.commissionRate || 0) * 100,
+              commission_value: p.commissionValueFactual,
+              image_url: p.imageUrl,
+              original_url: url,
+              opportunity_score: finalScore
+            });
 
-        // Inserir no banco
-        const { error } = await supabase
-          .from('products')
-          .insert({
-            name: p.name,
-            marketplace: 'Shopee',
-            category: `[RADAR] ${p.category}`,
-            current_price: p.currentPriceFactual,
-            original_price: p.originalPrice,
-            discount_percent: p.discountPercent,
-            commission_percent: (p.commissionRate || 0) * 100,
-            commission_value: p.commissionValueFactual,
-            image_url: p.imageUrl,
-            original_url: url,
-            opportunity_score: finalScore
-          });
-
-        if (error) {
-          console.error(`${logPrefix} Erro ao inserir produto:`, error.message, url);
-        } else {
-          totalInserted++;
-          existingUrls.add(url); // Evitar duplicados na mesma execução
+          if (!error) {
+            totalInserted++;
+            existingUrls.add(url);
+          }
         }
+      } catch (err) {
+        console.error(`${logPrefix} Erro na tarefa ${task.label}:`, err);
       }
     }
 
-    console.log(`${logPrefix} Ciclo finalizado. Descobertos: ${totalDiscovered} | Novos/Atualizados: ${totalInserted}`);
+    console.log(`${logPrefix} Ciclo finalizado. Inseridos: ${totalInserted}`);
     
     return NextResponse.json({
       status: 'success',
-      discovered: totalDiscovered,
       upserted: totalInserted,
-      strategies: strategies.length
+      tasks: discoveryTasks.length
     });
 
   } catch (error: any) {
-    console.error(`${logPrefix} ERRO CRÍTICO:`, error);
+    console.error(`${logPrefix} ERRO NO MOTOR DE DESCOBERTA:`, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

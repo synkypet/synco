@@ -71,12 +71,14 @@ export default function AutomacoesDashboardPage() {
   const [sourceGroupId, setSourceGroupId] = useState('');
   const [targetType, setTargetType] = useState<'group' | 'list'>('group');
   const [targetId, setTargetId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Validação simples
   const isNameValid = newName.trim().length >= 3;
   const isEntryValid = entryType === 'radar_offers' || (channelId && sourceGroupId);
   const isTargetValid = !!targetId;
-  const isFormValid = isNameValid && isEntryValid && isTargetValid;
+  const isSearchTermValid = entryType === 'radar_offers' ? searchTerm.trim().length >= 2 : true;
+  const isFormValid = isNameValid && isEntryValid && isTargetValid && isSearchTermValid;
 
   const handleCreatePipeline = () => {
     if (!isFormValid) return;
@@ -90,7 +92,8 @@ export default function AutomacoesDashboardPage() {
       channel_id: channelId || undefined,
       external_group_id: selectedSourceGroup?.remote_id || undefined,
       target_type: targetType,
-      target_id: targetId
+      target_id: targetId,
+      config: entryType === 'radar_offers' ? { searchTerm: searchTerm.trim() } : undefined
     });
 
     toast.promise(promise, {
@@ -167,17 +170,37 @@ export default function AutomacoesDashboardPage() {
                           <span className="text-[9px] font-black uppercase tracking-widest">Monitorar Grupo</span>
                         </button>
                         <button
-                          className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border bg-white/5 border-white/5 text-white/10 cursor-not-allowed grayscale`}
-                          disabled
+                          onClick={() => setEntryType('radar_offers')}
+                          className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border transition-all ${
+                            entryType === 'radar_offers' 
+                              ? 'bg-kinetic-orange/10 border-kinetic-orange/40 text-kinetic-orange shadow-glow-orange' 
+                              : 'bg-white/5 border-white/10 text-white/20 hover:bg-white/10'
+                          }`}
                         >
-                          <ShieldAlert size={14} className="absolute top-2 right-2 opacity-50" />
                           <Inbox size={20} className="mb-2" />
                           <span className="text-[9px] font-black uppercase tracking-widest">Radar Pro</span>
-                          <span className="text-[8px] font-bold opacity-30 mt-0.5 tracking-tighter">(Em breve)</span>
                         </button>
                       </div>
                     </div>
   
+                    {entryType === 'radar_offers' && (
+                      <div className="space-y-2 animate-in slide-in-from-bottom-2 duration-300">
+                        <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest flex justify-between">
+                           Termo de Busca (Keyword)
+                           {!isSearchTermValid && searchTerm.length > 0 && <span className="text-red-400 font-bold tracking-tight">Mín. 2 caracteres</span>}
+                        </Label>
+                        <Input 
+                          placeholder="Ex: impressao 3d, air fryer, fone bluetooth..." 
+                          className={!isSearchTermValid && searchTerm.length > 0 ? 'ring-1 ring-red-500/50' : ''}
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <p className="text-[8px] text-white/20 font-bold uppercase tracking-wider">
+                          O robô usará este termo para pesquisar ofertas na Shopee.
+                        </p>
+                      </div>
+                    )}
+
                     {entryType === 'group_monitor' && (
                       <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-bottom-2 duration-300">
                         <div className="space-y-2">

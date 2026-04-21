@@ -65,8 +65,38 @@ export const productService = {
     return data as Product[];
   },
 
+  /**
+   * Calcula o score de oportunidade baseado em ROI e Desconto Real.
+   * ROI = (Comissão / Preço) * 100
+   * Bias = Log10(Original / Atual)
+   */
+  calculateOpportunityScore(price: number, originalPrice: number | null, commissionValue: number): number {
+    const currentPrice = price || 0.01;
+    const roi = (commissionValue / currentPrice) * 100;
+    
+    // Fator de escala baseado no desconto
+    const discountRatio = (originalPrice && originalPrice > currentPrice) ? originalPrice / currentPrice : 1;
+    const scaleBias = Math.log10(discountRatio * 10) || 1;
+    
+    // Requisito: Base 40 + ROI amplificado pelo viés de desconto
+    const rawScore = 40 + (roi * scaleBias * 5);
+    return Math.min(100, Math.round(rawScore));
+  },
+
   async insertFromAutomation(productData: Partial<Product>, client?: any): Promise<Product | null> {
     const supabase = client || createClient();
+    
+    // 1. Deduplicação Layer 1: URL Original
+    if (productData.original_url) {
+      const { data: existing } = await supabase
+        .from('products')
+        .select('id')
+        .eq('original_url', productData.original_url)
+        .maybeSingle();
+      
+      if (existing) return null;
+    }
+
     const { data, error } = await supabase
       .from('products')
       .insert([productData])

@@ -66,6 +66,7 @@ export const automationService = {
       external_group_id?: string;
       target_type: 'group' | 'list';
       target_id: string;
+      config?: any;
     },
     client?: any
   ): Promise<AutomationSource> {
@@ -80,7 +81,8 @@ export const automationService = {
         source_type: setup.source_type,
         channel_id: setup.channel_id,
         external_group_id: setup.external_group_id,
-        is_active: true
+        is_active: true,
+        config: setup.config
       })
       .select()
       .single();
