@@ -125,7 +125,11 @@ export const campaignService = {
       generated_affiliate_url: item.generated_affiliate_url,
       redirect_chain: item.redirect_chain || [],
       reaffiliation_status: item.reaffiliation_status,
-      reaffiliation_error: item.reaffiliation_error
+      reaffiliation_error: item.reaffiliation_error,
+      
+      // Elegibilidade Operacional (Fase 2)
+      eligibility_status: item.eligibility_status,
+      eligibility_reasons: item.eligibility_reasons
     }));
 
     const { data: insertedItems, error: itemsError } = await supabase
@@ -170,10 +174,11 @@ export const campaignService = {
           ? channelConfig.status === 'connected'
           : !!sessionId;
 
-        const status = item.reaffiliation_status;
-        const isBlocked = status === 'blocked' || status === 'failed';
+        // --- GUARDIÃO ESTRUTURAL DA FASE 2 ---
+        // A geração de job agora depende EXCLUSIVAMENTE da elegibilidade gravada no item.
+        const isEligible = item.eligibility_status === 'eligible' || item.eligibility_status === 'warning';
 
-        if (isConnected && !isBlocked) {
+        if (isConnected && isEligible) {
           const fallbackChannel = userChannels?.find(ch => 
             ch.id !== group.channel_id && 
             ch.config?.status === 'connected'
@@ -195,8 +200,8 @@ export const campaignService = {
             try_count: 0,
             fallback_channel_id: fallbackChannel?.id || null,
           });
-        } else if (isBlocked) {
-            console.warn(`[CAMPAIGN-SERVICE] Item ${item.id} pulado porque o status de reafiliação é: ${status}`);
+        } else if (!isEligible) {
+            console.warn(`[CAMPAIGN-SERVICE] Item ${item.id} pulado porque o status de elegibilidade é: ${item.eligibility_status}. Motivos: ${item.eligibility_reasons?.join(' | ') || 'Nenhum reportado'}`);
         }
       });
     });
@@ -212,7 +217,18 @@ export const campaignService = {
       }
       console.log(`[CAMPAIGN-SERVICE] ✓ ${jobsToInsert.length} jobs gerados com sucesso.`);
     } else {
-      console.warn(`[CAMPAIGN-SERVICE] Nenhum job elegível gerado para a campanha #${campaign.id}.`);
+      console.warn(`[CAMPAIGN-SERVICE] Nenhum job elegível gerado para a campanha #${campaign.id}. Marcando como falha operacional.`);
+      
+      // Regra Oficial: Se não houver jobs e a campanha não for agendada, marcar como failed.
+      if (!dto.scheduled_at) {
+        await supabase
+          .from('campaigns')
+          .update({ status: 'failed' })
+          .eq('id', campaign.id);
+        
+        // Atualizar o objeto local para o retorno
+        campaign.status = 'failed';
+      }
     }
 
     // 5. Kickstart the worker (Trigger)
@@ -305,6 +321,7 @@ export const campaignService = {
       completed: data.filter(j => j.status === 'sent' || j.status === 'completed').length,
       failed: data.filter(j => j.status === 'failed').length,
       cancelled: data.filter(j => j.status === 'cancelled').length,
+      session_lost: data.filter(j => j.status === 'session_lost').length,
     };
 
     return stats;
@@ -343,6 +360,7 @@ export const campaignService = {
       if (job.status === 'sent' || job.status === 'completed') entry.completed++;
       else if (job.status === 'failed') entry.failed++;
       else if (job.status === 'processing') entry.processing++;
+      else if (job.status === 'session_lost') entry.session_lost = (entry.session_lost || 0) + 1;
       else entry.pending++;
     });
 

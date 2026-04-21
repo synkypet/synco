@@ -192,18 +192,20 @@ export async function processInboundAutomation(payload: InboundPayload) {
           continue;
         }
 
-        // --- GUARDIÃO OPERACIONAL (FRENTE 1) ---
-        const status = snapshot.factual.reaffiliation_status;
-        const errorMsg = snapshot.factual.reaffiliation_error || 'Falha desconhecida na validação factual';
+        // --- GUARDIÃO OPERACIONAL (FRENTE 1 & 2) ---
+        // A regra agora não depende apenas da afiliação, mas do contrato estrutural do linkProcessor
+        const isEligible = snapshot.factual.eligibility?.isEligible;
+        const eligibilityStatus = snapshot.factual.eligibility?.status;
+        const reasons = snapshot.factual.eligibility?.reasons?.join(' | ') || 'Desconhecido';
         
-        if (status === 'blocked' || status === 'failed') {
-          console.warn(`${logPrefix} [ITEM] [HARD-LOCK] Bloqueado! Status: ${status} | Motivo: ${errorMsg}`);
+        if (!isEligible) {
+          console.warn(`${logPrefix} [ITEM] [HARD-LOCK] Bloqueado! Status: ${eligibilityStatus} | Motivos: ${reasons}`);
           await automationService.logEvent({
             source_id: source.id,
             user_id: userId,
             status: 'filtered',
             event_type: 'operational_lock',
-            details: { url: normalized, status, error: errorMsg, messageId }
+            details: { url: normalized, status: eligibilityStatus, error: reasons, messageId }
           }, supabase);
           continue;
         }
@@ -214,12 +216,17 @@ export async function processInboundAutomation(payload: InboundPayload) {
         const commissionRate = snapshot.factual.commissionRate || 0;
         if (commissionRate > 0.30) {
           try {
-            const originalPrice = snapshot.factual.originalPrice || snapshot.factual.currentPriceFactual || 0;
             const currentPrice = snapshot.factual.currentPriceFactual || 0;
+            // Regra: originalPrice só existe se for factual e > atual
+            const originalPrice = (snapshot.factual.originalPrice && snapshot.factual.originalPrice > currentPrice) 
+              ? snapshot.factual.originalPrice 
+              : null;
+            
             let discountPercent = 0;
-            if (originalPrice > currentPrice && originalPrice > 0) {
+            if (originalPrice && originalPrice > currentPrice) {
               discountPercent = Math.round((1 - (currentPrice / originalPrice)) * 100);
             }
+
             const opportunityScore = Math.min(100, Math.round((discountPercent * 0.4) + (commissionRate * 100 * 0.6)));
 
             const insertedProduct = await productService.insertFromAutomation({
@@ -228,8 +235,8 @@ export async function processInboundAutomation(payload: InboundPayload) {
               original_url: snapshot.factual.originalUrl || rawUrl,
               image_url: snapshot.factual.image || undefined,
               current_price: currentPrice,
-              original_price: originalPrice,
-              discount_percent: discountPercent,
+              original_price: originalPrice ?? undefined, 
+              discount_percent: (discountPercent > 0) ? discountPercent : undefined,
               commission_percent: commissionRate * 100,
               commission_value: snapshot.factual.commissionValueFactual || 0,
               opportunity_score: opportunityScore,
@@ -288,7 +295,13 @@ export async function processInboundAutomation(payload: InboundPayload) {
               affiliate_url: snapshot.factual.finalLinkToSend,
               image_url: snapshot.factual.image,
               external_product_id: snapshot.factual.itemId?.toString(),
-              installments: snapshot.factual.installments
+              installments: snapshot.factual.installments,
+              
+              // Elegibilidade Operacional Definitiva (Fase 2)
+              eligibility_status: snapshot.factual.eligibility.status,
+              eligibility_reasons: snapshot.factual.eligibility.reasons,
+              reaffiliation_status: snapshot.factual.reaffiliation_status,
+              reaffiliation_error: snapshot.factual.reaffiliation_error
             }],
             destinations: [{
               type: route.target_type,

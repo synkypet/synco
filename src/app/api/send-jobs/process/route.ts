@@ -70,6 +70,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // --- ETAPA 3: GARBAGE COLLECTOR DE JOBS ZUMBIS ---
+    // Resgata jobs presos em 'processing' há mais de 5 minutos (crash/timeout do worker serverless)
+    const staleThreshold = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: resurrected } = await supabase
+      .from('send_jobs')
+      .update({ status: 'pending', updated_at: new Date().toISOString() })
+      .eq('status', 'processing')
+      .lte('updated_at', staleThreshold)
+      .select('id');
+      
+    if (resurrected && resurrected.length > 0) {
+      console.warn(`[WORKER-GC] [${requestId}] Ressuscitou ${resurrected.length} jobs zumbis presos em processing.`);
+    }
+
     // 2. Identificar Canais com Jobs Pendentes
     const { count: totalPendingInitial } = await supabase.from('send_jobs').select('*', { count: 'exact', head: true }).eq('status', 'pending');
 
@@ -86,7 +100,7 @@ export async function POST(request: Request) {
       .from('send_jobs')
       .select('channel_id')
       .eq('status', 'pending')
-      .order('created_at', { ascending: true })
+      .order('updated_at', { ascending: true })
       .limit(200);
 
     if (sampleError) throw new Error(`Fetch jobs error: ${sampleError.message}`);
@@ -140,7 +154,7 @@ export async function POST(request: Request) {
           continue;
         }
 
-        const { data: job } = await supabase.from('send_jobs').select('*').eq('channel_id', channelId).eq('status', 'pending').order('created_at', { ascending: true }).limit(1).maybeSingle();
+        const { data: job } = await supabase.from('send_jobs').select('*').eq('channel_id', channelId).eq('status', 'pending').order('updated_at', { ascending: true }).limit(1).maybeSingle();
         if (!job) continue;
 
         const { data: lockedJob } = await supabase.from('send_jobs').update({ status: 'processing', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'pending').select().single();
@@ -165,7 +179,35 @@ export async function POST(request: Request) {
             logJob('INFO', job.id, { action: 'delivered' }, requestId);
             results.push({ jobId: job.id, status: 'completed' });
           } else {
-            const errorType: ErrorType = result.errorType || provider.classifyError(result.error);
+            const errorType: string = result.errorType || provider.classifyError(result.error);
+            
+            // --- ETAPA 1: TRATAMENTO DE PERDA DE SESSÃO ---
+            if (errorType === 'SESSION_LOST') {
+              console.warn(`[WORKER-SESSION-LOST] [${requestId}] Sessão do canal ${channelId} perdida. Pausando fila.`);
+              
+              // 1. Marca o job atual como session_lost
+              await supabase.from('send_jobs').update({ 
+                status: 'session_lost', 
+                error_type: 'SESSION_LOST', 
+                last_error: 'Sessão WhatsApp Desconectada', 
+                processed_at: new Date().toISOString() 
+              }).eq('id', job.id);
+              
+              // 2. Pausa imediatamente todos os outros jobs pendentes deste canal para evitar queima da fila
+              await supabase.from('send_jobs').update({ 
+                status: 'session_lost', 
+                error_type: 'SESSION_LOST', 
+                last_error: 'Fila pausada: Sessão WhatsApp Desconectada',
+                updated_at: new Date().toISOString()
+              }).eq('channel_id', channelId).eq('status', 'pending');
+              
+              logJob('WARN', job.id, { action: 'paused_channel', reason: 'session_lost' }, requestId);
+              results.push({ jobId: job.id, status: 'session_lost', error: result.error });
+              
+              // 3. Abandona o processamento deste canal
+              break; // Sai do try/catch, vai para o finally (libera lock) e passa para o próximo canal do batch
+            }
+
             const finalStatus = (errorType === 'PERMANENT' || job.try_count + 1 >= MAX_RETRIES) ? 'failed' : 'pending';
             await supabase.from('send_jobs').update({ status: finalStatus, error_type: errorType, try_count: job.try_count + 1, last_error: result.error, processed_at: new Date().toISOString() }).eq('id', job.id);
             logJob('WARN', job.id, { action: 'failed', error: result.error, nextStatus: finalStatus }, requestId);

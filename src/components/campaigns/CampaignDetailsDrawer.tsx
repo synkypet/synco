@@ -34,6 +34,7 @@ const STATUS_BADGES: Record<string, any> = {
   completed: { label: 'Concluído', color: 'bg-emerald-500/10 text-emerald-500' },
   pending: { label: 'Pendente', color: 'bg-blue-500/10 text-blue-400' },
   processing: { label: 'Processando', color: 'bg-blue-500/10 text-blue-400 animate-pulse' },
+  session_lost: { label: 'Pausado (Sessão)', color: 'bg-yellow-500/10 text-yellow-500' },
   failed: { label: 'Falhou', color: 'bg-red-500/10 text-red-500' },
   cancelled: { label: 'Cancelado', color: 'bg-white/10 text-white/40' },
 };
@@ -66,11 +67,22 @@ export function CampaignDetailsDrawer({ isOpen, onClose, campaign }: CampaignDet
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                 <h2 className="text-xl font-black uppercase tracking-tight font-headline text-white">{campaign.name || 'Envio Rápido'}</h2>
-                 <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-1">
-                   {new Date(campaign.created_at || '').toLocaleString()}
-                 </p>
+              <div className="flex items-start gap-4">
+                 {campaign.items && campaign.items.length === 1 && (
+                   <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/40 border border-white/5 shadow-skeuo-pressed shrink-0">
+                     {campaign.items[0].image_url ? (
+                       <img src={campaign.items[0].image_url} alt="" className="w-full h-full object-cover" />
+                     ) : (
+                       <Package size={20} className="w-full h-full p-4 text-white/10" />
+                     )}
+                   </div>
+                 )}
+                 <div className="flex flex-col gap-1 min-w-0">
+                    <h2 className="text-xl font-black uppercase tracking-tight font-headline text-white line-clamp-2 leading-tight">{campaign.name || 'Envio Rápido'}</h2>
+                    <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-1">
+                      {new Date(campaign.created_at || '').toLocaleString()}
+                    </p>
+                 </div>
               </div>
 
               {/* Quick Stats Grid */}
@@ -195,25 +207,69 @@ export function CampaignDetailsDrawer({ isOpen, onClose, campaign }: CampaignDet
                </TabsContent>
 
                <TabsContent value="items" className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-                  {campaign.items?.map((item: any) => (
-                    <div key={item.id} className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-center gap-4">
-                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-black/20 flex-shrink-0 border border-white/5 shadow-skeuo-pressed">
-                          {item.image_url ? (
-                            <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <Package size={20} className="w-full h-full p-3 text-white/20" />
-                          )}
-                       </div>
-                       <div className="flex-1 min-w-0">
-                          <h4 className="text-[10px] font-black uppercase text-white/90 line-clamp-1">{item.product_name}</h4>
-                          <div className="flex items-center gap-2 mt-1">
-                             <a href={item.affiliate_url} target="_blank" className="flex items-center gap-1 text-[8px] font-black uppercase text-kinetic-orange hover:underline">
-                               Ver Link <ExternalLink size={8} />
-                             </a>
+                  {campaign.items?.map((item: any) => {
+                    const elStatus = item.eligibility_status || 'eligible';
+                    const elBadge = {
+                      eligible: { label: 'Elegível', color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
+                      warning: { label: 'Atenção', color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' },
+                      ineligible: { label: 'Inelegível', color: 'bg-red-500/10 text-red-500 border-red-500/20' }
+                    }[elStatus as string] || { label: 'Elegível', color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' };
+
+                    return (
+                      <div key={item.id} className="p-4 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-3">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-black/20 flex-shrink-0 border border-white/5 shadow-skeuo-pressed">
+                              {item.image_url ? (
+                                <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <Package size={20} className="w-full h-full p-3 text-white/20" />
+                              )}
                           </div>
-                       </div>
-                    </div>
-                  ))}
+                          <div className="flex-1 min-w-0 flex flex-col justify-center">
+                              <div className="flex items-start justify-between gap-2">
+                                <h4 className="text-[10px] font-black uppercase text-white/90 line-clamp-2">{item.product_name}</h4>
+                                <Badge variant="outline" className={cn("text-[7px] font-black uppercase tracking-widest shrink-0", elBadge.color)}>
+                                  {elBadge.label}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <a href={item.affiliate_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[8px] font-black uppercase text-kinetic-orange hover:underline">
+                                  Ver Link <ExternalLink size={8} />
+                                </a>
+                              </div>
+                          </div>
+                        </div>
+
+                        {/* Observabilidade: Motivos de Bloqueio Estrutural */}
+                        {item.eligibility_reasons && item.eligibility_reasons.length > 0 && (
+                          <div className="flex items-start gap-2 p-2.5 bg-red-500/5 border border-red-500/10 rounded-lg mt-1">
+                            <AlertCircle size={12} className="text-red-500 shrink-0 mt-0.5" />
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[8px] font-black uppercase text-red-500/80 tracking-widest">Motivos de Bloqueio:</span>
+                              <ul className="text-[9px] font-bold text-red-400/80 list-disc list-inside">
+                                {item.eligibility_reasons.map((reason: string, idx: number) => (
+                                  <li key={idx} className="leading-tight">{reason}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Observabilidade: Erro de Reafiliação (Técnico) */}
+                        {item.reaffiliation_error && (
+                          <div className="flex items-start gap-2 p-2.5 bg-yellow-500/5 border border-yellow-500/10 rounded-lg mt-1">
+                            <Ban size={12} className="text-yellow-500 shrink-0 mt-0.5" />
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[8px] font-black uppercase text-yellow-500/80 tracking-widest">Erro de Afiliado (Link):</span>
+                              <span className="text-[9px] font-bold text-yellow-400/80 leading-tight">
+                                {item.reaffiliation_error}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                </TabsContent>
 
                <TabsContent value="dests" className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">

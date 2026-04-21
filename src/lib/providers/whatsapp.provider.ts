@@ -14,6 +14,10 @@ const PERMANENT_ERROR_PATTERNS = [
   'blocked',
   'must be a valid whatsapp jid', // 422 - JID inválido
   'the to must be',               // 422 - campo "to" inválido
+];
+
+// Patterns de perda de sessão
+const SESSION_LOST_PATTERNS = [
   'session_not_connected',        // Sessão deslogada/caída
   'session not connected',
 ];
@@ -92,6 +96,13 @@ export class WhatsAppProvider implements ChannelProvider {
 
   classifyError(error: any): ErrorType {
     const msg = (error?.message || error || '').toString().toLowerCase();
+    
+    for (const pattern of SESSION_LOST_PATTERNS) {
+      if (msg.includes(pattern.toLowerCase())) {
+        return 'SESSION_LOST';
+      }
+    }
+
     for (const pattern of PERMANENT_ERROR_PATTERNS) {
       if (msg.includes(pattern.toLowerCase())) {
         return 'PERMANENT';

@@ -17,10 +17,11 @@ import { FactualData } from '../linkProcessor';
 export function fillTemplate(template: string, data: FactualData, sourceName?: string): string {
   if (!template) return '';
 
+  // 1. Definição dos valores (com Trava Factual no Pix)
   const placeholders: Record<string, string> = {
     '{{titulo}}': data.title || '',
     '{{preco}}': data.priceFormatted || '',
-    '{{pix}}': data.estimatedPixPriceFormatted || '',
+    '{{pix}}': data.pixDisplayEligible ? (data.estimatedPixPriceFormatted || '') : '',
     '{{link}}': data.finalLinkToSend || '',
     '{{loja}}': data.shopName || '',
     '{{comissao_percentual}}': data.commissionRatePercent || '',
@@ -31,16 +32,21 @@ export function fillTemplate(template: string, data: FactualData, sourceName?: s
 
   let result = template;
   
-  // Substituir cada placeholder pelo seu valor correspondente
+  // 2. Substituição Determinística
   Object.entries(placeholders).forEach(([key, value]) => {
-    // Escapar colchetes do placeholder para o RegExp
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     result = result.replace(new RegExp(escapedKey, 'g'), value);
   });
 
-  // Limpeza final: remove placeholders remanescentes que não foram mapeados (segurança)
+  // 3. Limpeza Final (SEGURANÇA COMERCIAL)
+  // Remove placeholders remanescentes que não foram mapeados
   result = result.replace(/\{\{[a-z0-9_]+\}\}/gi, '');
 
-  // Normalização de quebras de linha múltiplas causadas por campos vazios
+  // Remove linhas órfãs de labels comuns de preço se ficarem sem valor (ex: "Pix: ", "🔥 Por: ")
+  // Regex: Linha que contém apenas labels conhecidas seguidas de nada ou espaços
+  const widowLabels = /^(?:Pix:|Por:|De:|🔥 Por:|💥 Por:)\s*$/gmi;
+  result = result.replace(widowLabels, '');
+
+  // Normalização de quebras de linha múltiplas e espaços brancos
   return result.replace(/\n{3,}/g, '\n\n').trim();
 }

@@ -1,7 +1,7 @@
 // src/lib/providers/types.ts
 // Interface central do Provider Engine — todo canal de envio implementa este contrato.
 
-export type ErrorType = 'TEMPORARY' | 'PERMANENT';
+export type ErrorType = 'TEMPORARY' | 'PERMANENT' | 'SESSION_LOST';
 
 export interface SendResult {
   success: boolean;
