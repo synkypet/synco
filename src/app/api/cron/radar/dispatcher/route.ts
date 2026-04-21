@@ -36,7 +36,6 @@ export async function GET(request: Request) {
       .eq('is_active', true);
 
     if (!sources || sources.length === 0) {
-      console.log(`${logPrefix} Nenhuma automação Radar ativa encontrada.`);
       return NextResponse.json({ status: 'no_sources' });
     }
 
@@ -44,62 +43,47 @@ export async function GET(request: Request) {
     const { data: products } = await supabase
       .from('products')
       .select('*')
-      .eq('is_radar', true)
+      .ilike('category', '[RADAR]%')
       .order('created_at', { ascending: false })
       .limit(30);
 
     if (!products || products.length === 0) {
-      console.log(`${logPrefix} Nenhum produto recente no Radar.`);
       return NextResponse.json({ status: 'no_products' });
     }
 
     let totalCreated = 0;
 
-    // 3. Cruzamento de Dados
+    // 3. Cruzamento de Dados (Pipeline Operacional)
     for (const source of sources) {
       const routes = source.automation_routes || [];
       if (routes.length === 0) continue;
 
-      let sourceErrors = 0;
-      const MAX_ERRORS_PER_SOURCE = 3;
-
       for (const product of products) {
-        if (sourceErrors >= MAX_ERRORS_PER_SOURCE) {
-          console.warn(`${logPrefix} [ABORT] Muitos erros para a fonte ${source.id}. Abortando ciclo.`);
-          break;
-        }
-
         for (const route of routes) {
-          // A. Deduplicação (Dedupe)
-          const hashKey = generateHash(`radar_v1:${route.id}:${product.external_id || product.id}`);
-          
-          const { error: dedupeError } = await supabase
-            .from('automation_dedupe')
-            .insert({ hash_key: hashKey });
+          // A. Deduplicação Atômica
+          const hashKey = generateHash(`radar_v1:${route.id}:${product.id}`);
+          const { error: dedupeError } = await supabase.from('automation_dedupe').insert({ hash_key: hashKey });
 
           if (dedupeError) {
-            // Se for erro de duplicidade (23505), apenas ignoramos
             if (dedupeError.code === '23505') continue;
-            console.error(`${logPrefix} Erro no dedupe:`, dedupeError);
+            console.error(`${logPrefix} Erro no dedupe:`, dedupeError.message);
             continue;
           }
 
-          // B. Filtragem
-          if (!applyRadarFilters(product, route.filters)) {
-            continue;
-          }
+          // B. Filtragem por Regras de Usuário
+          if (!applyRadarFilters(product, route.filters)) continue;
 
-          // C. Criação de Campanha
+          // C. Geração de Campanha
           try {
             const campaignData = {
               name: `RADAR: ${product.name.substring(0, 30)}...`,
               items: [{
                 product_name: product.name,
                 image_url: product.image_url,
-                affiliate_url: product.original_url, // O worker cuidará da reafiliação se necessário
-                external_product_id: product.external_id,
+                affiliate_url: product.original_url,
                 current_price: product.current_price,
-                original_price: product.original_price
+                original_price: product.original_price,
+                external_product_id: product.id
               }],
               destinations: [{
                 type: route.target_type,
@@ -118,15 +102,14 @@ export async function GET(request: Request) {
             }, supabase);
 
             totalCreated++;
-          } catch (err) {
-            console.error(`${logPrefix} Erro ao despachar produto ${product.id}:`, err);
-            sourceErrors++;
+          } catch (err: any) {
+            console.error(`${logPrefix} Falha ao despachar produto ${product.id}:`, err.message);
           }
         }
       }
     }
 
-    // 4. Trigger Worker
+    // 4. Acionamento do Worker de Envios
     if (totalCreated > 0) {
       await triggerWorker({ requestId });
     }

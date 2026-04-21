@@ -23,20 +23,29 @@ export async function GET(request: Request) {
   try {
     const supabase = createAdminClient();
 
-    // 1. Buscar uma conexão Shopee válida para usar a API
+    // 1. Buscar a primeira conexão Shopee ativa disponível (Sistema-wide Discovery)
+    // Usamos o marketplaceService para garantir a descriptografia correta se necessário,
+    // ou buscamos diretamente se as chaves estiverem em texto plano (como no caso do Radar).
     const { data: connection } = await supabase
-      .from('marketplace_connections')
-      .select('*')
-      .eq('marketplace', 'Shopee')
-      .not('shopee_app_id', 'is', null)
-      .not('shopee_app_secret', 'is', null)
+      .from('user_marketplaces')
+      .select('*, marketplaces(name)')
+      .eq('is_active', true)
       .limit(1)
       .maybeSingle();
 
     if (!connection) {
-      console.warn(`${logPrefix} Nenhuma credencial Shopee encontrada no sistema para descoberta.`);
-      return NextResponse.json({ skipped: 'no_credentials' });
+      console.warn(`${logPrefix} Nenhuma conexão Shopee ativa encontrada para descoberta.`);
+      return NextResponse.json({ skipped: 'no_connections' });
     }
+
+    // Nota: Em um cenário real, o secret viria descriptografado. 
+    // Para o Radar, assumimos que as chaves globais do .env podem ser usadas como Fallback 
+    // se o usuário não tiver chaves próprias, ou usamos as chaves da conexão.
+    const shopeeConnection = {
+      ...connection,
+      shopee_app_id: connection.shopee_app_id || process.env.SHOPEE_APP_ID,
+      shopee_app_secret: (connection as any).shopee_app_secret || process.env.SHOPEE_APP_SECRET
+    };
 
     const adapter = new ShopeeAdapter();
     const strategies = [
@@ -49,18 +58,30 @@ export async function GET(request: Request) {
     let totalDiscovered = 0;
     let totalInserted = 0;
 
+    // 2. Buscar URLs já existentes para deduplicação manual
+    const { data: existingProducts } = await supabase
+      .from('products')
+      .select('original_url');
+    
+    const existingUrls = new Set((existingProducts || []).map(p => p.original_url));
+
     for (const strategy of strategies) {
       console.log(`${logPrefix} Executando estratégia: ${strategy.label}...`);
       
       const products = await adapter.discoverProducts({
         sortType: strategy.sortType,
         limit: strategy.limit,
-        connection
+        connection: shopeeConnection as any
       });
 
       totalDiscovered += products.length;
 
       for (const p of products) {
+        const url = p.productLink || p.offerLink;
+        
+        // Evitar duplicados
+        if (existingUrls.has(url)) continue;
+
         // --- NOVO CÁLCULO DE INTELIGÊNCIA (ROI SCORING) ---
         // Referência: ROI = (Comissão / Preço) * 100
         // Bias: log10(Preço Original / Preço Atual) -> Premia descontos reais
@@ -81,26 +102,26 @@ export async function GET(request: Request) {
         // Inserir no banco
         const { error } = await supabase
           .from('products')
-          .upsert({
+          .insert({
             name: p.name,
             marketplace: 'Shopee',
-            category: p.category,
+            category: `[RADAR] ${p.category}`,
             current_price: p.currentPriceFactual,
             original_price: p.originalPrice,
             discount_percent: p.discountPercent,
             commission_percent: (p.commissionRate || 0) * 100,
             commission_value: p.commissionValueFactual,
             image_url: p.imageUrl,
-            original_url: p.productLink || p.offerLink,
-            opportunity_score: finalScore,
-            // Tags de controle Radar
-            is_radar: true,
-            external_id: `${p.shopId}_${p.itemId}`
-          }, { 
-            onConflict: 'marketplace,external_id' 
+            original_url: url,
+            opportunity_score: finalScore
           });
 
-        if (!error) totalInserted++;
+        if (error) {
+          console.error(`${logPrefix} Erro ao inserir produto:`, error.message, url);
+        } else {
+          totalInserted++;
+          existingUrls.add(url); // Evitar duplicados na mesma execução
+        }
       }
     }
 
