@@ -7,6 +7,12 @@ import { refineOfferCopy } from './ai/refiner';
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
 
+export interface Eligibility {
+  isEligible: boolean;
+  status: 'eligible' | 'warning' | 'ineligible';
+  reasons: string[];
+}
+
 export interface FactualData {
   originalUrl: string;
   cleanUrl: string;
@@ -37,6 +43,7 @@ export interface FactualData {
   estimatedPixPrice?: number | null;
   estimatedPixPriceFormatted?: string | null;
   estimatedPixSource?: string | null;
+  pixDisplayEligible: boolean;
 
   affiliateLink?: string | null;
   shortLink?: string | null;
@@ -53,6 +60,9 @@ export interface FactualData {
   redirect_chain?: string[];
   reaffiliation_status: string;
   reaffiliation_error?: string;
+
+  // Elegibilidade Operacional
+  eligibility: Eligibility;
 }
 
 export interface GeneratedCopy {
@@ -97,6 +107,53 @@ function findAdapter(url: string): MarketplaceAdapter | null {
 }
 
 /**
+ * Valida a elegibilidade operacional de uma oferta com base em regras críticas.
+ */
+export function validateEligibility(factual: FactualData): Eligibility {
+  const reasons: string[] = [];
+  let status: 'eligible' | 'warning' | 'ineligible' = 'eligible';
+
+  // 1. Erros Críticos de Afiliação
+  if (factual.reaffiliation_status === 'blocked') {
+    reasons.push('Afiliação Bloqueada: Item proibido ou erro de conta');
+    status = 'ineligible';
+  } else if (factual.reaffiliation_status === 'failed') {
+    reasons.push(`Falha de Afiliação: ${factual.reaffiliation_error || 'Erro desconhecido'}`);
+    status = 'ineligible';
+  }
+
+  // 2. Metadados Essenciais (Regra SYNCO: Sem Título, Sem Preço ou Sem Imagem = Quebrado)
+  if (!factual.title || factual.title === 'Produto sem título' || factual.title === 'PRODUTO BLOQUEADO') {
+    reasons.push('Título ausente ou inválido');
+    status = 'ineligible';
+  }
+
+  if (!factual.price || factual.price <= 0) {
+    reasons.push('Preço factual indisponível ou inválido');
+    status = 'ineligible';
+  }
+
+  if (!factual.image) {
+    reasons.push('Imagem ausente (obrigatória no SYNCO)');
+    status = 'ineligible';
+  }
+
+  // 3. Avisos (Warnings)
+  if (status === 'eligible') {
+     if (!factual.commissionValueFactual || factual.commissionValueFactual <= 0) {
+       reasons.push('Comissão não detectada');
+       status = 'warning';
+     }
+  }
+
+  return {
+    isEligible: status !== 'ineligible',
+    status,
+    reasons
+  };
+}
+
+/**
  * Construtor central de mensagens baseadas no snapshot factual.
  * FOCADO EM PREÇO FACTUAL (DE/POR). TOTALMENTE DETERMINÍSTICO.
  */
@@ -105,10 +162,9 @@ export function buildMessageFromSnapshot(factual: FactualData): string {
   const title = factual.title;
   const emoji = '🛍️';
 
-  // 2. Extração de Preços (Priorizando Pix)
-  const hasPix = !!factual.estimatedPixPrice && !!factual.estimatedPixPriceFormatted;
-  const priceCurrent = hasPix ? factual.estimatedPixPrice : factual.price;
-  const priceCurrentFormatted = hasPix ? factual.estimatedPixPriceFormatted : factual.priceFormatted;
+  // 2. Extração de Preços (Factual)
+  const priceCurrent = factual.price;
+  const priceCurrentFormatted = factual.priceFormatted;
   
   const priceOriginal = factual.originalPrice;
   const priceOriginalFormatted = factual.originalPriceFormatted;
@@ -122,24 +178,16 @@ export function buildMessageFromSnapshot(factual: FactualData): string {
     priceLines += `~De: ${priceOriginalFormatted}~\n`;
   }
 
-  if (hasPix) {
-    priceLines += `🔥 Por: ${priceCurrentFormatted} no Pix`;
-  } else if (priceCurrentFormatted) {
-    priceLines += `💥 Por: ${priceCurrentFormatted}`;
+  if (priceCurrentFormatted) {
+    priceLines += `🔥 Por: ${priceCurrentFormatted}`;
   } else {
-    priceLines += `💥 Por: Preço sob consulta`;
+    priceLines += `🔥 Por: Preço sob consulta`;
   }
 
   // 4. Link & CTA
   const link = factual.finalLinkToSend;
 
-  // 5. Notas de Rodapé (Opcionais)
-  const footerNotes: string[] = [];
-  if (hasPix) {
-    footerNotes.push('*Valor Pix estimado.');
-  }
-
-  // 6. Montagem Final (Respeitando linhas em branco e respiro visual)
+  // 5. Montagem Final (Respeitando linhas em branco e respiro visual)
   const lines = [
     `${emoji} ${title}`,
     '',
@@ -148,8 +196,7 @@ export function buildMessageFromSnapshot(factual: FactualData): string {
     '📦 Compre aqui:',
     link,
     '',
-    '⚠️ Promoção sujeita a alteração a qualquer momento.',
-    ...footerNotes
+    '⚠️ Promoção sujeita a alteração a qualquer momento.'
   ];
 
   return lines.join('\n').trim();
@@ -211,6 +258,7 @@ export function buildProductSnapshot(opts: {
     estimatedPixPrice: estimatedPix,
     estimatedPixPriceFormatted: formatBRL(estimatedPix),
     estimatedPixSource: metadata.estimatedPixSource,
+    pixDisplayEligible: !!estimatedPix && !!metadata.estimatedPixSource && metadata.estimatedPixSource.startsWith('api'),
 
     commissionRate,
     commissionRatePercent: commissionRate !== null ? `${(commissionRate * 100).toFixed(2)}%` : null,
@@ -228,8 +276,14 @@ export function buildProductSnapshot(opts: {
     generated_affiliate_url: reaffiliation?.generated_affiliate_url,
     redirect_chain: reaffiliation?.redirect_chain || [],
     reaffiliation_status: reaffiliation?.reaffiliation_status || 'not_needed',
-    reaffiliation_error: reaffiliation?.reaffiliation_error
+    reaffiliation_error: reaffiliation?.reaffiliation_error,
+
+    // Inicializar temporário para permitir validação
+    eligibility: { isEligible: true, status: 'eligible', reasons: [] }
   };
+
+  // 2. Aplicar Validação Real
+  factual.eligibility = validateEligibility(factual);
 
   return {
     id,

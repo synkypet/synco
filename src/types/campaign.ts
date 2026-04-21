@@ -42,6 +42,10 @@ export interface CampaignItem {
   redirect_chain?: any[] | null;
   reaffiliation_status?: string | null;
   reaffiliation_error?: string | null;
+
+  // Elegibilidade Operacional (Fase 2)
+  eligibility_status?: 'eligible' | 'warning' | 'ineligible' | null;
+  eligibility_reasons?: string[] | null;
 }
 
 export interface CampaignDestination {
@@ -72,6 +76,10 @@ export interface CreateCampaignDTO {
     redirect_chain?: any[];
     reaffiliation_status?: string;
     reaffiliation_error?: string;
+
+    // Elegibilidade Operacional (Fase 2)
+    eligibility_status: 'eligible' | 'warning' | 'ineligible';
+    eligibility_reasons: string[];
   }[];
   destinations: {
     type: 'list' | 'group';

@@ -25,6 +25,8 @@ const OPERATIONAL_STATUS: Record<string, { label: string; color: string; icon: R
   cooldown:  { label: 'Aguardando envio',  color: 'bg-blue-500/10 text-blue-400',                               icon: <Timer size={8} /> },
   sending:   { label: 'Processando',       color: 'bg-kinetic-orange/10 text-kinetic-orange animate-pulse',     icon: <SendHorizonal size={8} /> },
   completed: { label: 'Finalizada',        color: 'bg-emerald-500/10 text-emerald-400',                         icon: <CheckCircle2 size={8} /> },
+  failed:    { label: 'Falhou',            color: 'bg-red-500/10 text-red-500',                                 icon: <AlertCircle size={8} /> },
+  session_lost: { label: 'Pausada',        color: 'bg-yellow-500/10 text-yellow-500',                           icon: <AlertCircle size={8} /> },
 };
 
 interface CampaignCardProps {
@@ -57,10 +59,14 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
   const isStatsReady = !statsLoading && stats !== null && stats !== undefined;
 
   let opStatus: string;
-  if (!isStatsReady || (statsTotal === 0 && isRecentlyCreated)) {
+  if (campaign.status === 'failed') {
+    opStatus = 'failed'; // Banco de dados diz explicitamente que a campanha falhou
+  } else if (!isStatsReady || (statsTotal === 0 && isRecentlyCreated)) {
     opStatus = 'queued'; // Aguardando sincronização — mostra como "na fila"
   } else if ((stats?.processing ?? 0) > 0) {
     opStatus = 'sending';
+  } else if ((stats?.session_lost ?? 0) > 0) {
+    opStatus = 'session_lost';
   } else if ((stats?.pending ?? 0) > 0) {
     opStatus = queue?.position === 1 ? 'cooldown' : 'queued';
   } else {
@@ -151,6 +157,8 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
                   className={cn(
                     "fill-none transition-all duration-1000 ease-out",
                     opStatus === 'sending'   ? "stroke-kinetic-orange" :
+                    opStatus === 'failed'    ? "stroke-red-500" :
+                    opStatus === 'session_lost' ? "stroke-yellow-500" :
                     opStatus === 'completed' ? "stroke-emerald-500"    : "stroke-blue-400"
                   )}
                   strokeWidth="6"
@@ -160,8 +168,16 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
                 />
               </svg>
               <div className="absolute flex flex-col items-center">
-                <span className="text-xs font-black text-white">{progress}%</span>
-                {opStatus === 'sending' && <Loader2 size={8} className="animate-spin text-kinetic-orange mt-0.5" />}
+                {opStatus === 'failed' ? (
+                  <AlertCircle size={14} className="text-red-500" />
+                ) : opStatus === 'session_lost' ? (
+                  <AlertCircle size={14} className="text-yellow-500" />
+                ) : (
+                  <>
+                    <span className="text-xs font-black text-white">{progress}%</span>
+                    {opStatus === 'sending' && <Loader2 size={8} className="animate-spin text-kinetic-orange mt-0.5" />}
+                  </>
+                )}
               </div>
             </div>
 

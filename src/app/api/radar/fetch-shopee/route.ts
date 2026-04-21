@@ -50,16 +50,26 @@ export async function POST(request: Request) {
     const insertedProducts = [];
 
     for (const node of topItems) {
-      const originalPrice = parseFloat(String(node.priceMax || node.price || 0)) / 100000;
       const currentPrice = parseFloat(String(node.priceMin || node.price || 0)) / 100000;
+      const factualMax = parseFloat(String(node.priceMax || 0)) / 100000;
+      
+      // --- GUARDIÃO DO RADAR (Fase 2) ---
+      // Impede persistência de itens que seriam bloqueados no `linkProcessor`
+      if (!node.imageUrl || !node.productName || currentPrice <= 0) {
+        console.log(`[RADAR-GUARD] Item pulado. Inelegível (Sem imagem, título ou preço > 0). Item: ${node.itemId}`);
+        continue;
+      }
+
+      // Regra Factual: Preço original só existe se for comprovadamente maior que o atual
+      const originalPrice = (factualMax > currentPrice) ? factualMax : null;
       const commissionRate = parseFloat(String(node.commissionRate || 0));
       
-      let discountPercent = parseFloat(String(node.priceDiscountRate || 0));
-      if (!discountPercent && originalPrice > currentPrice) {
+      let discountPercent = 0;
+      if (originalPrice && originalPrice > currentPrice) {
         discountPercent = Math.round((1 - (currentPrice / originalPrice)) * 100);
       }
 
-      // Base opportunity score, elevated if it has good commission
+      // Base opportunity score, elevado if it has good commission
       const opportunityScore = Math.min(100, Math.round((discountPercent * 0.4) + (commissionRate * 100 * 0.6) + 50));
       const productLink = node.productLink || `https://shopee.com.br/product/${node.shopId}/${node.itemId}`;
       
@@ -71,8 +81,8 @@ export async function POST(request: Request) {
           original_url: productLink,
           image_url: node.imageUrl,
           current_price: currentPrice,
-          original_price: originalPrice,
-          discount_percent: discountPercent,
+          original_price: originalPrice ?? undefined,
+          discount_percent: (discountPercent > 0) ? discountPercent : undefined,
           commission_percent: commissionRate * 100,
           commission_value: (currentPrice * commissionRate),
           opportunity_score: Math.min(100, opportunityScore),

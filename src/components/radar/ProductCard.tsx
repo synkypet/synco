@@ -154,16 +154,21 @@ const ProductCard: React.FC<ProductCardProps> = ({
         </h3>
 
         {/* Preços - Deep-void cavity */}
-        <div className="bg-deep-void/50 rounded-xl px-3 py-2 shadow-skeuo-pressed mb-3 flex items-baseline gap-2">
-          {product.original_price && (
-            <span className="text-[10px] text-white/20 line-through font-medium">R$ {product.original_price.toFixed(2)}</span>
+        <div className="bg-deep-void/50 rounded-xl px-3 py-2 shadow-skeuo-pressed mb-3 flex flex-col gap-1">
+          {product.original_price && product.original_price > (product.current_price || 0) && (
+            <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest leading-none">
+              De: <span className="line-through decoration-kinetic-orange/40 font-medium">R$ {product.original_price.toFixed(2)}</span>
+            </span>
           )}
-          <span className={cn(
-            "text-2xl font-black font-headline text-kinetic-orange tracking-tight",
-            score >= 90 && "shadow-glow-orange-intense neon-glow"
-          )}>
-            R$ {product.current_price?.toFixed(2)}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-black text-kinetic-orange uppercase tracking-widest opacity-70">🔥 Por:</span>
+            <span className={cn(
+              "text-2xl font-black font-headline text-kinetic-orange tracking-tight",
+              score >= 90 && "shadow-glow-orange-intense neon-glow"
+            )}>
+              R$ {product.current_price?.toFixed(2)}
+            </span>
+          </div>
         </div>
 
         {/* Comissão */}

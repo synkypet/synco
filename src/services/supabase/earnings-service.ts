@@ -16,23 +16,26 @@ export const earningsService = {
     return data || [];
   },
 
-  async getEarningsSummary(): Promise<EarningsSummary> {
+  async getEarningsSummary(userId: string, options?: { startDate?: string, endDate?: string }): Promise<EarningsSummary> {
     const supabase = createClient();
-    const { data: imports, error: importError } = await supabase
-      .from('earnings_imports')
-      .select('total_commissions, total_orders');
-
-    if (importError) throw importError;
-
-    const { data: items, error: itemError } = await supabase
+    
+    let query = supabase
       .from('earnings_import_items')
-      .select('product_name, commission_amount, occurred_at')
-      .order('occurred_at', { ascending: true });
+      .select('product_name, commission_amount, occurred_at, order_id')
+      .eq('user_id', userId);
+
+    if (options?.startDate) {
+      const end = options.endDate || new Date().toISOString();
+      query = query.gte('occurred_at', options.startDate).lte('occurred_at', end);
+    }
+
+    const { data: items, error: itemError } = await query.order('occurred_at', { ascending: true });
 
     if (itemError) throw itemError;
 
-    const total_commissions = imports?.reduce((acc, curr) => acc + Number(curr.total_commissions), 0) || 0;
-    const total_orders = imports?.reduce((acc, curr) => acc + Number(curr.total_orders), 0) || 0;
+    const total_commissions = items?.reduce((acc, curr) => acc + Number(curr.commission_amount), 0) || 0;
+    const uniqueOrders = new Set(items?.map(i => i.order_id));
+    const total_orders = uniqueOrders.size;
     
     // Monthly aggregation
     const monthlyMap: Record<string, number> = {};

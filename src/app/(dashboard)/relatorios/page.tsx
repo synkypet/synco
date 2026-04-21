@@ -16,6 +16,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     AreaChart, Area, PieChart, Pie, Cell, Legend
 } from 'recharts';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
     useOperationalSummary, 
     usePerformanceCharts, 
@@ -42,15 +43,17 @@ const STATUS_COLORS = {
 };
 
 export default function RelatoriosPage() {
+    const { user } = useAuth();
     const [period, setPeriod] = useState('week');
     const [tab, setTab] = useState('overview');
 
-    const { data: summary, isLoading: isLoadingSummary } = useOperationalSummary(period);
-    const { data: charts, isLoading: isLoadingCharts } = usePerformanceCharts(period);
-    const { data: topGroups, isLoading: isLoadingTopGroups } = useTopGroups(period);
-    const { data: history, isLoading: isLoadingHistory } = useOperationalHistory(period);
+    const { data: summary, isLoading: isLoadingSummary } = useOperationalSummary(user?.id, { period });
+    const { data: charts, isLoading: isLoadingCharts } = usePerformanceCharts(user?.id, { period });
+    const { data: topGroups, isLoading: isLoadingTopGroups } = useTopGroups(user?.id, { period });
+    const { data: history, isLoading: isLoadingHistory } = useOperationalHistory(user?.id, { period });
 
-    const isLoading = isLoadingSummary || isLoadingCharts || isLoadingTopGroups || isLoadingHistory;
+    const isAuthLoading = !user;
+    const isLoading = isAuthLoading || isLoadingSummary || isLoadingCharts || isLoadingTopGroups || isLoadingHistory;
 
     const pieData = [
         { name: 'Sucesso', value: summary?.total_sent || 0, color: STATUS_COLORS.sent },

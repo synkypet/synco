@@ -32,12 +32,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
 
-  // Detecção de primeiro acesso e Replay via metadata
+  // Onboarding desabilitado por enquanto a pedido do usuário
+  /*
   useEffect(() => {
     if (!authLoading && user) {
       const isCompleted = user.user_metadata?.onboarding_completed;
       if (isCompleted === undefined || isCompleted === false) {
-        // Delay curto para garantir que a UI base carregou
         const timer = setTimeout(() => setShowTutorial(true), 1200);
         return () => clearTimeout(timer);
       } else {
@@ -45,10 +45,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
       }
     }
   }, [user, authLoading]);
+  */
 
   return (
     <div className="min-h-screen bg-deep-void">
-        {/* Tutorial Layer */}
+        {/* Tutorial Layer desabilitada */}
+        {/*
         <AnimatePresence>
           {showTutorial && user && (
             <OnboardingTutorial 
@@ -58,6 +60,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             />
           )}
         </AnimatePresence>
+        */}
 
         {/* Mobile overlay */}
         {mobileMenuOpen && (
