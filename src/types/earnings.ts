@@ -1,39 +1,54 @@
 // src/types/earnings.ts
 
-export type ImportStatus = 'processing' | 'completed' | 'failed';
+export type OrderStatus = 'Pending' | 'Completed' | 'Cancelled' | 'To Pay' | string;
 
-export interface EarningsImport {
+export interface ImportBatch {
   id: string;
   user_id: string;
+  filename: string;
   marketplace: string;
-  period: string | null;
-  status: ImportStatus;
-  products_count: number;
-  total_orders: number;
-  total_commissions: number;
-  error_message?: string | null;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  total_rows: number;
+  inserted_count: number;
+  updated_count: number;
+  failed_count: number;
+  error_summary?: string;
   created_at: string;
+}
+
+export interface ShopeeOrder {
+  id: string;
+  user_id: string;
+  batch_id?: string;
+  
+  // Identificadores (Regra de Unicidade Multinível)
+  external_id: string;
+  source_item_id?: string;
+  source_row_fingerprint: string;
+  
+  // Dados do Pedido
+  order_id: string;
+  product_id?: string;
+  product_name?: string;
+  order_time: string;
+  order_status: OrderStatus;
+  
+  // Financeiro
+  checkout_amount: number;
+  estimated_commission: number;
+  actual_commission: number;
+  currency: string;
+  sub_id?: string;
+  
+  // Auditoria
+  raw_row_json: any;
+  marketplace: string;
+  imported_at: string;
   updated_at: string;
 }
 
-export interface EarningsImportItem {
-  id: string;
-  import_id: string;
-  user_id: string;
-  product_name: string | null;
-  order_id: string | null;
-  order_amount: number | null;
-  commission_amount: number | null;
-  status: string | null;
-  occurred_at: string | null;
-  created_at: string;
-}
-
-export interface EarningsSummary {
-  total_commissions: number;
-  total_orders: number;
-  total_clicks: number; // For now 0/null as per rules
-  avg_commission: number;
-  monthly_data: { month: string; ganhos: number }[];
-  top_products: { name: string; marketplace: string; orders: number; commission_total: number }[];
+export interface OperationalStats {
+  totalCampaigns: number;
+  totalJobs: number;
+  recentActivity: any[];
 }

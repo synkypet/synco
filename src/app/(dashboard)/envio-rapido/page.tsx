@@ -302,11 +302,11 @@ export default function EnvioRapidoPage() {
         reaffiliation_error: p.factual.reaffiliation_error,
 
         // --- FÓRMULA OPERACIONAL (Fase 2: Elegibilidade Persistida) ---
-        eligibility_status: p.factual.eligibility.status,
-        eligibility_reasons: p.factual.eligibility.reasons,
+        eligibility_status: p.factual.eligibility?.status || 'eligible',
+        eligibility_reasons: p.factual.eligibility?.reasons || [],
 
         external_product_id: p.factual.itemId?.toString(),
-        installments: p.factual.installments
+        installments: p.factual.installments || null
       })),
       destinations: selectedDestinations.map(id => ({
         id,

@@ -10,6 +10,7 @@ import {
 import { useChannels } from '@/hooks/use-channels';
 import { useGroups } from '@/hooks/use-groups';
 import { useDestinations } from '@/hooks/use-destinations';
+import { useQueryClient } from '@tanstack/react-query';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { StatCard } from '@/components/ui/StatCard';
 import { AutomationTargetSelector } from '@/components/automation/AutomationTargetSelector';
@@ -34,7 +35,8 @@ import {
   Settings,
   ShieldCheck,
   FileText,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -53,6 +55,7 @@ import { toast } from 'sonner';
 export default function AutomacoesDashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   
   // Queries
   const { data: sources, isLoading } = useAutomationSources(user?.id as string);
@@ -71,12 +74,15 @@ export default function AutomacoesDashboardPage() {
   const [sourceGroupId, setSourceGroupId] = useState('');
   const [targetType, setTargetType] = useState<'group' | 'list'>('group');
   const [targetId, setTargetId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   // Validação simples
   const isNameValid = newName.trim().length >= 3;
   const isEntryValid = entryType === 'radar_offers' || (channelId && sourceGroupId);
   const isTargetValid = !!targetId;
-  const isFormValid = isNameValid && isEntryValid && isTargetValid;
+  const isSearchTermValid = entryType === 'radar_offers' ? searchTerm.trim().length >= 2 : true;
+  const isFormValid = isNameValid && isEntryValid && isTargetValid && isSearchTermValid;
 
   const handleCreatePipeline = () => {
     if (!isFormValid) return;
@@ -90,7 +96,8 @@ export default function AutomacoesDashboardPage() {
       channel_id: channelId || undefined,
       external_group_id: selectedSourceGroup?.remote_id || undefined,
       target_type: targetType,
-      target_id: targetId
+      target_id: targetId,
+      config: entryType === 'radar_offers' ? { searchTerm: searchTerm.trim() } : undefined
     });
 
     toast.promise(promise, {
@@ -102,6 +109,36 @@ export default function AutomacoesDashboardPage() {
       },
       error: (err: any) => `Erro na criação: ${err.message || 'Verifique os dados.'}`
     });
+  };
+
+  const handleSync = async (sourceId: string) => {
+    setSyncingId(sourceId);
+    try {
+      const response = await fetch('/api/radar/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId })
+      });
+      
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        // Invalida os logs para atualizar a tabela instantaneamente
+        queryClient.invalidateQueries({ queryKey: ['automation-logs'] });
+        
+        if (data.totalInserted > 0) {
+          toast.success(`Sucesso! ${data.totalInserted} novas ofertas exclusivas injetadas no seu Radar.`);
+        } else {
+          toast.info('Sincronismo finalizado: Nenhuma oferta nova encontrada (Deduplicadas).');
+        }
+      } else {
+        toast.error('Erro na sincronização: ' + data.error);
+      }
+    } catch (err) {
+      toast.error('Falha na comunicação com o servidor.');
+    } finally {
+      setSyncingId(null);
+    }
   };
 
   if (isLoading) {
@@ -167,17 +204,37 @@ export default function AutomacoesDashboardPage() {
                           <span className="text-[9px] font-black uppercase tracking-widest">Monitorar Grupo</span>
                         </button>
                         <button
-                          className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border bg-white/5 border-white/5 text-white/10 cursor-not-allowed grayscale`}
-                          disabled
+                          onClick={() => setEntryType('radar_offers')}
+                          className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border transition-all ${
+                            entryType === 'radar_offers' 
+                              ? 'bg-kinetic-orange/10 border-kinetic-orange/40 text-kinetic-orange shadow-glow-orange' 
+                              : 'bg-white/5 border-white/10 text-white/20 hover:bg-white/10'
+                          }`}
                         >
-                          <ShieldAlert size={14} className="absolute top-2 right-2 opacity-50" />
                           <Inbox size={20} className="mb-2" />
                           <span className="text-[9px] font-black uppercase tracking-widest">Radar Pro</span>
-                          <span className="text-[8px] font-bold opacity-30 mt-0.5 tracking-tighter">(Em breve)</span>
                         </button>
                       </div>
                     </div>
   
+                    {entryType === 'radar_offers' && (
+                      <div className="space-y-2 animate-in slide-in-from-bottom-2 duration-300">
+                        <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest flex justify-between">
+                           Termo de Busca (Keyword)
+                           {!isSearchTermValid && searchTerm.length > 0 && <span className="text-red-400 font-bold tracking-tight">Mín. 2 caracteres</span>}
+                        </Label>
+                        <Input 
+                          placeholder="Ex: impressao 3d, air fryer, fone bluetooth..." 
+                          className={!isSearchTermValid && searchTerm.length > 0 ? 'ring-1 ring-red-500/50' : ''}
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <p className="text-[8px] text-white/20 font-bold uppercase tracking-wider">
+                          O robô usará este termo para pesquisar ofertas na Shopee.
+                        </p>
+                      </div>
+                    )}
+
                     {entryType === 'group_monitor' && (
                       <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-bottom-2 duration-300">
                         <div className="space-y-2">
@@ -326,13 +383,27 @@ export default function AutomacoesDashboardPage() {
                          <span className="text-[10px] font-bold uppercase tracking-tight italic">Live Feed</span>
                        </div>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      className="h-10 text-[10px] font-black uppercase tracking-widest gap-2 bg-white/5 hover:bg-kinetic-orange hover:text-white transition-all rounded-xl border border-white/5"
-                      onClick={() => router.push(`/automacoes/${source.id}`)}
-                    >
-                      GERENCIAR <Settings size={14} className="group-hover:rotate-45 transition-transform" />
-                    </Button>
+                     <div className="flex items-center gap-2">
+                      {source.source_type === 'radar_offers' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-10 w-10 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all ${syncingId === source.id ? 'text-kinetic-orange' : 'text-white/40'}`}
+                          onClick={() => handleSync(source.id)}
+                          disabled={syncingId !== null}
+                        >
+                          <RefreshCw size={14} className={syncingId === source.id ? 'animate-spin' : ''} />
+                        </Button>
+                      )}
+                      
+                      <Button 
+                        variant="ghost" 
+                        className="h-10 text-[10px] font-black uppercase tracking-widest gap-2 bg-white/5 hover:bg-kinetic-orange hover:text-white transition-all rounded-xl border border-white/5"
+                        onClick={() => router.push(`/automacoes/${source.id}`)}
+                      >
+                        GERENCIAR <Settings size={14} className="group-hover:rotate-45 transition-transform" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </TactileCard>
