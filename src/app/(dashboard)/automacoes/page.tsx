@@ -10,6 +10,7 @@ import {
 import { useChannels } from '@/hooks/use-channels';
 import { useGroups } from '@/hooks/use-groups';
 import { useDestinations } from '@/hooks/use-destinations';
+import { useQueryClient } from '@tanstack/react-query';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { StatCard } from '@/components/ui/StatCard';
 import { AutomationTargetSelector } from '@/components/automation/AutomationTargetSelector';
@@ -54,6 +55,7 @@ import { toast } from 'sonner';
 export default function AutomacoesDashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   
   // Queries
   const { data: sources, isLoading } = useAutomationSources(user?.id as string);
@@ -121,7 +123,14 @@ export default function AutomacoesDashboardPage() {
       const data = await response.json();
       
       if (data.status === 'success') {
-        toast.success(`Sincronizado! ${data.totalInserted} novas ofertas encontradas.`);
+        // Invalida os logs para atualizar a tabela instantaneamente
+        queryClient.invalidateQueries({ queryKey: ['automation-logs'] });
+        
+        if (data.totalInserted > 0) {
+          toast.success(`Sucesso! ${data.totalInserted} novas ofertas exclusivas injetadas no seu Radar.`);
+        } else {
+          toast.info('Sincronismo finalizado: Nenhuma oferta nova encontrada (Deduplicadas).');
+        }
       } else {
         toast.error('Erro na sincronização: ' + data.error);
       }

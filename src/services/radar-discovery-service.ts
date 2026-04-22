@@ -149,7 +149,7 @@ export const radarDiscoveryService = {
               keyword: task.keyword,
               found: products.length,
               inserted: taskInserted,
-              message: `Descoberta finalizada para "${task.keyword || 'Global'}". ${products.length} itens analisados. ${taskInserted} novos injetados.`
+              message: `Radar Pro: ${taskInserted} novas ofertas encontradas para o termo "${task.keyword || 'Global'}".`
             }
           }, supabase);
         }
