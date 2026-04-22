@@ -1,178 +1,141 @@
 // src/services/supabase/earnings-service.ts
+
 import { createClient } from '@/lib/supabase/client';
-import { EarningsImport, EarningsImportItem, EarningsSummary } from '@/types/earnings';
-
-
+import { ImportBatch, ShopeeOrder } from '@/types/earnings';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export const earningsService = {
-  async getImportHistory(): Promise<EarningsImport[]> {
-    const supabase = createClient();
+  /**
+   * Inicia um novo lote de importação
+   */
+  async createBatch(batch: Partial<ImportBatch>, client?: SupabaseClient): Promise<ImportBatch> {
+    const supabase = client || createClient();
     const { data, error } = await supabase
-      .from('earnings_imports')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .from('import_batches')
+      .insert(batch)
+      .select()
+      .single();
 
     if (error) throw error;
-    return data || [];
+    return data;
   },
 
-  async getEarningsSummary(userId: string, options?: { startDate?: string, endDate?: string }): Promise<EarningsSummary> {
-    const supabase = createClient();
+  /**
+   * Salva os pedidos importados em massa (UPSERT)
+   */
+  async upsertOrders(batchId: string, orders: any[], client?: SupabaseClient) {
+    const supabase = client || createClient();
     
-    let query = supabase
-      .from('earnings_import_items')
-      .select('product_name, commission_amount, occurred_at, order_id')
-      .eq('user_id', userId);
-
-    if (options?.startDate) {
-      const end = options.endDate || new Date().toISOString();
-      query = query.gte('occurred_at', options.startDate).lte('occurred_at', end);
-    }
-
-    const { data: items, error: itemError } = await query.order('occurred_at', { ascending: true });
-
-    if (itemError) throw itemError;
-
-    const total_commissions = items?.reduce((acc, curr) => acc + Number(curr.commission_amount), 0) || 0;
-    const uniqueOrders = new Set(items?.map(i => i.order_id));
-    const total_orders = uniqueOrders.size;
-    
-    // Monthly aggregation
-    const monthlyMap: Record<string, number> = {};
-    items?.forEach(item => {
-      const date = new Date(item.occurred_at || '');
-      const monthKey = date.toLocaleString('pt-BR', { month: 'short' });
-      monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + Number(item.commission_amount);
-    });
-
-    const monthly_data = Object.entries(monthlyMap).map(([month, ganhos]) => ({
-      month,
-      ganhos
+    // Normalizar para o schema do banco
+    const cleanedOrders = orders.map(o => ({
+      user_id: o.user_id,
+      batch_id: batchId,
+      external_id: o.external_id,
+      source_item_id: o.source_item_id || null,
+      source_row_fingerprint: o.source_row_fingerprint,
+      order_id: o.order_id,
+      product_id: o.product_id || null,
+      product_name: o.product_name || null,
+      order_time: o.order_time,
+      order_status: o.order_status,
+      checkout_amount: o.checkout_amount,
+      estimated_commission: o.estimated_commission,
+      actual_commission: o.actual_commission,
+      currency: o.currency || 'BRL',
+      sub_id: o.sub_id || null,
+      raw_row_json: o.raw_row_json,
+      updated_at: new Date().toISOString()
     }));
 
-    // Top Products aggregation
-    const productMap: Record<string, { orders: number; commission: number }> = {};
-    items?.forEach(item => {
-      const name = item.product_name || 'Desconhecido';
-      if (!productMap[name]) productMap[name] = { orders: 0, commission: 0 };
-      productMap[name].orders += 1;
-      productMap[name].commission += Number(item.commission_amount);
-    });
+    // Realizar UPSERT baseado na constraint unique_user_external_order
+    const { data, error } = await supabase
+      .from('shopee_orders')
+      .upsert(cleanedOrders, { 
+        onConflict: 'user_id, external_id' 
+      });
 
-    const top_products = Object.entries(productMap)
-      .map(([name, stats]) => ({
-        name,
-        marketplace: 'Shopee', // Scope limited to Shopee for now
-        orders: stats.orders,
-        commission_total: stats.commission
-      }))
-      .sort((a, b) => b.commission_total - a.commission_total)
-      .slice(0, 5);
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Atualiza o status do lote
+   */
+  async updateBatchStatus(id: string, updates: Partial<ImportBatch>, client?: SupabaseClient) {
+    const supabase = client || createClient();
+    const { error } = await supabase
+      .from('import_batches')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  /**
+   * Busca resumo operacional consolidado do usuário
+   */
+  async getOperationalStats(userId: string, client?: SupabaseClient) {
+    const supabase = client || createClient();
+    
+    const [campaigns, jobs] = await Promise.all([
+      supabase.from('campaigns').select('id', { count: 'exact', head: true }),
+      supabase.from('send_jobs').select('id', { count: 'exact', head: true })
+    ]);
 
     return {
-      total_commissions,
-      total_orders,
-      total_clicks: 0, // Not tracked yet
-      avg_commission: total_orders > 0 ? total_commissions / total_orders : 0,
-      monthly_data: monthly_data.length > 0 ? monthly_data : [
-        { month: 'Jan', ganhos: 0 },
-        { month: 'Fev', ganhos: 0 },
-        { month: 'Mar', ganhos: 0 }
-      ],
-      top_products
+      totalCampaigns: campaigns.count || 0,
+      totalJobs: jobs.count || 0
     };
   },
 
-  async importShopeeCSV(fileContent: string): Promise<EarningsImport> {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuário não autenticado');
-
-    const lines = fileContent.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    if (lines.length < 2) throw new Error('Arquivo CSV inválido ou vazio');
-
-    // Simple CSV Parser (assuming Shopee standard format)
-    // Header assumption: Order ID, Product Name, Order Price, Commission Fee, Status, Time
-    const header = lines[0].split(',').map(h => h.toLowerCase().trim());
+  /**
+   * Busca desempenho real consolidado (Shopee)
+   */
+  async getRealStats(userId: string, client?: SupabaseClient) {
+    const supabase = client || createClient();
     
-    // Attempt to find column indices
-    const idxOrderId = header.findIndex(h => h.includes('id') || h.includes('pedido'));
-    const idxProductName = header.findIndex(h => h.includes('produto') || h.includes('item') || h.includes('name'));
-    const idxOrderAmount = header.findIndex(h => h.includes('valor') || h.includes('preço') || h.includes('price') || h.includes('amount'));
-    const idxCommission = header.findIndex(h => h.includes('comissão') || h.includes('fee') || h.includes('earnings'));
-    const idxStatus = header.findIndex(h => h.includes('status'));
-    const idxTime = header.findIndex(h => h.includes('data') || h.includes('time') || h.includes('hora'));
+    const { data, error } = await supabase
+      .from('shopee_orders')
+      .select('actual_commission, estimated_commission, order_status, checkout_amount')
+      .eq('user_id', userId);
 
-    const dataRows = lines.slice(1);
-    let totalCommissions = 0;
-    let totalOrders = 0;
+    if (error) return null;
 
-    // Create Import Record
-    const { data: importRecord, error: importError } = await supabase
-      .from('earnings_imports')
-      .insert({
-        user_id: user.id,
-        marketplace: 'Shopee',
-        status: 'processing',
-        period: 'Importação Manual'
-      })
-      .select()
-      .single();
+    const confirmed = data.filter(o => {
+      const s = String(o.order_status).toLowerCase();
+      return s === 'completed' || s === 'concluído';
+    });
+    
+    const pending = data.filter(o => {
+      const s = String(o.order_status).toLowerCase();
+      return s === 'pending' || s === 'aguardando';
+    });
 
-    if (importError) throw importError;
+    return {
+      totalConfirmed: confirmed.reduce((acc, curr) => acc + (Number(curr.actual_commission) || 0), 0),
+      totalPending: pending.reduce((acc, curr) => acc + (Number(curr.estimated_commission) || 0), 0),
+      totalOrders: data.length,
+      totalSales: confirmed.reduce((acc, curr) => acc + (Number(curr.checkout_amount) || 0), 0)
+    };
+  },
 
-    const itemsToInsert: any[] = [];
+  /**
+   * Busca os pedidos mais recentes para a lista de atividade
+   */
+  async getRecentOrders(userId: string, limit: number = 10, client?: SupabaseClient): Promise<ShopeeOrder[]> {
+    const supabase = client || createClient();
+    
+    const { data, error } = await supabase
+      .from('shopee_orders')
+      .select('*')
+      .eq('user_id', userId)
+      .order('order_time', { ascending: false })
+      .limit(limit);
 
-    for (const row of dataRows) {
-      // Basic CSV split considering possible quotes (very simple version)
-      const values = row.split(',').map(v => v.replace(/^"|"$/g, '').trim());
-      
-      const commission = parseFloat(values[idxCommission] || '0') || 0;
-      const amount = parseFloat(values[idxOrderAmount] || '0') || 0;
-      
-      if (!isNaN(commission)) {
-        totalCommissions += commission;
-        totalOrders += 1;
-        
-        itemsToInsert.push({
-          import_id: importRecord.id,
-          user_id: user.id,
-          product_name: values[idxProductName] || 'N/A',
-          order_id: values[idxOrderId] || 'N/A',
-          order_amount: amount,
-          commission_amount: commission,
-          status: values[idxStatus] || 'N/A',
-          occurred_at: values[idxTime] ? new Date(values[idxTime]).toISOString() : new Date().toISOString()
-        });
-      }
+    if (error) {
+      console.error('Error fetching recent orders:', error);
+      return [];
     }
-
-    // Insert Items
-    if (itemsToInsert.length > 0) {
-      const { error: itemsError } = await supabase
-        .from('earnings_import_items')
-        .insert(itemsToInsert);
-      
-      if (itemsError) {
-        await supabase.from('earnings_imports').update({ status: 'failed', error_message: itemsError.message }).eq('id', importRecord.id);
-        throw itemsError;
-      }
-    }
-
-    // Update Import Record
-    const { data: finalRecord, error: updateError } = await supabase
-      .from('earnings_imports')
-      .update({
-        status: 'completed',
-        products_count: itemsToInsert.length,
-        total_orders: totalOrders,
-        total_commissions: totalCommissions
-      })
-      .eq('id', importRecord.id)
-      .select()
-      .single();
-
-    if (updateError) throw updateError;
-    return finalRecord;
+    return data || [];
   }
 };

@@ -91,6 +91,7 @@ export function useCreateAutomationPipeline() {
       external_group_id?: string;
       target_type: 'group' | 'list';
       target_id: string;
+      config?: any;
     }) => {
       const { userId, ...payload } = setup;
       return automationService.createPipeline(userId, payload);

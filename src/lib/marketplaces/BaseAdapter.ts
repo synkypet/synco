@@ -21,6 +21,7 @@ export interface ProductMetadata {
   productLink?: string;
   offerLink?: string;
   productCatIds?: number[];
+  category?: string;
   
   // Detalhes extras
   shortLink?: string;
