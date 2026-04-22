@@ -91,6 +91,14 @@ export async function GET(request: Request) {
 
           // C. Criação de Campanha
           try {
+            // --- REGRA DE ELEGIBILIDADE FACTUAL (HARDENING) ---
+            const reasons: string[] = [];
+            if (!product.name) reasons.push('Ausência de título');
+            if (!product.image_url) reasons.push('Ausência de imagem válida');
+            if (!product.current_price || product.current_price <= 0) reasons.push('Ausência de preço factual');
+
+            const isEligible = reasons.length === 0;
+
             const campaignData = {
               name: `RADAR: ${product.name.substring(0, 30)}...`,
               items: [{
@@ -99,7 +107,9 @@ export async function GET(request: Request) {
                 affiliate_url: product.original_url, // O worker cuidará da reafiliação se necessário
                 external_product_id: product.external_id,
                 current_price: product.current_price,
-                original_price: product.original_price
+                original_price: product.original_price,
+                eligibility_status: (isEligible ? 'eligible' : 'ineligible') as any,
+                eligibility_reasons: reasons
               }],
               destinations: [{
                 type: route.target_type,
