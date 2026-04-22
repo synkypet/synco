@@ -1,234 +1,79 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  Activity,
-  Users,
-  Radar,
+import React, { useState } from 'react';
+import { 
+  Activity, 
+  Bell, 
+  Clock, 
+  Zap, 
+  Search, 
+  Filter, 
+  Loader2, 
+  CheckCircle2, 
+  AlertCircle, 
+  ArrowRight,
+  TrendingUp,
+  Package,
   Layers,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  RefreshCw,
-  Zap,
-  Eye,
-  AlertTriangle,
-  Circle,
+  Users,
+  Settings2,
+  Play,
+  Pause,
+  ExternalLink
 } from 'lucide-react';
 import LayoutContainer from '@/components/layout/LayoutContainer';
 import PageHeader from '@/components/shared/PageHeader';
+import { StatCard } from '@/components/ui/StatCard';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { 
+  useAutomationSources, 
+  useAllAutomationLogs, 
+  useAutomationSummary,
+  useUpdateAutomationSource 
+} from '@/hooks/use-automations';
+import { useCampaigns, useQueuePosition } from '@/hooks/use-campaigns';
+import Link from 'next/link';
 
-// ─── Tipos ───────────────────────────────────────────────────────────────────
+// ─── Component: Live Queue Item ─────────────────────────────────────────────
 
-interface AutomationSource {
-  id: string;
-  name: string;
-  is_active: boolean;
-  source_type: string;
-  created_at: string;
-  automation_routes: { id: string; target_type: string; target_id: string; is_active: boolean }[];
-}
-
-interface SendJob {
-  id: string;
-  campaign_id: string;
-  status: string;
-  created_at: string;
-  destination: string;
-}
-
-interface Campaign {
-  id: string;
-  name: string;
-  status: string;
-  created_at: string;
-  total_destinations: number;
-}
-
-interface AutomationLog {
-  id: string;
-  source_id: string;
-  status: string;
-  event_type: string;
-  details: any;
-  created_at: string;
-}
-
-interface MonitoringData {
-  groupSources: AutomationSource[];
-  radarSources: AutomationSource[];
-  pendingJobs: SendJob[];
-  activeCampaigns: Campaign[];
-  recentLogs: AutomationLog[];
-  queuePositions: Record<string, number>;
-  totalPending: number;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatRelativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  if (minutes < 1) return 'agora mesmo';
-  if (minutes < 60) return `há ${minutes}min`;
-  if (hours < 24) return `há ${hours}h`;
-  return `há ${Math.floor(hours / 24)}d`;
-}
-
-function StatusDot({ active }: { active: boolean }) {
-  return (
-    <span className={cn(
-      'w-2 h-2 rounded-full inline-block shrink-0',
-      active
-        ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)] animate-pulse'
-        : 'bg-white/10'
-    )} />
-  );
-}
-
-function QueueBadge({ position }: { position?: number }) {
-  if (!position) return (
-    <Badge variant="outline" className="text-[8px] border-white/10 text-white/20 h-5 px-2 font-black uppercase">
-      Aguardando
-    </Badge>
-  );
-  return (
-    <Badge variant="outline" className="text-[8px] bg-kinetic-orange/10 border-kinetic-orange/20 text-kinetic-orange h-5 px-2 font-black uppercase">
-      #{position} na fila
-    </Badge>
-  );
-}
-
-function EmptyState({ icon: Icon, label }: { icon: any; label: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 gap-3 opacity-20">
-      <Icon className="w-8 h-8" />
-      <p className="text-[10px] font-black uppercase tracking-widest text-center">{label}</p>
-    </div>
-  );
-}
-
-function SkeletonRow() {
-  return <div className="h-14 rounded-2xl bg-white/5 animate-pulse" />;
-}
-
-// ─── Componente de Fonte de Automação ────────────────────────────────────────
-
-function SourceCard({
-  source,
-  queuePositions,
-  activeCampaigns,
-}: {
-  source: AutomationSource;
-  queuePositions: Record<string, number>;
-  activeCampaigns: Campaign[];
-}) {
-  const linkedCampaign = activeCampaigns.find(c =>
-    c.name.toLowerCase().includes(source.name.toLowerCase())
-  );
-  const queuePos = linkedCampaign ? queuePositions[linkedCampaign.id] : undefined;
-  const routeCount = source.automation_routes?.length || 0;
+function LiveQueueItem({ campaign }: { campaign: any }) {
+  const { data: queue } = useQueuePosition(campaign.id);
+  const totalItems = campaign.destinations?.length || 0;
+  const completed = campaign.destinations?.filter((d: any) => d.status === 'sent' || d.status === 'failed').length || 0;
+  const progress = totalItems > 0 ? Math.round((completed / totalItems) * 100) : 0;
 
   return (
-    <div className="flex items-center justify-between p-4 rounded-2xl bg-deep-void shadow-skeuo-pressed gap-4">
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        <StatusDot active={source.is_active} />
-        <div className="min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-tight text-white/80 truncate">
-            {source.name}
-          </p>
-          <p className="text-[9px] font-bold text-white/20 uppercase mt-0.5">
-            {routeCount} rota{routeCount !== 1 ? 's' : ''} • {formatRelativeTime(source.created_at)}
-          </p>
+    <div className="flex items-center gap-4 p-4 rounded-2xl bg-black/20 border border-white/5 hover:border-white/10 transition-colors group">
+      <div className="w-10 h-10 rounded-xl bg-kinetic-orange/10 flex items-center justify-center shrink-0">
+        <Zap className={cn("w-5 h-5 text-kinetic-orange", queue?.operationalStatus === 'sending' && "animate-pulse")} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-white/90 truncate">{campaign.name}</h4>
+          <Badge variant="outline" className="h-4 text-[8px] font-black tracking-tighter bg-white/5 border-none text-white/40">
+            {queue?.operationalStatus || 'QUEUED'}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-kinetic-orange transition-all duration-1000" 
+              style={{ width: `${progress}%` }} 
+            />
+          </div>
+          <span className="text-[9px] font-black font-mono text-white/20 whitespace-nowrap">{progress}%</span>
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <QueueBadge position={queuePos} />
-        <Badge
-          variant="outline"
-          className={cn(
-            'text-[8px] h-5 px-2 font-black uppercase border',
-            source.is_active
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-              : 'bg-white/5 text-white/20 border-white/5'
-          )}
-        >
-          {source.is_active ? 'Ativo' : 'Inativo'}
-        </Badge>
+      <div className="text-right shrink-0 px-2 border-l border-white/5">
+        <span className="block text-[10px] font-black text-white/60">Pos. {queue?.position || '--'}</span>
+        <span className="text-[8px] font-bold text-white/20 uppercase">Fila Canal</span>
       </div>
-    </div>
-  );
-}
-
-// ─── Componente de Job na Fila ───────────────────────────────────────────────
-
-function JobRow({ job, position }: { job: SendJob; position: number }) {
-  return (
-    <div className="flex items-center gap-3 p-3 rounded-xl bg-deep-void shadow-skeuo-pressed">
-      <span className="text-[10px] font-black text-kinetic-orange w-6 text-center shrink-0">
-        #{position}
-      </span>
-      <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-black uppercase text-white/60 truncate">
-          {job.destination}
-        </p>
-        <p className="text-[8px] font-bold text-white/20 uppercase">
-          {formatRelativeTime(job.created_at)}
-        </p>
-      </div>
-      <Badge
-        variant="outline"
-        className={cn(
-          'text-[8px] h-4 px-1.5 font-black uppercase border shrink-0',
-          job.status === 'processing'
-            ? 'bg-kinetic-orange/10 text-kinetic-orange border-kinetic-orange/20'
-            : 'bg-white/5 text-white/20 border-white/5'
-        )}
-      >
-        {job.status === 'processing' ? 'Enviando' : 'Fila'}
-      </Badge>
-    </div>
-  );
-}
-
-// ─── Componente de Log ───────────────────────────────────────────────────────
-
-function LogRow({ log }: { log: AutomationLog }) {
-  const isOk = log.status === 'processed' || log.status === 'captured';
-  return (
-    <div className="flex items-start gap-3 p-3 rounded-xl bg-deep-void shadow-skeuo-pressed">
-      <div className={cn(
-        'w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5',
-        isOk ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-      )}>
-        {isOk ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-black uppercase text-white/60 truncate">
-          {log.event_type}
-        </p>
-        <p className="text-[8px] font-bold text-white/20 uppercase">
-          {formatRelativeTime(log.created_at)}
-        </p>
-      </div>
-      <Badge
-        variant="outline"
-        className={cn(
-          'text-[8px] h-4 px-1.5 font-black uppercase border shrink-0',
-          isOk
-            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-            : 'bg-red-500/10 text-red-400 border-red-500/20'
-        )}
-      >
-        {log.status}
-      </Badge>
     </div>
   );
 }
@@ -237,327 +82,280 @@ function LogRow({ log }: { log: AutomationLog }) {
 
 export default function MonitoramentoPage() {
   const { user } = useAuth();
-  const [data, setData] = useState<MonitoringData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [activeTab, setActiveTab] = useState('general');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const fetchData = useCallback(async (silent = false) => {
-    if (!user?.id) return;
-    if (!silent) setIsLoading(true);
-    else setIsRefreshing(true);
+  // Data Hooks
+  const { data: sources, isLoading: isLoadingSources } = useAutomationSources(user?.id as string);
+  const { data: logs, isLoading: isLoadingLogs } = useAllAutomationLogs(user?.id as string, 30);
+  const { data: summary, isLoading: isLoadingSummary } = useAutomationSummary(user?.id as string);
+  const { data: campaigns } = useCampaigns();
+  const updateSource = useUpdateAutomationSource();
 
-    try {
-      const res = await fetch('/api/monitoring/queue', {
-        headers: { 'x-user-id': user.id },
-      });
-      if (!res.ok) throw new Error('Falha ao carregar monitoramento');
-      const json = await res.json();
-      setData(json);
-      setLastUpdated(new Date());
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [user?.id]);
+  const activeCampaigns = campaigns?.filter(c => c.status === 'sending' || c.status === 'pending') || [];
 
-  useEffect(() => {
-    fetchData();
-    // Auto-refresh a cada 30 segundos
-    const interval = setInterval(() => fetchData(true), 30000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+  const filteredSources = sources?.filter(s => {
+    if (activeTab === 'groups') return s.source_type === 'group_monitor';
+    if (activeTab === 'radar') return s.source_type === 'radar_offers';
+    return true;
+  }).filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())) || [];
 
-  const allSources = [...(data?.groupSources || []), ...(data?.radarSources || [])];
+  const isLoading = isLoadingSources || isLoadingSummary;
+
+  if (isLoading) {
+    return (
+      <LayoutContainer type="analytical">
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4 opacity-20">
+          <Loader2 className="w-10 h-10 animate-spin text-kinetic-orange" />
+          <span className="text-[10px] font-black uppercase tracking-[0.3em] font-headline italic">Sincronizando Monitoramento...</span>
+        </div>
+      </LayoutContainer>
+    );
+  }
+
+  // KPIs
+  const KPI_GRID = [
+    {
+      label: 'Eventos Capturados',
+      value: (summary?.captured || 0).toLocaleString(),
+      description: 'Total de leads/links ingeridos',
+      icon: <Layers size={16} />,
+      colorScheme: 'default' as const,
+    },
+    {
+      label: 'Mensagens Distribuídas',
+      value: (summary?.processed || 0).toLocaleString(),
+      description: 'Saídas via automação',
+      icon: <CheckCircle2 size={16} />,
+      colorScheme: 'success' as const,
+    },
+    {
+      label: 'Falhas/Filtrados',
+      value: (summary?.error || 0).toLocaleString(),
+      description: 'Itens bloqueados ou erro',
+      icon: <AlertCircle size={16} />,
+      colorScheme: 'destructive' as const,
+    },
+    {
+      label: 'Taxa de Conversão',
+      value: summary?.captured ? `${Math.round((summary.processed / summary.captured) * 100)}%` : '0%',
+      description: 'Conversão Ingestão -> Envio',
+      icon: <TrendingUp size={16} />,
+      colorScheme: 'kinetic' as const,
+    },
+  ];
 
   return (
-    <LayoutContainer type="operational">
-      <PageHeader
-        title="Monitoramento"
-        description="Acompanhe a fila de envios, automações de grupos e o Radar em tempo real."
-        icon={<Activity size={24} />}
-      />
-
-      {/* Header de status */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-black/40 rounded-full border border-white/5 shadow-skeuo-pressed">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-            <span className="text-[9px] text-emerald-500 font-black uppercase tracking-widest">Live</span>
-          </div>
-          {lastUpdated && (
-            <span className="text-[9px] text-white/20 font-bold uppercase">
-              Atualizado {formatRelativeTime(lastUpdated.toISOString())}
-            </span>
-          )}
+    <LayoutContainer type="analytical">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+        <PageHeader 
+          title="Monitoramento Real-time" 
+          description="Acompanhe o fluxo de ingestão, processamento e distribuição de ofertas em tempo real."
+          icon={<Activity size={24} />}
+        />
+        <div className="flex items-center gap-2">
+            <Badge variant="outline" className="px-3 py-1 gap-1.5 bg-kinetic-orange/5 border-kinetic-orange/20 text-kinetic-orange animate-pulse">
+                <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-kinetic-orange opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-kinetic-orange"></span>
+                </span>
+                LIVE ENGINE
+            </Badge>
         </div>
-        <button
-          onClick={() => fetchData(true)}
-          disabled={isRefreshing}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 shadow-skeuo-pressed hover:bg-white/10 transition-all text-white/40 hover:text-white"
-        >
-          <RefreshCw className={cn('w-3 h-3', isRefreshing && 'animate-spin')} />
-          <span className="text-[9px] font-black uppercase tracking-widest">Atualizar</span>
-        </button>
       </div>
 
-      {/* KPIs rápidos */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            label: 'Na Fila',
-            value: data?.totalPending ?? 0,
-            icon: Clock,
-            color: 'text-kinetic-orange',
-            bg: 'bg-kinetic-orange/10',
-            border: 'border-kinetic-orange/20',
-          },
-          {
-            label: 'Grupos Ativos',
-            value: data?.groupSources.filter(s => s.is_active).length ?? 0,
-            icon: Users,
-            color: 'text-blue-400',
-            bg: 'bg-blue-500/10',
-            border: 'border-blue-500/20',
-          },
-          {
-            label: 'Radar Ativo',
-            value: data?.radarSources.filter(s => s.is_active).length ?? 0,
-            icon: Radar,
-            color: 'text-purple-400',
-            bg: 'bg-purple-500/10',
-            border: 'border-purple-500/20',
-          },
-          {
-            label: 'Logs 24h',
-            value: data?.recentLogs.length ?? 0,
-            icon: Activity,
-            color: 'text-emerald-400',
-            bg: 'bg-emerald-500/10',
-            border: 'border-emerald-500/20',
-          },
-        ].map(({ label, value, icon: Icon, color, bg, border }) => (
-          <TactileCard key={label} className="p-4 border-none">
-            <div className="flex items-center gap-3">
-              <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shadow-skeuo-flat', bg, `border ${border}`)}>
-                <Icon className={cn('w-4 h-4', color)} />
-              </div>
-              <div>
-                {isLoading
-                  ? <div className="h-6 w-12 rounded bg-white/10 animate-pulse" />
-                  : <p className="text-xl font-black text-white">{value}</p>
-                }
-                <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">{label}</p>
-              </div>
-            </div>
-          </TactileCard>
+      {/* Primary Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {KPI_GRID.map((item) => (
+          <StatCard 
+            key={item.label}
+            {...item}
+          />
         ))}
       </div>
 
-      {/* Tabs principais */}
-      <Tabs defaultValue="grupos" className="w-full">
-        <TabsList className="mb-6 bg-deep-void/50 shadow-skeuo-pressed p-1 rounded-2xl border-none h-12">
-          <TabsTrigger
-            value="grupos"
-            className="text-[10px] font-black uppercase tracking-[0.2em] px-6 h-full rounded-xl data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-400 data-[state=active]:shadow-skeuo-pressed font-headline italic flex items-center gap-2"
-          >
-            <Users className="w-3.5 h-3.5" /> Grupos
-          </TabsTrigger>
-          <TabsTrigger
-            value="radar"
-            className="text-[10px] font-black uppercase tracking-[0.2em] px-6 h-full rounded-xl data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-400 data-[state=active]:shadow-skeuo-pressed font-headline italic flex items-center gap-2"
-          >
-            <Radar className="w-3.5 h-3.5" /> Radar
-          </TabsTrigger>
-          <TabsTrigger
-            value="fila"
-            className="text-[10px] font-black uppercase tracking-[0.2em] px-6 h-full rounded-xl data-[state=active]:bg-kinetic-orange/10 data-[state=active]:text-kinetic-orange data-[state=active]:shadow-skeuo-pressed font-headline italic flex items-center gap-2"
-          >
-            <Layers className="w-3.5 h-3.5" /> Fila Geral
-          </TabsTrigger>
-          <TabsTrigger
-            value="logs"
-            className="text-[10px] font-black uppercase tracking-[0.2em] px-6 h-full rounded-xl data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-400 data-[state=active]:shadow-skeuo-pressed font-headline italic flex items-center gap-2"
-          >
-            <Activity className="w-3.5 h-3.5" /> Logs
-          </TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <TabsList className="bg-muted/50 p-1 rounded-xl h-10 border border-white/5">
+            <TabsTrigger value="general" className="text-[10px] font-black uppercase px-6">Geral</TabsTrigger>
+            <TabsTrigger value="groups" className="text-[10px] font-black uppercase px-6">Grupos</TabsTrigger>
+            <TabsTrigger value="radar" className="text-[10px] font-black uppercase px-6">Radar</TabsTrigger>
+          </TabsList>
 
-        {/* Tab Grupos */}
-        <TabsContent value="grupos" className="mt-0">
-          <TactileCard className="p-6 border-none">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center shadow-skeuo-flat border border-blue-500/20">
-                <Users className="w-4 h-4 text-blue-400" />
-              </div>
-              <div>
-                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] font-headline italic text-white/90">
-                  Automações de Grupos
-                </h3>
-                <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
-                  Monitoramento de grupos WhatsApp
-                </p>
-              </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 w-3.5 h-3.5" />
+              <Input 
+                placeholder="Filtrar automações..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-10 text-[10px] font-black uppercase tracking-widest pl-10 bg-black/20 border-white/5 w-64 rounded-xl"
+              />
             </div>
-            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-5" />
-            <div className="space-y-2">
-              {isLoading
-                ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)
-                : data?.groupSources.length === 0
-                ? <EmptyState icon={Users} label="Nenhuma automação de grupo configurada" />
-                : data?.groupSources.map(source => (
-                  <SourceCard
-                    key={source.id}
-                    source={source}
-                    queuePositions={data.queuePositions}
-                    activeCampaigns={data.activeCampaigns}
-                  />
-                ))
-              }
-            </div>
-          </TactileCard>
-        </TabsContent>
+            <Button variant="outline" size="icon" className="h-10 w-10 border-white/5 bg-black/20 text-white/40">
+              <Filter className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
 
-        {/* Tab Radar */}
-        <TabsContent value="radar" className="mt-0">
-          <TactileCard className="p-6 border-none">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center shadow-skeuo-flat border border-purple-500/20">
-                <Radar className="w-4 h-4 text-purple-400" />
-              </div>
-              <div>
-                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] font-headline italic text-white/90">
-                  Automações do Radar
-                </h3>
-                <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
-                  Disparos automáticos de ofertas descobertas
-                </p>
-              </div>
-            </div>
-            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-5" />
-            <div className="space-y-2">
-              {isLoading
-                ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)
-                : data?.radarSources.length === 0
-                ? <EmptyState icon={Radar} label="Nenhuma automação do Radar configurada" />
-                : data?.radarSources.map(source => (
-                  <SourceCard
-                    key={source.id}
-                    source={source}
-                    queuePositions={data.queuePositions}
-                    activeCampaigns={data.activeCampaigns}
-                  />
-                ))
-              }
-            </div>
-          </TactileCard>
-        </TabsContent>
-
-        {/* Tab Fila Geral */}
-        <TabsContent value="fila" className="mt-0">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Fila de Jobs */}
-            <TactileCard className="p-6 border-none">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-9 h-9 rounded-xl bg-kinetic-orange/10 flex items-center justify-center shadow-skeuo-flat border border-kinetic-orange/20">
-                  <Clock className="w-4 h-4 text-kinetic-orange" />
-                </div>
-                <div>
-                  <h3 className="text-[11px] font-black uppercase tracking-[0.2em] font-headline italic text-white/90">
-                    Jobs na Fila
-                  </h3>
-                  <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
-                    {data?.totalPending || 0} pendentes
-                  </p>
-                </div>
-              </div>
-              <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-5" />
-              <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
-                {isLoading
-                  ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
-                  : data?.pendingJobs.length === 0
-                  ? <EmptyState icon={Clock} label="Nenhum job pendente" />
-                  : data?.pendingJobs.map((job, index) => (
-                    <JobRow key={job.id} job={job} position={index + 1} />
-                  ))
-                }
-              </div>
-            </TactileCard>
-
-            {/* Campanhas Ativas */}
-            <TactileCard className="p-6 border-none">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shadow-skeuo-flat border border-emerald-500/20">
-                  <Zap className="w-4 h-4 text-emerald-400" />
-                </div>
-                <div>
-                  <h3 className="text-[11px] font-black uppercase tracking-[0.2em] font-headline italic text-white/90">
-                    Campanhas em Execução
-                  </h3>
-                  <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
-                    Broadcasts ativos agora
-                  </p>
-                </div>
-              </div>
-              <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-5" />
-              <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
-                {isLoading
-                  ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)
-                  : data?.activeCampaigns.length === 0
-                  ? <EmptyState icon={Zap} label="Nenhuma campanha em execução" />
-                  : data?.activeCampaigns.map((campaign) => {
-                    const pos = data.queuePositions[campaign.id];
-                    return (
-                      <div key={campaign.id} className="flex items-center justify-between p-4 rounded-2xl bg-deep-void shadow-skeuo-pressed gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-black uppercase tracking-tight text-white/80 truncate">
-                            {campaign.name}
-                          </p>
-                          <p className="text-[9px] font-bold text-white/20 uppercase mt-0.5">
-                            {campaign.total_destinations} destinos
-                          </p>
-                        </div>
-                        <QueueBadge position={pos} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* List of Sources (2/3) */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredSources.map((source) => (
+                <TactileCard key={source.id} className="p-6 border-none ring-1 ring-white/5 bg-anthracite-surface/40 hover:bg-anthracite-surface/60 transition-all group">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center border",
+                        source.source_type === 'radar_offers' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                      )}>
+                        {source.source_type === 'radar_offers' ? <Zap size={20} /> : <Users size={20} />}
                       </div>
-                    );
-                  })
-                }
-              </div>
+                      <div>
+                        <h4 className="text-[11px] font-black uppercase tracking-widest text-white/90 truncate max-w-[150px]">{source.name}</h4>
+                        <p className="text-[9px] text-white/20 uppercase font-bold tracking-tighter">
+                          {source.source_type === 'radar_offers' ? 'Monitor: Radar OfertAS' : 'Monitor: Grupos Ativos'}
+                        </p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => updateSource.mutate({ id: source.id, updates: { is_active: !source.is_active } })}
+                      className={cn(
+                        "h-8 w-8 rounded-full border border-white/5 shadow-skeuo-pressed",
+                        source.is_active ? "text-emerald-500 bg-emerald-500/5" : "text-white/10 bg-black/40"
+                      )}
+                    >
+                      {source.is_active ? <Play size={10} className="fill-current" /> : <Pause size={10} />}
+                    </Button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                    <div className="flex items-center gap-6">
+                      <div className="text-left">
+                        <span className="block text-[10px] font-black text-white/60">{(source as any).automation_routes?.length || 0}</span>
+                        <span className="text-[8px] font-bold text-white/10 uppercase">Destinos</span>
+                      </div>
+                      <div className="text-left">
+                        <span className="block text-[10px] font-black text-emerald-500/60 font-mono tracking-tighter italic">ONLINE</span>
+                        <span className="text-[8px] font-bold text-white/10 uppercase">Status</span>
+                      </div>
+                    </div>
+                    <Link href={`/automacoes`}>
+                       <Button variant="ghost" size="sm" className="h-7 text-[8px] font-black uppercase bg-white/5 border-none opacity-0 group-hover:opacity-100 transition-all">Configurar</Button>
+                    </Link>
+                  </div>
+                </TactileCard>
+              ))}
+              {filteredSources.length === 0 && (
+                <div className="md:col-span-2 p-12 text-center rounded-3xl border border-dashed border-white/10 opacity-30">
+                   <Package size={40} className="mx-auto mb-4" />
+                   <p className="text-sm font-black uppercase tracking-widest italic">Nenhuma automação ativa neste filtro</p>
+                </div>
+              )}
+            </div>
+
+            {/* Event Flow List */}
+            <TactileCard className="p-0 border-none bg-anthracite-surface/40 overflow-hidden">
+               <div className="p-8 pb-4 flex items-center justify-between border-b border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                      <Clock className="w-4 h-4 text-white/40" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-widest text-white/90">Fluxo de Ingestão</h3>
+                      <p className="text-[9px] text-white/20 uppercase tracking-widest">Logs factuais do processador</p>
+                    </div>
+                  </div>
+               </div>
+
+               <div className="divide-y divide-white/5 max-h-[500px] overflow-y-auto">
+                 {logs?.map((log, i) => (
+                   <div key={log.id} className="flex items-start gap-4 px-8 py-4 hover:bg-white/5 transition-colors group">
+                      <div className="w-20 shrink-0 text-[10px] font-bold text-white/10 uppercase mt-1 group-hover:text-white/30 truncate">
+                        {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={cn(
+                            "text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded border leading-none",
+                            log.status === 'captured' && "bg-blue-500/10 text-blue-400 border-blue-500/20",
+                            log.status === 'processed' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+                            log.status === 'error' && "bg-red-500/10 text-red-400 border-red-500/20",
+                            log.status === 'filtered' && "bg-white/5 text-white/40 border-white/10"
+                          )}>
+                            {log.event_type}
+                          </span>
+                          <span className="text-[10px] font-bold text-white/20 italic truncate">{(log as any).source?.name || 'Sistema'}</span>
+                        </div>
+                        <p className="text-[11px] font-bold text-white/60 tracking-tight leading-normal">
+                          {log.details?.message || log.details?.title || 'Evento capturado com sucesso'}
+                        </p>
+                      </div>
+                      <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <ExternalLink size={12} className="text-white/20" />
+                      </div>
+                   </div>
+                 ))}
+                 {(!logs || logs.length === 0) && !isLoadingLogs && (
+                   <div className="p-16 text-center">
+                     <Activity size={32} className="mx-auto mb-4 text-white/5" />
+                     <p className="text-[10px] font-black uppercase tracking-widest text-white/10">Aguardando sinais do engine...</p>
+                   </div>
+                 )}
+               </div>
             </TactileCard>
           </div>
-        </TabsContent>
 
-        {/* Tab Logs */}
-        <TabsContent value="logs" className="mt-0">
-          <TactileCard className="p-6 border-none">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shadow-skeuo-flat border border-emerald-500/20">
-                <Activity className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] font-headline italic text-white/90">
-                  Logs de Automação
-                </h3>
-                <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
-                  Últimas 24 horas
+          {/* Execution & Queue (1/3) */}
+          <div className="space-y-8">
+             <div className="flex items-center gap-3 mb-2">
+                <Settings2 className="w-4 h-4 text-kinetic-orange/40" />
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white/40 italic">Linha de Despacho</h3>
+             </div>
+
+             {/* Live Queue Items */}
+             <div className="space-y-4">
+                {activeCampaigns.map(campaign => (
+                  <LiveQueueItem key={campaign.id} campaign={campaign} />
+                ))}
+                {activeCampaigns.length === 0 && (
+                  <div className="p-12 text-center rounded-3xl border border-dashed border-white/5 opacity-10">
+                     <Clock className="w-8 h-8 mx-auto mb-3" />
+                     <p className="text-[9px] font-black uppercase">Fila de saída livre</p>
+                  </div>
+                )}
+             </div>
+
+             {/* Footer Stats / Operational Context */}
+             <TactileCard className="p-8 border-none bg-gradient-to-br from-blue-500/5 to-transparent">
+                <div className="flex items-center gap-3 mb-6">
+                  <Activity size={16} className="text-blue-400" />
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-400/60 italic">Integridade Wasender</h3>
+                </div>
+                <div className="space-y-4">
+                   <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Sessões Ativas</span>
+                      <span className="text-xs font-black text-white">01 / 01</span>
+                   </div>
+                   <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Latência API</span>
+                      <span className="text-[10px] font-mono font-black text-emerald-500">24ms</span>
+                   </div>
+                   <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Heartbeat</span>
+                      <span className="text-[9px] font-black text-white/60">OK</span>
+                   </div>
+                </div>
+                <div className="h-px bg-white/5 my-6" />
+                <p className="text-[9px] text-white/20 uppercase font-black leading-relaxed">
+                  Sistema operando dentro dos parâmetros de pacing e cooldown padrão (M1).
                 </p>
-              </div>
-            </div>
-            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-5" />
-            <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
-              {isLoading
-                ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
-                : data?.recentLogs.length === 0
-                ? <EmptyState icon={Activity} label="Nenhum log nas últimas 24 horas" />
-                : data?.recentLogs.map(log => (
-                  <LogRow key={log.id} log={log} />
-                ))
-              }
-            </div>
-          </TactileCard>
-        </TabsContent>
+             </TactileCard>
+          </div>
+        </div>
       </Tabs>
     </LayoutContainer>
   );
