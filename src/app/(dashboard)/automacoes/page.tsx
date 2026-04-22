@@ -34,7 +34,8 @@ import {
   Settings,
   ShieldCheck,
   FileText,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -72,6 +73,7 @@ export default function AutomacoesDashboardPage() {
   const [targetType, setTargetType] = useState<'group' | 'list'>('group');
   const [targetId, setTargetId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   // Validação simples
   const isNameValid = newName.trim().length >= 3;
@@ -105,6 +107,29 @@ export default function AutomacoesDashboardPage() {
       },
       error: (err: any) => `Erro na criação: ${err.message || 'Verifique os dados.'}`
     });
+  };
+
+  const handleSync = async (sourceId: string) => {
+    setSyncingId(sourceId);
+    try {
+      const response = await fetch('/api/radar/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId })
+      });
+      
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        toast.success(`Sincronizado! ${data.totalInserted} novas ofertas encontradas.`);
+      } else {
+        toast.error('Erro na sincronização: ' + data.error);
+      }
+    } catch (err) {
+      toast.error('Falha na comunicação com o servidor.');
+    } finally {
+      setSyncingId(null);
+    }
   };
 
   if (isLoading) {
@@ -349,13 +374,27 @@ export default function AutomacoesDashboardPage() {
                          <span className="text-[10px] font-bold uppercase tracking-tight italic">Live Feed</span>
                        </div>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      className="h-10 text-[10px] font-black uppercase tracking-widest gap-2 bg-white/5 hover:bg-kinetic-orange hover:text-white transition-all rounded-xl border border-white/5"
-                      onClick={() => router.push(`/automacoes/${source.id}`)}
-                    >
-                      GERENCIAR <Settings size={14} className="group-hover:rotate-45 transition-transform" />
-                    </Button>
+                     <div className="flex items-center gap-2">
+                      {source.source_type === 'radar_offers' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-10 w-10 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all ${syncingId === source.id ? 'text-kinetic-orange' : 'text-white/40'}`}
+                          onClick={() => handleSync(source.id)}
+                          disabled={syncingId !== null}
+                        >
+                          <RefreshCw size={14} className={syncingId === source.id ? 'animate-spin' : ''} />
+                        </Button>
+                      )}
+                      
+                      <Button 
+                        variant="ghost" 
+                        className="h-10 text-[10px] font-black uppercase tracking-widest gap-2 bg-white/5 hover:bg-kinetic-orange hover:text-white transition-all rounded-xl border border-white/5"
+                        onClick={() => router.push(`/automacoes/${source.id}`)}
+                      >
+                        GERENCIAR <Settings size={14} className="group-hover:rotate-45 transition-transform" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </TactileCard>
