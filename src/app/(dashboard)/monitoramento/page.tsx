@@ -89,10 +89,10 @@ export default function MonitoramentoPage() {
   const { data: sources, isLoading: isLoadingSources } = useAutomationSources(user?.id as string);
   const { data: logs, isLoading: isLoadingLogs } = useAllAutomationLogs(user?.id as string, 30);
   const { data: summary, isLoading: isLoadingSummary } = useAutomationSummary(user?.id as string);
-  const { data: campaigns } = useCampaigns();
+  const { data: campaignsData } = useCampaigns(user?.id, 1, 50); // Monitoramento busca as 50 mais recentes
   const updateSource = useUpdateAutomationSource();
 
-  const activeCampaigns = campaigns?.filter(c => c.status === 'sending' || c.status === 'pending') || [];
+  const activeCampaigns = campaignsData?.campaigns?.filter(c => c.status === 'sending' || c.status === 'pending') || [];
 
   const filteredSources = sources?.filter(s => {
     if (activeTab === 'groups') return s.source_type === 'group_monitor';

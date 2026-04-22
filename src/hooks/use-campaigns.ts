@@ -1,13 +1,13 @@
 // src/hooks/use-campaigns.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { campaignService } from '@/services/supabase/campaign-service';
-import { CreateCampaignDTO, Campaign } from '@/types/campaign';
+import { CreateCampaignDTO, Campaign, CampaignsPaginatedResponse } from '@/types/campaign';
 import { toast } from 'sonner';
 
-export function useCampaigns(userId?: string) {
-  return useQuery({
-    queryKey: ['campaigns', userId],
-    queryFn: () => userId ? campaignService.list(userId) : Promise.resolve([]),
+export function useCampaigns(userId?: string, page: number = 1, pageSize: number = 20) {
+  return useQuery<CampaignsPaginatedResponse>({
+    queryKey: ['campaigns', userId, page, pageSize],
+    queryFn: () => userId ? campaignService.list(userId, page, pageSize) : Promise.resolve({ campaigns: [], total: 0, page, pageSize, totalPages: 0 }),
     enabled: !!userId,
     // Polling mais agressivo para ver novas campanhas
     refetchInterval: 5000,

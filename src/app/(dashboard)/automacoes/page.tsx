@@ -51,6 +51,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
 
 export default function AutomacoesDashboardPage() {
   const { user } = useAuth();
@@ -302,6 +303,8 @@ export default function AutomacoesDashboardPage() {
         }
       />
 
+      <OperationalAccessBanner />
+
       {/* Stats View */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
         <StatCard 
@@ -311,9 +314,9 @@ export default function AutomacoesDashboardPage() {
           colorScheme="success"
         />
         <StatCard 
-          label="Captações Hoje"
-          value={0}
-          icon={<Inbox size={12} />}
+          label="Automações no Total"
+          value={sources?.length || 0}
+          icon={<Zap size={12} />}
           colorScheme="kinetic"
         />
       </div>

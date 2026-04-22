@@ -86,3 +86,10 @@ export interface CreateCampaignDTO {
     id: string;
   }[];
 }
+export interface CampaignsPaginatedResponse {
+  campaigns: Campaign[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}

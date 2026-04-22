@@ -17,13 +17,17 @@ import { Campaign } from '@/types/campaign';
 import { CampaignCard } from '@/components/campaigns/CampaignCard';
 import { CampaignDetailsDrawer } from '@/components/campaigns/CampaignDetailsDrawer';
 import { cn } from '@/lib/utils';
+import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
 
 export default function CampanhasPage() {
   const { user } = useAuth();
-  const { data: campaigns = [], isLoading, isError, refetch } = useCampaigns(user?.id);
-  
+  const [page, setPage] = useState(1);
+  const { data: paginatedData, isLoading, isError, refetch } = useCampaigns(user?.id, page, 20);
+  const campaigns = paginatedData?.campaigns || [];
+  const total = paginatedData?.total || 0;
+  const totalPages = paginatedData?.totalPages || 0;
+
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -31,10 +35,9 @@ export default function CampanhasPage() {
     return campaigns.filter(c => {
       const matchesSearch = c.name?.toLowerCase().includes(search.toLowerCase()) || 
                            c.id.toLowerCase().includes(search.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      return matchesSearch;
     });
-  }, [campaigns, search, statusFilter]);
+  }, [campaigns, search]);
 
   const handleViewDetails = (campaign: Campaign) => {
     setSelectedCampaign(campaign);
@@ -67,7 +70,9 @@ export default function CampanhasPage() {
         </div>
       </div>
 
-      {/* Filters Bar */}
+      <OperationalAccessBanner />
+
+      {/* Search and Navigation Bar */}
       <div className="flex flex-col gap-6 bg-white/5 p-6 rounded-2xl shadow-skeuo-flat border border-white/5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex-1 max-w-md relative group">
@@ -80,35 +85,37 @@ export default function CampanhasPage() {
             />
           </div>
 
-          <div className="flex items-center gap-3">
-             <div className="flex items-center gap-2 p-1.5 bg-deep-void rounded-xl shadow-skeuo-pressed">
-                <button
-                  onClick={() => setStatusFilter('all')}
-                  className={cn(
-                    "px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
-                    statusFilter === 'all' ? "bg-kinetic-orange text-black" : "text-white/20 hover:text-white"
-                  )}
+          <div className="flex items-center gap-6">
+             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20 italic hidden md:block">
+               {total} campanhas
+             </div>
+
+             <div className="flex items-center gap-4 bg-deep-void p-1 rounded-xl shadow-skeuo-pressed">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1 || isLoading}
+                  className="h-8 w-8 p-0 hover:bg-white/5 text-white/40 disabled:opacity-10 transition-all"
                 >
-                  Todas
-                </button>
-                <button
-                  onClick={() => setStatusFilter('sending')}
-                  className={cn(
-                    "px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
-                    statusFilter === 'sending' ? "bg-blue-500 text-white" : "text-white/20 hover:text-white"
-                  )}
+                  <span className="text-lg font-black">&lt;</span>
+                </Button>
+
+                <div className="flex items-center gap-2 px-2">
+                   <span className="text-xs font-black italic text-kinetic-orange">{page}</span>
+                   <span className="text-[10px] font-black uppercase text-white/10 italic tracking-widest">/</span>
+                   <span className="text-[10px] font-black uppercase text-white/30 italic tracking-widest">{totalPages}</span>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages || isLoading}
+                  className="h-8 w-8 p-0 hover:bg-white/5 text-white/40 disabled:opacity-10 transition-all"
                 >
-                  Em Curso
-                </button>
-                <button
-                  onClick={() => setStatusFilter('completed')}
-                  className={cn(
-                    "px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
-                    statusFilter === 'completed' ? "bg-emerald-500 text-white" : "text-white/20 hover:text-white"
-                  )}
-                >
-                  Concluídas
-                </button>
+                  <span className="text-lg font-black">&gt;</span>
+                </Button>
              </div>
           </div>
         </div>
@@ -126,14 +133,51 @@ export default function CampanhasPage() {
           <p className="text-[10px] font-bold uppercase opacity-50">Falha ao acessar o motor de dados.</p>
         </div>
       ) : filteredCampaigns.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredCampaigns.map(campaign => (
-            <CampaignCard 
-              key={campaign.id} 
-              campaign={campaign} 
-              onViewDetails={handleViewDetails}
-            />
-          ))}
+        <div className="space-y-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredCampaigns.map(campaign => (
+              <CampaignCard 
+                key={campaign.id} 
+                campaign={campaign} 
+                onViewDetails={handleViewDetails}
+              />
+            ))}
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex flex-col md:flex-row items-center justify-center gap-8 pt-8 border-t border-white/5 relative">
+            <div className="md:absolute md:left-0 text-[10px] font-black uppercase tracking-[0.2em] text-white/20 italic">
+              Total de {total} campanhas registradas
+            </div>
+
+            <div className="flex items-center gap-8">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1 || isLoading}
+                className="hover:bg-white/5 text-white/40 disabled:opacity-10 transition-all"
+              >
+                <span className="text-xl font-black">&lt;</span>
+              </Button>
+
+              <div className="flex items-center gap-2">
+                 <span className="text-xs font-black italic text-kinetic-orange">{page}</span>
+                 <span className="text-[10px] font-black uppercase text-white/10 italic tracking-widest">/</span>
+                 <span className="text-[10px] font-black uppercase text-white/30 italic tracking-widest">{totalPages}</span>
+              </div>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages || isLoading}
+                className="hover:bg-white/5 text-white/40 disabled:opacity-10 transition-all"
+              >
+                <span className="text-xl font-black">&gt;</span>
+              </Button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-32 rounded-3xl bg-white/5 border border-dashed border-white/10 text-center">

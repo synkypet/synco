@@ -5,31 +5,61 @@ import { triggerWorker } from '@/lib/worker/trigger';
 
 export const campaignService = {
 
-  async list(userId: string): Promise<Campaign[]> {
+  async list(userId: string, page: number = 1, pageSize: number = 20): Promise<{ campaigns: Campaign[], total: number, page: number, pageSize: number, totalPages: number }> {
     const supabase = createClient();
-    const { data, error } = await supabase
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error, count } = await supabase
       .from('campaigns')
       .select(`
         *,
         items:campaign_items(*),
         destinations:campaign_destinations(*)
-      `)
+      `, { count: 'exact' })
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
     if (error) {
       console.error('Error fetching campaigns:', error);
       throw error;
     }
 
-    return data as Campaign[];
+    const total = count || 0;
+
+    return {
+      campaigns: data as Campaign[],
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize)
+    };
   },
 
   async create(userId: string, dto: CreateCampaignDTO, client?: SupabaseClient): Promise<Campaign> {
     const supabase = client || createClient();
     console.log(`[CAMPAIGN-SERVICE] Iniciando criação de campanha para user ${userId}...`);
 
-    // ─── 0. Validação Prévia ──────────────────────────────────────────────────
+    // ─── 0.1 Billing Enforcement (Fase 2 - Redundante) ────────────────────────
+    // Esta trava garante que mesmo que uma API seja burlada, o núcleo do serviço recuse a criação.
+    if (typeof window === 'undefined') {
+      try {
+        const { resolveUserAccessCore } = await import('@/services/supabase/access-resolver');
+        const access = await resolveUserAccessCore(userId, supabase);
+        
+        if (!access.isOperative) {
+          console.error(`[CAMPAIGN-SERVICE] [HARD-LOCK] Bloqueio de Billing para User ${userId}. Status: ${access.status}`);
+          throw new Error(`BILLING_RESTRICTED:${access.status}`);
+        }
+      } catch (e: any) {
+        // Se for o erro de billing, repassar. Se for erro de import/outro, logar e continuar (best effort)
+        if (e.message?.startsWith('BILLING_RESTRICTED')) throw e;
+        console.warn('[CAMPAIGN-SERVICE] Falha ao validar billing (Bypass de segurança):', e.message);
+      }
+    }
+
+    // ─── 1. Validação Prévia ──────────────────────────────────────────────────
     if (!dto.items || dto.items.length === 0) {
       console.warn('[CAMPAIGN-SERVICE] Abortando: Nenhun item fornecido.');
       throw new Error('Nenhum item fornecido para a campanha.');
