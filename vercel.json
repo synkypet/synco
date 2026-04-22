@@ -1,8 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/radar-top-shopee",
-      "schedule": "0 12 * * *"
+      "path": "/api/cron/radar/discovery",
+      "schedule": "0 * * * *"
     }
   ]
 }

@@ -507,6 +507,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
           category: getCategoryName(node.productCatIds || []),
           itemId: String(node.itemId || ''),
           shopId: String(node.shopId || ''),
+          commissionRate: parseFloat(String(node.commissionRate || "0")),
           productLink: node.productLink,
           offerLink: node.offerLink,
           fetchedAt: new Date().toISOString()

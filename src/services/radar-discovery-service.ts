@@ -146,7 +146,7 @@ export const radarDiscoveryService = {
             .insert({
               name: p.name,
               marketplace: 'Shopee',
-              category: task.keyword ? `[PRO] ${task.keyword}` : `[RADAR] ${p.category}`,
+              category: task.keyword ? `[RADAR] [PRO] ${task.keyword}` : `[RADAR] ${p.category}`,
               current_price: p.currentPriceFactual,
               original_price: p.originalPrice,
               discount_percent: p.discountPercent,
