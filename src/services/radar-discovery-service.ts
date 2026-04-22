@@ -104,7 +104,7 @@ export const radarDiscoveryService = {
           await automationService.logEvent({
             source_id: task.sourceId,
             user_id: task.userId,
-            status: 'processing',
+            status: 'processing' as any,
             event_type: 'radar_discovery',
             details: { message: `Iniciando busca na Shopee por "${task.keyword || 'Global'}"...`, url: `Busca: ${task.keyword || 'Global'}` }
           }, supabase);
