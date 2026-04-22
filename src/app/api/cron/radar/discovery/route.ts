@@ -110,6 +110,12 @@ export async function GET(request: Request) {
               opportunity_score: finalScore
             });
 
+          if (!error) {
+            totalInserted++;
+            existingUrls.add(url);
+          }
+        }
+
         // 5. Registrar Atividade no Log Operacional
         if (products.length > 0) {
           await automationService.logEvent({
