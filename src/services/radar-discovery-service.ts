@@ -97,6 +97,19 @@ export const radarDiscoveryService = {
     // 4. Executar tarefas
     for (const task of tasks) {
       try {
+        console.log(`${logPrefix} Iniciando: ${task.label}...`);
+        
+        // Registrar início da busca para feedback imediato
+        if (task.sourceId) {
+          await automationService.logEvent({
+            source_id: task.sourceId,
+            user_id: task.userId,
+            status: 'processing',
+            event_type: 'radar_discovery',
+            details: { message: `Iniciando busca na Shopee por "${task.keyword || 'Global'}"...`, url: `Busca: ${task.keyword || 'Global'}` }
+          }, supabase);
+        }
+
         let taskInserted = 0;
         const products = await adapter.discoverProducts({
           sortType: task.sortType,
@@ -105,8 +118,21 @@ export const radarDiscoveryService = {
           connection: shopeeConnection as any
         });
 
+        const capturedItemsMeta: any[] = [];
+
         for (const p of products) {
           const url = p.productLink || p.offerLink;
+          capturedItemsMeta.push({
+            name: p.name,
+            url,
+            price: p.currentPriceFactual,
+            score: productService.calculateOpportunityScore(
+              p.currentPriceFactual || 0,
+              p.originalPrice || null,
+              p.commissionValueFactual || 0
+            )
+          });
+
           if (!url || existingUrls.has(url)) continue;
 
           const finalScore = productService.calculateOpportunityScore(
@@ -138,21 +164,27 @@ export const radarDiscoveryService = {
           }
         }
 
-        // 5. Logar evento de descoberta
-        if (products.length > 0) {
-          await automationService.logEvent({
-            source_id: task.sourceId || '',
-            user_id: task.userId,
-            status: 'captured',
-            event_type: 'radar_discovery',
-            details: {
-              keyword: task.keyword,
-              found: products.length,
-              inserted: taskInserted,
-              message: `Radar Pro: ${taskInserted} novas ofertas encontradas para o termo "${task.keyword || 'Global'}".`
-            }
-          }, supabase);
-        }
+        // 5. Logar evento de finalização com relatório detalhado de itens
+        const finalStatus = taskInserted > 0 ? 'captured' : 'finished';
+        const finalMsg = taskInserted > 0 
+          ? `Radar Pro: ${taskInserted} novas ofertas exclusivas injetadas para "${task.keyword || 'Global'}".` 
+          : `Radar Pro: Busca finalizada para "${task.keyword || 'Global'}". ${products.length} itens analisados, mas todos já constavam no seu Radar.`;
+
+        await automationService.logEvent({
+          source_id: task.sourceId || '',
+          user_id: task.userId,
+          status: finalStatus as any,
+          event_type: 'radar_discovery',
+          details: {
+            keyword: task.keyword,
+            found: products.length,
+            inserted: taskInserted,
+            capturedItems: capturedItemsMeta,
+            url: `Busca: ${task.keyword || 'Global'}`,
+            message: finalMsg
+          }
+        }, supabase);
+
       } catch (err) {
         console.error(`${logPrefix} Falha na tarefa ${task.label}:`, err);
       }
