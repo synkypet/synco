@@ -43,6 +43,7 @@ import { ProductSnapshot } from '@/lib/linkProcessor';
 import LayoutContainer from '@/components/layout/LayoutContainer';
 import { Zap } from 'lucide-react';
 import { useSelectedProducts } from '@/contexts/SelectedProductsContext';
+import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
 
 // Opções de Tonalidade da IA (Base44)
 const TONE_OPTIONS = [
@@ -339,6 +340,8 @@ export default function EnvioRapidoPage() {
         icon={<Zap size={24} />}
       />
 
+      <OperationalAccessBanner />
+
       <Tabs defaultValue="broadcast" className="w-full">
         <TabsList className="mb-6 bg-deep-void/50 shadow-skeuo-pressed p-1 rounded-2xl border-none h-12">
           <TabsTrigger
@@ -535,6 +538,17 @@ export default function EnvioRapidoPage() {
                                 {!product.factual.eligibility.isEligible && (
                                   <Badge className="bg-red-500/10 text-red-500 border border-red-500/20 text-[9px] font-black uppercase tracking-widest font-headline italic">
                                     ⚠️ Inelegível
+                                  </Badge>
+                                )}
+
+                                {product.factual.eligibility.offer_type !== 'product_offer' && (
+                                  <Badge className={cn(
+                                    "border text-[9px] font-black uppercase tracking-widest font-headline italic",
+                                    product.factual.eligibility.offer_type === 'coupon_offer' 
+                                      ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+                                      : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                  )}>
+                                    {product.factual.eligibility.offer_type === 'coupon_offer' ? '🎟 Cupom Detectado' : '🛍 Produto com Cupom'}
                                   </Badge>
                                 )}
 

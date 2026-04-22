@@ -7,7 +7,24 @@ export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
   try {
     const payload = await request.json();
-    console.log(`[PROCESS-ROUTE] [${requestId}] Payload recebido:`, JSON.stringify(payload, null, 2));
+    const { userId } = payload;
+    console.log(`[PROCESS-ROUTE] [${requestId}] Payload recebido para user ${userId}:`, JSON.stringify(payload, null, 2));
+
+    // ─── BILLING ENFORCEMENT (Fase 2) ──────────────────────────────────────────
+    if (userId) {
+      const { resolveUserAccess } = await import('@/services/supabase/access-service');
+      const access = await resolveUserAccess(userId);
+
+      if (!access.isOperative) {
+        console.warn(`[PROCESS-ROUTE] [${requestId}] Acesso negado para user ${userId}. Status: ${access.status}`);
+        return NextResponse.json({ 
+          error: 'Acesso Operacional Restrito', 
+          code: 'BILLING_RESTRICTED',
+          accessResolution: access.status,
+          message: 'Seu plano atual ou status de pagamento não permite realizar novos disparos automáticos.'
+        }, { status: 403 });
+      }
+    }
     
     const result = await processInboundAutomation(payload);
     

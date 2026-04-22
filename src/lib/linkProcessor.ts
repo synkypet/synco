@@ -7,10 +7,13 @@ import { refineOfferCopy } from './ai/refiner';
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
 
+export type OfferType = 'product_offer' | 'coupon_offer' | 'product_with_coupon';
+
 export interface Eligibility {
   isEligible: boolean;
   status: 'eligible' | 'warning' | 'ineligible';
   reasons: string[];
+  offer_type: OfferType;
 }
 
 export interface FactualData {
@@ -107,11 +110,48 @@ function findAdapter(url: string): MarketplaceAdapter | null {
 }
 
 /**
+ * Classifica a oferta com base em heurísticas de texto e links.
+ */
+export function classifyOffer(text: string, factual: Partial<FactualData>): { type: OfferType; reasons: string[] } {
+  const content = (text + ' ' + (factual.title || '')).toLowerCase();
+  const reasons: string[] = [];
+
+  // 1. Heurísticas para CUPOM PURO (coupon_offer)
+  const couponKeywords = ['cupom', 'off', 'resgate', 'copie e cole', 'link carrinho', 'mínimo', '🎟', 'voucher'];
+  const hasCouponKeywords = couponKeywords.some(k => content.includes(k));
+  const hasPromoCode = /[A-Z0-9]{5,15}/.test(text); // Código em maiúsculas/números
+  
+  // Se tem palavras de cupom e NÃO tem um card factual de produto sólido (título/preço)
+  const isWeakProduct = !factual.title || factual.title.includes('sem título') || !factual.price || factual.price <= 0;
+
+  if (hasCouponKeywords && isWeakProduct) {
+    return { type: 'coupon_offer', reasons: ['Oferta de cupom detectada'] };
+  }
+
+  // 2. Heurísticas para PRODUTO COM CUPOM (product_with_coupon)
+  const mixedKeywords = ['com cupom', 'aplique o cupom', 'resgate aqui', 'usar cupom', 'preço com cupom'];
+  const hasMixedKeywords = mixedKeywords.some(k => content.includes(k));
+  
+  if (hasMixedKeywords && !isWeakProduct) {
+    return { type: 'product_with_coupon', reasons: ['Oferta de produto com cupom detectada'] };
+  }
+
+  // 3. Padrão: PRODUTO COMUM
+  return { type: 'product_offer', reasons: [] };
+}
+
+/**
  * Valida a elegibilidade operacional de uma oferta com base em regras críticas.
  */
-export function validateEligibility(factual: FactualData): Eligibility {
+export function validateEligibility(factual: FactualData, offerType: OfferType = 'product_offer'): Eligibility {
   const reasons: string[] = [];
   let status: 'eligible' | 'warning' | 'ineligible' = 'eligible';
+
+  // ─── BLOQUEIO DE SEGURANÇA: CUPONS (FASE 1) ───
+  if (offerType !== 'product_offer') {
+    reasons.push(`Fluxo de ${offerType === 'coupon_offer' ? 'cupom' : 'produto com cupom'} ainda não suportado para envio automático`);
+    status = 'ineligible';
+  }
 
   // 1. Erros Críticos de Afiliação
   if (factual.reaffiliation_status === 'blocked') {
@@ -149,7 +189,8 @@ export function validateEligibility(factual: FactualData): Eligibility {
   return {
     isEligible: status !== 'ineligible',
     status,
-    reasons
+    reasons,
+    offer_type: offerType
   };
 }
 
@@ -279,11 +320,14 @@ export function buildProductSnapshot(opts: {
     reaffiliation_error: reaffiliation?.reaffiliation_error,
 
     // Inicializar temporário para permitir validação
-    eligibility: { isEligible: true, status: 'eligible', reasons: [] }
+    eligibility: { isEligible: true, status: 'eligible', reasons: [], offer_type: 'product_offer' }
   };
 
-  // 2. Aplicar Validação Real
-  factual.eligibility = validateEligibility(factual);
+  // 2. Classificar Oferta (Heurísticas)
+  const classification = classifyOffer(originalUrl, factual);
+ 
+  // 3. Aplicar Validação Real
+  factual.eligibility = validateEligibility(factual, classification.type);
 
   return {
     id,

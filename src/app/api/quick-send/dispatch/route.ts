@@ -13,6 +13,20 @@ export async function POST(req: Request) {
 
     console.log(`[QUICK-SEND-API] Recebida solicitação de despacho manual para user ${userId}...`);
 
+    // ─── BILLING ENFORCEMENT (Fase 2) ──────────────────────────────────────────
+    const { resolveUserAccess } = await import('@/services/supabase/access-service');
+    const access = await resolveUserAccess(userId);
+
+    if (!access.isOperative) {
+      console.warn(`[QUICK-SEND-API] Acesso negado para user ${userId}. Status: ${access.status}`);
+      return NextResponse.json({ 
+        error: 'Acesso Operacional Restrito', 
+        code: 'BILLING_RESTRICTED',
+        accessResolution: access.status,
+        message: 'Seu plano atual ou status de pagamento não permite realizar novos disparos.'
+      }, { status: 403 });
+    }
+
     // Usar cliente admin para garantir que a expansão de listas e criação de jobs funcione 
     // com bypass de RLS se necessário, mantendo a consistência operacional.
     const supabase = createAdminClient();

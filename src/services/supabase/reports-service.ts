@@ -107,7 +107,6 @@ export const reportsService = {
       total_pending,
       active_groups_count,
       total_groups: total_active_groups,
-      estimated_reach: global_estimated_reach,
       active_campaigns_count,
       monitorings_count,
       active_automations_count,
@@ -208,7 +207,7 @@ export const reportsService = {
 
     let query = supabase
       .from('campaigns')
-      .select('*, send_jobs(status)')
+      .select('*, send_jobs(status, destination), items:campaign_items(image_url)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -224,6 +223,13 @@ export const reportsService = {
       const sentCount = dests.filter((d: any) => d.status === 'sent').length;
       const failedCount = dests.filter((d: any) => d.status === 'failed').length;
       
+      // Contagem real de destinos únicos (remote_ids)
+      const uniqueDestinations = new Set(dests.map((d: any) => d.destination)).size;
+
+      // Imagem do primeiro item da campanha
+      const items = (c as any).items || [];
+      const imageUrl = items[0]?.image_url || null;
+      
       let status: 'success' | 'failed' | 'processing' | 'info' = 'info';
       if (sentCount > 0 && failedCount === 0) status = 'success';
       if (failedCount > 0) status = 'failed';
@@ -237,7 +243,8 @@ export const reportsService = {
         type: 'campaign' as const,
         status,
         envios: sentCount,
-        alcance: 0
+        groupCount: uniqueDestinations,
+        imageUrl
       };
     }) || [];
   },
@@ -257,15 +264,21 @@ export const reportsService = {
     const { data: logs, error } = await query;
     if (error) throw error;
 
-    return logs?.map(log => ({
-      id: log.id,
-      timestamp: log.created_at,
-      date: new Date(log.created_at).toLocaleDateString('pt-BR'),
-      event: `${(log.source as any)?.name || 'Automação'}: ${this._formatEventType(log.event_type)}`,
-      type: (log.source as any)?.source_type === 'radar_offers' ? 'radar' : 'automation',
-      status: log.status === 'processed' || log.status === 'captured' ? 'success' : (log.status === 'error' ? 'failed' : 'info'),
-      metadata: log.details
-    })) || [];
+    return logs?.map(log => {
+      const details = log.details || {};
+      const imageUrl = details.image_url || details.product_image || null;
+      
+      return {
+        id: log.id,
+        timestamp: log.created_at,
+        date: new Date(log.created_at).toLocaleDateString('pt-BR'),
+        event: `${(log.source as any)?.name || 'Automação'}: ${this._formatEventType(log.event_type)}`,
+        type: (log.source as any)?.source_type === 'radar_offers' ? 'radar' : 'automation',
+        status: log.status === 'processed' || log.status === 'captured' ? 'success' : (log.status === 'error' ? 'failed' : 'info'),
+        imageUrl,
+        metadata: log.details
+      };
+    }) || [];
   },
 
   async getUnifiedActivity(userId: string, limit: number = 20, options: { days?: number, startDate?: string, endDate?: string } = { days: 7 }): Promise<OperationalHistoryItem[]> {

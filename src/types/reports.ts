@@ -6,7 +6,6 @@ export interface OperationalSummary {
   total_pending: number;
   active_groups_count: number;
   total_groups: number;
-  estimated_reach: number;
   active_campaigns_count: number;
   monitorings_count: number;
   active_automations_count: number;
@@ -39,6 +38,7 @@ export interface OperationalHistoryItem {
   type: 'campaign' | 'automation' | 'monitoring' | 'radar';
   status?: 'success' | 'failed' | 'processing' | 'info';
   envios?: number;
-  alcance?: number;
+  groupCount?: number;
+  imageUrl?: string;
   metadata?: any;
 }

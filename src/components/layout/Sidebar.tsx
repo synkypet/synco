@@ -140,6 +140,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         ))}
       </nav>
 
+      {/* ─── Account Status (Removido por redundância) ─── */}
+
       {/* Gradient separator */}
       <div className="h-px mx-4 bg-gradient-to-r from-transparent via-white/10 to-transparent flex-shrink-0" />
 
