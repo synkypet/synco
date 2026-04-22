@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ShopeeAdapter } from '@/lib/marketplaces/ShopeeAdapter';
 import { productService } from '@/services/supabase/product-service';
+import { automationService } from '@/services/supabase/automation-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,10 +110,20 @@ export async function GET(request: Request) {
               opportunity_score: finalScore
             });
 
-          if (!error) {
-            totalInserted++;
-            existingUrls.add(url);
-          }
+        // 5. Registrar Atividade no Log Operacional
+        if (products.length > 0) {
+          await automationService.logEvent({
+            source_id: task.label.includes('Radar Pro') ? activeRadars?.find(r => r.name === task.label.replace('Radar Pro: ', ''))?.id || '' : '',
+            user_id: activeRadars?.find(r => r.name === task.label.replace('Radar Pro: ', ''))?.user_id || connection.user_id,
+            status: 'captured',
+            event_type: 'radar_discovery',
+            details: {
+              keyword: task.keyword,
+              found: products.length,
+              inserted: totalInserted,
+              message: `Descoberta finalizada para "${task.keyword || 'Global'}". ${products.length} itens analisados.`
+            }
+          }, supabase);
         }
       } catch (err) {
         console.error(`${logPrefix} Erro na tarefa ${task.label}:`, err);
