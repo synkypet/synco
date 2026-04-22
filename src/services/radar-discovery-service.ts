@@ -19,21 +19,35 @@ export const radarDiscoveryService = {
     const adapter = new ShopeeAdapter();
     const logPrefix = `[RADAR-DISCOVERY]`;
 
-    // 1. Resolver Conexão Shopee (Assumindo uma ativa principal do sistema ou do usuário)
+    // 1. Resolver Conexão Shopee (Garantindo que tenha as chaves de API)
     const { data: connection } = await supabase
       .from('user_marketplaces')
       .select('*, marketplaces(name)')
       .eq('is_active', true)
+      .not('shopee_app_id', 'is', null)
       .limit(1)
       .maybeSingle();
 
     if (!connection) {
-      throw new Error('Nenhuma conexão Shopee ativa encontrada.');
+      console.warn(`${logPrefix} Nenhuma conexão Shopee válida encontrada.`);
+      
+      // Registrar no log operacional para o usuário ver
+      if (options.sourceId || options.userId) {
+        await automationService.logEvent({
+          source_id: options.sourceId || '',
+          user_id: options.userId || '',
+          status: 'error',
+          event_type: 'radar_discovery',
+          details: { message: 'Erro: Nenhuma conexão Shopee com Chaves de API (App ID) ativa foi encontrada.' }
+        }, supabase);
+      }
+      
+      return { totalInserted: 0, tasksExecuted: 0 };
     }
 
     const shopeeConnection = {
       ...connection,
-      shopee_app_id: connection.shopee_app_id || process.env.SHOPEE_APP_ID,
+      shopee_app_id: connection.shopee_app_id,
       shopee_app_secret: (connection as any).shopee_app_secret || process.env.SHOPEE_APP_SECRET
     };
 
