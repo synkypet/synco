@@ -1,2 +1,8 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/radar/discovery",
+      "schedule": "0 * * * *"
+    }
+  ]
 }
