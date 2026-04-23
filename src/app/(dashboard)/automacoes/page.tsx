@@ -76,6 +76,14 @@ export default function AutomacoesDashboardPage() {
   const [targetType, setTargetType] = useState<'group' | 'list'>('group');
   const [targetId, setTargetId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [minCommission, setMinCommission] = useState('');
+  const [shopeeSort, setShopeeSort] = useState('1'); 
+  const [shopeeList, setShopeeList] = useState('0');
+  const [shopeeLimit, setShopeeLimit] = useState('10');
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewResults, setPreviewResults] = useState<any[] | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
 
   // Validação simples
@@ -98,8 +106,19 @@ export default function AutomacoesDashboardPage() {
       external_group_id: selectedSourceGroup?.remote_id || undefined,
       target_type: targetType,
       target_id: targetId,
-      config: entryType === 'radar_offers' ? { searchTerm: searchTerm.trim() } : undefined
-    });
+      config: entryType === 'radar_offers' ? { 
+        searchTerm: searchTerm.trim(),
+        sortType: parseInt(shopeeSort),
+        listType: parseInt(shopeeList),
+        batchLimit: parseInt(shopeeLimit)
+      } : undefined,
+      // Passando filtros para a rota inicial
+      filters: entryType === 'radar_offers' ? {
+        min_price: minPrice ? parseFloat(minPrice) : undefined,
+        max_price: maxPrice ? parseFloat(maxPrice) : undefined,
+        min_commission_value: minCommission ? parseFloat(minCommission) : undefined
+      } : undefined
+    } as any); // Adicionando any para evitar erro de tipo se filters não estiver no DTO básico
 
     toast.promise(promise, {
       loading: 'Iniciando esteira operacional...',
@@ -110,6 +129,37 @@ export default function AutomacoesDashboardPage() {
       },
       error: (err: any) => `Erro na criação: ${err.message || 'Verifique os dados.'}`
     });
+  };
+
+  const handlePreviewRadar = async () => {
+    if (!searchTerm.trim()) return;
+    setIsPreviewing(true);
+    setPreviewResults(null);
+    try {
+      const res = await fetch('/api/radar/fetch-shopee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword: searchTerm.trim(),
+          sortType: parseInt(shopeeSort),
+          listType: parseInt(shopeeList),
+          limit: 10,
+          minPrice: minPrice ? parseFloat(minPrice) : undefined,
+          maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+          minCommission: minCommission ? parseFloat(minCommission) : undefined
+        })
+      });
+      const data = await res.json();
+      if (data.status === 'SUCCESS') {
+        setPreviewResults(data.products || data.similar_products || []);
+      } else {
+        toast.error('Erro no preview: ' + data.error);
+      }
+    } catch (err) {
+      toast.error('Falha ao gerar preview.');
+    } finally {
+      setIsPreviewing(false);
+    }
   };
 
   const handleSync = async (sourceId: string) => {
@@ -165,7 +215,7 @@ export default function AutomacoesDashboardPage() {
                 <PlusCircle size={18} /> Nova Automação
               </KineticButton>
             </DialogTrigger>
-            <DialogContent className="max-w-lg p-0 overflow-y-auto max-h-[90vh]">
+            <DialogContent className="max-w-xl p-0 overflow-y-auto max-h-[90vh]">
               <div className="p-6 bg-gradient-to-b from-white/5 to-transparent">
                  <DialogHeader>
                    <DialogTitle className="mb-4 flex items-center gap-2">
@@ -219,20 +269,103 @@ export default function AutomacoesDashboardPage() {
                     </div>
   
                     {entryType === 'radar_offers' && (
-                      <div className="space-y-2 animate-in slide-in-from-bottom-2 duration-300">
-                        <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest flex justify-between">
-                           Termo de Busca (Keyword)
-                           {!isSearchTermValid && searchTerm.length > 0 && <span className="text-red-400 font-bold tracking-tight">Mín. 2 caracteres</span>}
-                        </Label>
-                        <Input 
-                          placeholder="Ex: impressao 3d, air fryer, fone bluetooth..." 
-                          className={!isSearchTermValid && searchTerm.length > 0 ? 'ring-1 ring-red-500/50' : ''}
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                        <p className="text-[8px] text-white/20 font-bold uppercase tracking-wider">
-                          O robô usará este termo para pesquisar ofertas na Shopee.
-                        </p>
+                      <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest flex justify-between">
+                             Termo de Busca (Keyword)
+                             {!isSearchTermValid && searchTerm.length > 0 && <span className="text-red-400 font-bold tracking-tight">Mín. 2 caracteres</span>}
+                          </Label>
+                          <Input 
+                            placeholder="Ex: fone bluetooth, air fryer..." 
+                            className={!isSearchTermValid && searchTerm.length > 0 ? 'ring-1 ring-red-500/50' : ''}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Ordenar (Shopee)</Label>
+                             <Select value={shopeeSort} onValueChange={setShopeeSort}>
+                               <SelectTrigger>
+                                 <SelectValue />
+                               </SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="1">Específico</SelectItem>
+                                 <SelectItem value="2">Mais Recentes</SelectItem>
+                                 <SelectItem value="5">Maior Comissão</SelectItem>
+                               </SelectContent>
+                             </Select>
+                           </div>
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Lista</Label>
+                             <Select value={shopeeList} onValueChange={setShopeeList}>
+                               <SelectTrigger>
+                                 <SelectValue />
+                               </SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="0">Padrão</SelectItem>
+                                 <SelectItem value="1">Em Promoção</SelectItem>
+                               </SelectContent>
+                             </Select>
+                           </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3">
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Preço Mín</Label>
+                             <Input type="number" placeholder="0.00" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
+                           </div>
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Comissão Mín (R$)</Label>
+                             <Input type="number" placeholder="0.00" value={minCommission} onChange={(e) => setMinCommission(e.target.value)} />
+                           </div>
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Qtd/Ciclo</Label>
+                             <Select value={shopeeLimit} onValueChange={setShopeeLimit}>
+                               <SelectTrigger>
+                                 <SelectValue />
+                               </SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="3">3 itens</SelectItem>
+                                 <SelectItem value="5">5 itens</SelectItem>
+                                 <SelectItem value="10">10 itens</SelectItem>
+                                 <SelectItem value="20">20 itens</SelectItem>
+                               </SelectContent>
+                             </Select>
+                           </div>
+                        </div>
+
+                        <Button 
+                          variant="secondary" 
+                          className="w-full h-10 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest gap-2"
+                          onClick={handlePreviewRadar}
+                          disabled={isPreviewing || !isSearchTermValid}
+                        >
+                          {isPreviewing ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
+                          Gerar Preview das Ofertas
+                        </Button>
+
+                        {previewResults && (
+                          <div className="space-y-2 p-4 bg-black/20 rounded-2xl border border-white/5 animate-in fade-in duration-500">
+                             <p className="text-[9px] font-black uppercase text-white/20 tracking-widest mb-3">Preview da Curadoria ({previewResults.length} itens)</p>
+                             <div className="space-y-2 max-h-[220px] overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
+                                {previewResults.length === 0 ? (
+                                  <p className="text-[10px] text-white/30 italic text-center py-4">Nenhum produto encontrado com estes filtros.</p>
+                                ) : (
+                                  previewResults.map((p, idx) => (
+                                    <div key={idx} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg border border-white/[0.02] overflow-hidden">
+                                       <img src={p.image_url} className="w-10 h-10 rounded bg-white/10 object-cover shrink-0" />
+                                       <div className="flex-1 min-w-0">
+                                          <p className="text-[10px] font-bold text-white/80 line-clamp-2 leading-tight mb-1">{p.name}</p>
+                                          <p className="text-[8px] font-medium text-white/30 truncate">R$ {p.current_price} • Comis: R$ {p.commission_value}</p>
+                                       </div>
+                                    </div>
+                                  ))
+                                )}
+                             </div>
+                          </div>
+                        )}
                       </div>
                     )}
 

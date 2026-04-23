@@ -63,6 +63,8 @@ export async function GET(request: Request) {
       const routes = source.automation_routes || [];
       if (routes.length === 0) continue;
 
+      const keyword = (source.config as any)?.searchTerm || source.name;
+
       // ─── BILLING ENFORCEMENT ───────────────────────────────────────────────
       let access = userAccessCache.get(source.user_id);
       if (!access) {
@@ -71,43 +73,70 @@ export async function GET(request: Request) {
       }
 
       if (!access.isOperative) {
-        console.warn(`${logPrefix} [SKIP-BILLING] User ${source.user_id} não está operativo. Status: ${access.status}`);
+        console.warn(`${logPrefix} [SKIP-BILLING] User ${source.user_id} não está operativo.`);
         continue;
       }
 
-      // Buscar conexões do usuário para o processLinks (reafiliação correta)
+      // Buscar conexões do usuário para o processLinks
       let connections = userConnectionsCache.get(source.user_id);
       if (!connections) {
         connections = await marketplaceService.getEnrichedConnections(source.user_id, supabase);
         userConnectionsCache.set(source.user_id, connections);
       }
 
-      for (const product of products) {
-        for (const route of routes) {
-          // A. Deduplicação Atômica
-          const hashKey = generateHash(`radar_v1:${route.id}:${product.id}`);
+      for (const route of routes) {
+        // A. Verificação de Profundidade de Fila (Pacing do Heartbeat)
+        // Se já houver jobs pendentes para este destino, não adicionamos mais do Radar agora.
+        const { count: pendingJobs } = await supabase
+          .from('send_jobs')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', source.user_id)
+          .eq('destination', route.target_id)
+          .eq('status', 'pending');
+
+        if (pendingJobs && pendingJobs >= 2) {
+          console.log(`${logPrefix} [RADAR QUEUE] Rota ${route.id} já possui ${pendingJobs} itens pendentes. Pulando abastecimento.`);
+          continue;
+        }
+
+        // B. Seleção de Candidato (Filtrar produtos que batem com a keyword da fonte)
+        const candidates = products.filter(p => p.category.toLowerCase().includes(keyword.toLowerCase()));
+        
+        if (candidates.length === 0) {
+          console.log(`${logPrefix} [RADAR EMPTY] Sem candidatos novos no banco para keyword "${keyword}".`);
+          continue;
+        }
+
+        let dispatchedForRoute = false;
+
+        for (const product of candidates) {
+          if (dispatchedForRoute) break; // Garantir 1 por ciclo por rota para envio gradual
+
+          // C. Deduplicação Atômica (automation_id + product_id + route_id)
+          const hashKey = generateHash(`radar_v2:${source.id}:${product.id}:${route.id}`);
           const { error: dedupeError } = await supabase.from('automation_dedupe').insert({ hash_key: hashKey });
 
           if (dedupeError) {
-            if (dedupeError.code === '23505') continue;
+            if (dedupeError.code === '23505') {
+               // console.log(`${logPrefix} [RADAR SKIP] Produto ${product.id} já enviado para rota ${route.id}.`);
+               continue;
+            }
             console.error(`${logPrefix} Erro no dedupe:`, dedupeError.message);
             continue;
           }
 
-          // B. Filtragem por Regras de Usuário (Baseada no snapshot do Radar)
+          // D. Filtragem por Regras de Usuário
           if (!applyRadarFilters(product, route.filters)) continue;
 
-          // C. Geração de Campanha com Hardening Factual
+          // E. Geração de Campanha com Hardening Factual
           try {
-            // ─── REPROCESSAMENTO FACTUAL EM TEMPO REAL ───────────────────────
-            console.log(`${logPrefix} [AUDIT] Revalidando factualidade para ${product.original_url}...`);
-            const [snapshot] = await processLinks([product.original_url], connections || [], 'auto');
+            console.log(`${logPrefix} [RADAR DISPATCH] Abastecendo rota ${route.id} com produto ${product.id}...`);
             
+            const [snapshot] = await processLinks([product.original_url], connections || [], 'auto');
             const factual = snapshot.factual;
-            const eligibility = factual.eligibility;
 
-            if (!eligibility.isEligible) {
-              console.warn(`${logPrefix} [AUDIT-REJECT] Item ${product.id} rejeitado: ${eligibility.reasons.join(', ')}`);
+            if (!factual.eligibility.isEligible) {
+              console.warn(`${logPrefix} [AUDIT-REJECT] Item ${product.id} rejeitado: ${factual.eligibility.reasons.join(', ')}`);
               continue;
             }
 
@@ -145,6 +174,7 @@ export async function GET(request: Request) {
             }, supabase);
 
             totalCreated++;
+            dispatchedForRoute = true; // Consumo gradual concluído para esta rota
           } catch (err: any) {
             console.error(`${logPrefix} Falha ao despachar produto ${product.id}:`, err.message);
           }
@@ -174,11 +204,15 @@ export async function GET(request: Request) {
 function applyRadarFilters(product: any, filters: any): boolean {
   if (!filters) return true;
 
-  // 1. Preço Mínimo
+  // 1. Preço Mínimo / Máximo
   if (filters.min_price && product.current_price < filters.min_price) return false;
+  if (filters.max_price && product.current_price > filters.max_price) return false;
 
-  // 2. Comissão Mínima
-  if (filters.min_commission_rate && product.commission_percent < filters.min_commission_rate) return false;
+  // 2. Comissão Mínima (Prioridade para Valor Absoluto R$)
+  if (filters.min_commission_value && product.commission_value < filters.min_commission_value) return false;
+  
+  // Legado: Porcentagem (se não houver valor absoluto definido)
+  if (!filters.min_commission_value && filters.min_commission_rate && product.commission_percent < filters.min_commission_rate) return false;
 
   // 3. Blacklist
   if (filters.keywords_blacklist?.length > 0) {

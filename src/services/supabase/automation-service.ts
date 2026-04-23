@@ -67,6 +67,7 @@ export const automationService = {
       target_type: 'group' | 'list';
       target_id: string;
       config?: any;
+      filters?: any;
     },
     client?: any
   ): Promise<AutomationSource> {
@@ -97,7 +98,7 @@ export const automationService = {
         target_type: setup.target_type,
         target_id: setup.target_id,
         is_active: true,
-        filters: {},
+        filters: setup.filters || {},
         template_config: {}
       });
 

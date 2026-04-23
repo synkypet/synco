@@ -71,23 +71,56 @@ export const radarDiscoveryService = {
     console.log(`${logPrefix} Processando ${sources?.length || 0} fontes de Radar.`);
 
     // 3. Montar Tarefas
-    const tasks: { label: string; keyword?: string; sortType: number; sourceId?: string; userId: string }[] = [];
+    const tasks: { label: string; keyword?: string; sortType: number; listType: number; limit: number; sourceId?: string; userId: string; config: any }[] = [];
 
-    sources?.forEach(s => {
-      const keyword = (s.config as any)?.searchTerm || s.name;
+    const NOW = Date.now();
+
+    for (const s of (sources || [])) {
+      const config = (s.config as any) || {};
+      const keyword = config.searchTerm || s.name;
+      
+      // A. Cooldown Check (Discovery Pacing)
+      const lastRun = config.last_discovery_at ? new Date(config.last_discovery_at).getTime() : 0;
+      const cooldownMs = (config.cooldown_minutes || 60) * 60 * 1000;
+      
+      if (NOW - lastRun < cooldownMs) {
+        console.log(`${logPrefix} [SKIP-COOLDOWN] Fonte "${s.name}" ainda em cooldown.`);
+        continue;
+      }
+
+      // B. Buffer Check (Supply/Demand)
+      // Buscamos se já existem produtos com essa keyword que ainda não foram usados por essa fonte
+      // Para simplificar no MVP, verificamos produtos recentes com a keyword
+      const { count: existingCount } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .ilike('category', `%${keyword}%`);
+
+      if (existingCount && existingCount > 15) {
+        console.log(`${logPrefix} [SKIP-BUFFER] Fonte "${s.name}" já possui ${existingCount} candidatos no banco.`);
+        // Atualiza o timestamp para não ficar tentando em todo ciclo de 1 min, mas um cooldown menor
+        await supabase.from('automation_sources').update({
+           config: { ...config, last_discovery_at: new Date().toISOString() }
+        }).eq('id', s.id);
+        continue;
+      }
+
       tasks.push({ 
         label: `Radar Pro: ${s.name}`, 
         keyword, 
-        sortType: 1,
+        sortType: config.sortType || 1,
+        listType: config.listType || 0,
+        limit: config.batchLimit || 20,
         sourceId: s.id,
-        userId: s.user_id
+        userId: s.user_id,
+        config
       });
-    });
+    }
 
     // Se for um ciclo global (sem sourceId específico), adicionamos as tarefas de sistema
     if (!options.sourceId) {
-      tasks.push({ label: 'System: Hot Products', sortType: 3, userId: connection.user_id });
-      tasks.push({ label: 'System: Recommendations', sortType: 5, userId: connection.user_id });
+      tasks.push({ label: 'System: Hot Products', sortType: 3, listType: 0, limit: 20, userId: connection.user_id, config: {} });
+      tasks.push({ label: 'System: Recommendations', sortType: 5, listType: 0, limit: 20, userId: connection.user_id, config: {} });
     }
 
     let globalInserted = 0;
@@ -113,8 +146,9 @@ export const radarDiscoveryService = {
         let taskInserted = 0;
         const products = await adapter.discoverProducts({
           sortType: task.sortType,
+          listType: task.listType,
           keyword: task.keyword,
-          limit: 20, // Etapa 2: Lote reduzido para 20 para garantir hidratação consistente
+          limit: task.limit, 
           connection: shopeeConnection as any
         });
 
@@ -202,6 +236,13 @@ export const radarDiscoveryService = {
             message: finalMsg
           }
         }, supabase);
+
+        // 6. Atualizar timestamp de última descoberta bem sucedida
+        if (task.sourceId) {
+          await supabase.from('automation_sources').update({
+            config: { ...task.config, last_discovery_at: new Date().toISOString() }
+          }).eq('id', task.sourceId);
+        }
 
       } catch (err) {
         console.error(`${logPrefix} Falha na tarefa ${task.label}:`, err);
