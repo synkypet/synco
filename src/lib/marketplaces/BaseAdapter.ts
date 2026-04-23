@@ -18,10 +18,14 @@ export interface ProductMetadata {
   itemId?: string | number;
   shopId?: string | number;
   shopName?: string;
+  shopType?: string;
+  sales?: number;
+  ratingStar?: number;
   productLink?: string;
   offerLink?: string;
   productCatIds?: number[];
   category?: string;
+  brazil_friendly?: 'accept' | 'review' | 'reject';
   
   // Detalhes extras
   shortLink?: string;
@@ -32,10 +36,14 @@ export interface ProductMetadata {
   rawPrice?: string;
   rawPriceMin?: string;
   rawPriceMax?: string;
+  rawOriginalPrice?: string;
   rawCommission?: string;
   rawCommissionRate?: string;
   rawSellerCommissionRate?: string;
   rawShopeeCommissionRate?: string;
+
+  // Metadados de Processamento
+  price_scale_used?: number;
 
   // Campos Factuais Normalizados
   currentPriceFactual: number;

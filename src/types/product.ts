@@ -42,6 +42,8 @@ export type ProductFilter = {
   free_shipping?: boolean;
   official_store?: boolean;
   favorites_only?: boolean;
+  status?: string;
+  exclude_dead?: boolean;
   sortBy?: 'opportunity_score' | 'current_price' | 'commission_percent';
   sortOrder?: 'asc' | 'desc';
 };

@@ -6,6 +6,7 @@ import { UserMarketplaceConnection } from '@/types/marketplace';
 import { ShopeeAffiliateClient } from '@/lib/shopee-affiliate/client';
 import { getCategoryName } from './shopee/categories';
 import { cleanProductName } from './shopee/cleaner';
+import { isBrazilFriendlyProduct } from '@/lib/filters/brazil-friendly';
 
 export class ShopeeAdapter extends MarketplaceAdapter {
   readonly name = 'Shopee';
@@ -300,13 +301,42 @@ export class ShopeeAdapter extends MarketplaceAdapter {
   }
 
   /**
-   * Normaliza valores de preço/comissão tratando a escala da Shopee (micros vs direto).
+   * Normaliza valores de preço/comissão tratando a escala da Shopee (micros vs cents).
+   * @deprecated Usar lógica baseada em nó para maior precisão (Fase 2)
    */
   private normalizeValue(val: any): number {
     const num = parseFloat(String(val || "0"));
     if (isNaN(num)) return 0;
-    // Se o valor for maior que 50000, assumimos escala de micros (divisão por 10^5)
+    // Heurística legada (mantida para compatibilidade em fetchMetadata individual)
     return num > 50000 ? num / 100000 : num;
+  }
+
+  /**
+   * Detecta a escala mais provável (1, 100 ou 100.000) baseada nos valores do nó.
+   */
+  private detectBestScale(node: any): 1 | 100 | 100000 {
+    const rawPriceStr = String(node.priceMin || node.price || "0");
+    const rawPrice = parseFloat(rawPriceStr);
+    if (rawPrice === 0) return 100000;
+
+    // 1. Se o valor bruto já contém ponto decimal (ex: 16.2), assumimos Escala 1 (Já em Reais)
+    if (rawPriceStr.includes('.')) {
+      if (rawPrice < 20000) return 1;
+    }
+
+    // 2. Se for um valor inteiro pequeno (ex: 16, 49), provavelmente é Escala 1
+    if (rawPrice < 1000) return 1;
+
+    // 3. Diferenciação entre Cents (100) e Micros (100.000)
+    const asCents = rawPrice / 100;
+    const asMicros = rawPrice / 100000;
+
+    // Se em escala de centavos o preço for "humano" (< 5000) 
+    // e em escala de micros for irrisório (< 0.50), escala é 100.
+    if (asCents < 5000 && asMicros < 0.5) return 100;
+    
+    // Default oficial da Shopee para a maioria dos casos é micros
+    return 100000;
   }
 
   // ─── Captura de Metadados Pro ──────────────────────────────────────────
@@ -389,7 +419,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       }
 
       console.log('--- [SHOPEE PRO AUDIT] ---');
-      console.log(`Vencedor: ${winner.productName}`);
+      console.log(`Item auditado: ${winner.productName}`);
       console.log(`Price Factual: ${currentPriceFactual} (Source: ${currentPriceSource})`);
       console.log(`Pix Estimado: ${estimatedPixPrice}`);
       console.log(`Parcelas (Heurística): ${installments}`);
@@ -464,11 +494,26 @@ export class ShopeeAdapter extends MarketplaceAdapter {
    */
   async discoverProducts(options: { 
     limit?: number; 
-    sortType?: number; 
+    sortType?: number;
+    listType?: number;
     keyword?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    minCommission?: number;
+    page?: number;
     connection: UserMarketplaceConnection 
   }): Promise<ProductMetadata[]> {
-    const { limit = 20, sortType = 3, keyword, connection } = options;
+    const { 
+      limit = 20, 
+      sortType = 1,   // 1 = Específico/relevância (alinhado com referência)
+      listType = 0,   // 0 = Padrão, 1 = Promoção (alinhado com referência)
+      keyword, 
+      minPrice, 
+      maxPrice, 
+      minCommission,
+      page = 1,
+      connection 
+    } = options;
 
     if (!connection.shopee_app_id || !connection.shopee_app_secret) {
       throw new Error('Connection missing App ID or Secret');
@@ -480,41 +525,92 @@ export class ShopeeAdapter extends MarketplaceAdapter {
         secret: connection.shopee_app_secret
       });
 
+      // Busca com parâmetros nativos da Shopee (alinhado com referência)
       const nodes = await client.searchProducts({ 
-        limit, 
+        limit: Math.max(limit, 50), 
         sortType,
+        listType,
         keyword,
-        page: 1 
+        page
       });
 
-      return nodes.map(node => {
-        const factualPrice = this.normalizeValue(node.priceMin || node.price);
-        const commissionAmt = this.normalizeValue(node.commission);
-        const cleanTitle = cleanProductName(node.productName);
-        
-        return {
-          name: cleanTitle,
-          originalPrice: this.normalizeValue(node.priceMax) || factualPrice,
-          currentPrice: factualPrice,
-          currentPriceFactual: factualPrice,
-          currentPriceSource: 'api.price',
-          commissionValueFactual: commissionAmt,
-          commissionSource: 'api.commission',
-          discountPercent: parseFloat(node.priceDiscountRate || "0"),
-          imageUrl: node.imageUrl || '',
-          marketplace: 'Shopee',
-          shopName: node.shopName || 'Shopee',
-          category: getCategoryName(node.productCatIds || []),
-          itemId: String(node.itemId || ''),
-          shopId: String(node.shopId || ''),
-          commissionRate: parseFloat(String(node.commissionRate || "0")),
-          productLink: node.productLink,
-          offerLink: node.offerLink,
-          fetchedAt: new Date().toISOString()
-        };
-      });
+      // AUDITORIA TRULY RAW (Primeiro item)
+      if (nodes.length > 0) {
+        console.log('--- [TRULY-RAW-NODE-0] ---');
+        console.log(JSON.stringify(nodes[0], null, 2));
+        console.log('---------------------------');
+      }
+
+      return nodes
+        .map(node => {
+          const scale = this.detectBestScale(node);
+          const normalize = (v: any) => {
+            const num = parseFloat(String(v || "0")) / scale;
+            return Math.round(num * 100) / 100; // Normaliza para 2 casas decimais
+          };
+
+          const factualPrice = normalize(node.priceMin || node.price);
+          const rawCommRate = node.commissionRate !== undefined && node.commissionRate !== null 
+            ? parseFloat(String(node.commissionRate)) 
+            : undefined;
+          
+          const commissionAmt = rawCommRate ? factualPrice * rawCommRate : 0;
+          const cleanTitle = cleanProductName(node.productName);
+          
+          const canonicalUrl = node.offerLink || node.productLink || 
+            (node.shopId && node.itemId 
+              ? `https://shopee.com.br/product/${node.shopId}/${node.itemId}` 
+              : '');
+          
+          const brResult = isBrazilFriendlyProduct({ name: cleanTitle });
+          
+          return {
+            name: cleanTitle,
+            originalPrice: normalize(node.priceMax) || factualPrice,
+            currentPrice: factualPrice,
+            currentPriceFactual: factualPrice,
+            currentPriceSource: 'api.price' as const,
+            commissionValueFactual: commissionAmt,
+            commissionSource: 'api.commission' as const,
+            discountPercent: node.priceDiscountRate ? parseFloat(node.priceDiscountRate) : 0,
+            imageUrl: node.imageUrl || '',
+            marketplace: 'Shopee' as const,
+            shopName: node.shopName || 'Shopee',
+            shopId: String(node.shopId || ''),
+            shopType: node.shopType || '',
+            sales: node.sales ? parseInt(String(node.sales)) : 0,
+            ratingStar: node.ratingStar ? parseFloat(String(node.ratingStar)) : 0,
+            category: getCategoryName(node.productCatIds || []),
+            itemId: String(node.itemId || ''),
+            commissionRate: rawCommRate,
+            productLink: canonicalUrl,
+            offerLink: node.offerLink,
+            fetchedAt: new Date().toISOString(),
+            brazil_friendly: brResult.decision,
+
+            // Metadados de Auditoria v2
+            price_scale_used: scale,
+            rawPrice: String(node.price || ''),
+            rawPriceMin: String(node.priceMin || ''),
+            rawPriceMax: String(node.priceMax || ''),
+            rawOriginalPrice: String(node.originalPrice || ''),
+            rawCommission: String(node.commission || ''),
+            rawCommissionRate: String(node.commissionRate || '')
+          };
+        })
+        .filter(p => {
+          // FASE 2: Integridade técnica mínima (os únicos que excluem)
+          const hasTitle = !!p.name && p.name.length > 3;
+          const hasImage = !!p.imageUrl && p.imageUrl.length > 10;
+          const hasPrice = p.currentPrice > 0;
+          const hasUrl = !!p.productLink;
+          const hasCommission = (p.commissionRate || 0) > 0;
+
+          return hasTitle && hasImage && hasPrice && hasUrl && hasCommission;
+        })
+        .slice(0, limit);
     } catch (error: any) {
-      console.error(`[SHOPEE-DISCOVERY] Error with sortType ${sortType}:`, error.message);
+      console.error(`[SHOPEE-DISCOVERY] Error:`, error.message);
       return [];
     }
   }

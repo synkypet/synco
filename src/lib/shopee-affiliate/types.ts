@@ -29,6 +29,9 @@ export interface ProductNode {
   itemId?: string | number;
   shopId?: string | number;
   shopName?: string;
+  shopType?: string;
+  sales?: number | string;
+  ratingStar?: number | string;
   productCatIds?: number[];
   sellerCommissionRate?: string | number;
   shopeeCommissionRate?: string | number;

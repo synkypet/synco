@@ -49,7 +49,14 @@ export function cleanProductName(name: string): string {
     .replace(/\s\s+/g, ' ')    // Remove espaços duplos
     .trim();
 
-  // 5. Capitalização: Forçar primeira letra maiúscula e manter o resto (Shopee costuma usar Título Case)
+  // 5. Deduplicação de palavras adjacentes (ex: "Fone Fone Bluetooth")
+  const words = clean.split(' ');
+  const uniqueWords = words.filter((word, index) => {
+    return index === 0 || word.toLowerCase() !== words[index - 1].toLowerCase();
+  });
+  clean = uniqueWords.join(' ');
+
+  // 6. Capitalização: Forçar primeira letra maiúscula e manter o resto (Shopee costuma usar Título Case)
   if (clean.length > 0) {
     clean = clean.charAt(0).toUpperCase() + clean.slice(1);
   }

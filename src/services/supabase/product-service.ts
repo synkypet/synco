@@ -46,6 +46,14 @@ export const productService = {
       if (filters.favorites_only) {
         query = query.eq('is_favorite', true);
       }
+      /* 
+      if (filters.status) {
+        query = query.eq('status', filters.status);
+      }
+      if (filters.exclude_dead) {
+        query = query.neq('status', 'dead');
+      }
+      */
     }
 
     // Dynamic sorting
@@ -100,7 +108,7 @@ export const productService = {
     const { data, error } = await supabase
       .from('products')
       .insert([productData])
-      .select()
+      .select('id')
       .single();
 
     if (error) {

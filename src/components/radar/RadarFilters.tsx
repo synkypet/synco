@@ -101,10 +101,20 @@ const RadarFilters: React.FC<RadarFiltersProps> = ({ filters, onFilterChange, on
 
       {/* Basic filters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-        <div className="space-y-2">
-          <Label className="text-[10px] font-black uppercase text-white/30 tracking-widest ml-1">Categoria</Label>
+        <div className="space-y-2 opacity-80 hover:opacity-100 transition-opacity">
+          <div className="flex items-center justify-between px-1">
+            <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest flex items-center gap-1.5">
+              Categoria
+              <span title="A Shopee não suporta busca nativa por categoria. Este filtro refina apenas os itens já descobertos." className="cursor-help">
+                <Filter size={10} className="text-white/20" />
+              </span>
+            </Label>
+            <Badge variant="outline" className="text-[7px] h-3.5 px-1 bg-white/5 border-white/5 text-white/30 font-black uppercase tracking-tighter">
+              Refino Local
+            </Badge>
+          </div>
           <Select value={filters.category || 'all'} onValueChange={(v) => updateFilter('category', v === 'all' ? undefined : v)}>
-            <SelectTrigger className="h-11 bg-deep-void shadow-skeuo-pressed border-none text-xs font-bold text-white/70 uppercase px-4 rounded-xl focus:ring-1 focus:ring-kinetic-orange/50 transition-all">
+            <SelectTrigger className="h-11 bg-deep-void/50 shadow-skeuo-pressed border-none text-xs font-bold text-white/50 uppercase px-4 rounded-xl focus:ring-1 focus:ring-white/20 transition-all italic">
               <SelectValue placeholder="Todas" />
             </SelectTrigger>
             <SelectContent className="bg-anthracite-surface border-none shadow-skeuo-elevated rounded-xl">
@@ -117,7 +127,10 @@ const RadarFilters: React.FC<RadarFiltersProps> = ({ filters, onFilterChange, on
         </div>
 
         <div className="space-y-2">
-          <Label className="text-[10px] font-black uppercase text-white/30 tracking-widest ml-1">Preço Máximo</Label>
+          <div className="flex items-center gap-1.5 ml-1">
+            <Label className="text-[10px] font-black uppercase text-white/90 tracking-widest">Preço Máximo</Label>
+            <div className="w-1 h-1 rounded-full bg-kinetic-orange shadow-glow-orange animate-pulse" />
+          </div>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] text-white/20 font-black">R$</span>
             <Input 
@@ -131,7 +144,10 @@ const RadarFilters: React.FC<RadarFiltersProps> = ({ filters, onFilterChange, on
         </div>
 
         <div className="space-y-2">
-          <Label className="text-[10px] font-black uppercase text-white/30 tracking-widest ml-1">Comissão Mín (%)</Label>
+          <div className="flex items-center gap-1.5 ml-1">
+            <Label className="text-[10px] font-black uppercase text-white/90 tracking-widest">Comissão Mín (%)</Label>
+            <div className="w-1 h-1 rounded-full bg-kinetic-orange shadow-glow-orange animate-pulse" />
+          </div>
           <Input 
             type="number" 
             placeholder="0%" 

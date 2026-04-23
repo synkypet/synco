@@ -13,16 +13,30 @@ import { Product } from '@/types/product';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 // Reusing the Product type from domain
-export type SelectedProduct = Product;
+export interface SelectedProduct {
+  id: string;
+  name: string;
+  original_url: string;
+  marketplace: string;
+  image_url?: string;
+  current_price?: number;
+  commission_value?: number;
+  status?: string;
+  updated_at?: string;
+}
 
 interface SelectedProductsContextValue {
   selectedProducts: SelectedProduct[];
-  addProduct: (product: SelectedProduct) => void;
+  addProduct: (product: Product) => void;
   removeProduct: (productId: string) => void;
-  toggleProduct: (product: SelectedProduct) => void;
+  toggleProduct: (product: Product) => void;
   isSelected: (productId: string) => boolean;
   clearProducts: () => void;
   count: number;
+  eligibleCount: number;
+  reviewCount: number;
+  deadCount: number;
+  hasIssues: boolean;
   isHydrated: boolean;
 }
 
@@ -66,10 +80,21 @@ export function SelectedProductsProvider({ children }: { children: ReactNode }) 
     }
   }, [selectedProducts, isHydrated]);
 
-  const addProduct = useCallback((product: SelectedProduct) => {
+  const addProduct = useCallback((product: Product) => {
     setSelectedProducts((prev) => {
       if (prev.some((p) => p.id === product.id)) return prev;
-      return [...prev, product];
+      const lightProduct: SelectedProduct = {
+        id: product.id,
+        name: product.name,
+        original_url: product.original_url,
+        marketplace: product.marketplace,
+        image_url: product.image_url,
+        current_price: product.current_price,
+        commission_value: product.commission_value,
+        status: product.status,
+        updated_at: product.updated_at
+      };
+      return [...prev, lightProduct];
     });
   }, []);
 
@@ -77,11 +102,23 @@ export function SelectedProductsProvider({ children }: { children: ReactNode }) 
     setSelectedProducts((prev) => prev.filter((p) => p.id !== productId));
   }, []);
 
-  const toggleProduct = useCallback((product: SelectedProduct) => {
+  const toggleProduct = useCallback((product: Product) => {
     setSelectedProducts((prev) => {
       const exists = prev.some((p) => p.id === product.id);
       if (exists) return prev.filter((p) => p.id !== product.id);
-      return [...prev, product];
+      
+      const lightProduct: SelectedProduct = {
+        id: product.id,
+        name: product.name,
+        original_url: product.original_url,
+        marketplace: product.marketplace,
+        image_url: product.image_url,
+        current_price: product.current_price,
+        commission_value: product.commission_value,
+        status: product.status,
+        updated_at: product.updated_at
+      };
+      return [...prev, lightProduct];
     });
   }, []);
 
@@ -94,6 +131,11 @@ export function SelectedProductsProvider({ children }: { children: ReactNode }) 
     setSelectedProducts([]);
   }, []);
 
+  const eligibleCount = selectedProducts.filter(p => p.status === 'eligible').length;
+  const reviewCount = selectedProducts.filter(p => p.status === 'review_needed' || p.status === 'audit_failed').length;
+  const deadCount = selectedProducts.filter(p => p.status === 'dead').length;
+  const hasIssues = reviewCount > 0 || deadCount > 0;
+
   return (
     <SelectedProductsContext.Provider
       value={{
@@ -104,6 +146,10 @@ export function SelectedProductsProvider({ children }: { children: ReactNode }) 
         isSelected,
         clearProducts,
         count: selectedProducts.length,
+        eligibleCount,
+        reviewCount,
+        deadCount,
+        hasIssues,
         isHydrated,
       }}
     >

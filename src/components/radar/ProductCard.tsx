@@ -6,13 +6,14 @@ import { KineticButton } from '@/components/ui/KineticButton';
 import { Button } from '@/components/ui/button';
 import {
   Heart, Copy, MoreVertical, Eye, Megaphone,
-  Zap, Truck, Tag, CheckSquare, Square, Store, CheckCircle2, Star
+  Zap, Truck, Tag, CheckSquare, Square, Store, CheckCircle2, Star, Loader2, AlertTriangle, ExternalLink, RefreshCw
 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -25,22 +26,16 @@ interface ProductCardProps {
   onSelect?: (product: Product) => void;
   onViewDetails?: (product: Product) => void;
   onAddToCampaign?: (product: Product) => void;
+  onAudit?: (product: Product) => Promise<void>;
 }
 
-const TAG_COLORS: Record<string, string> = {
-  'Oferta Forte': 'bg-red-500/10 text-red-600 border-red-500/20',
-  'Tendência': 'bg-purple-500/10 text-purple-600 border-purple-500/20',
-  'Menor Preço': 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  'Cupom Bom': 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
-};
-
 const MARKETPLACE_COLORS: Record<string, string> = {
-  Shopee: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
-  'Mercado Livre': 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
-  Amazon: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  Magalu: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
-  AliExpress: 'bg-red-500/10 text-red-600 border-red-500/20',
-  Shein: 'bg-black/10 text-black border-black/20',
+  Shopee: 'text-orange-500',
+  'Mercado Livre': 'text-yellow-500',
+  Amazon: 'text-blue-500',
+  Magalu: 'text-indigo-500',
+  AliExpress: 'text-red-500',
+  Shein: 'text-white',
 };
 
 const ProductCard: React.FC<ProductCardProps> = ({
@@ -49,184 +44,221 @@ const ProductCard: React.FC<ProductCardProps> = ({
   onToggleFavorite,
   onSelect,
   onViewDetails,
-  onAddToCampaign
+  onAddToCampaign,
+  onAudit
 }) => {
+  const [isAuditing, setIsAuditing] = React.useState(false);
+
   const copyLink = () => {
     const link = product.original_url || '#';
     navigator.clipboard.writeText(link);
     toast.success('Link copiado!');
   };
 
+  const handleAudit = async () => {
+    if (!onAudit || isAuditing) return;
+    setIsAuditing(true);
+    try {
+      await onAudit(product);
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
   const score = product.opportunity_score || 0;
-  const scoreColor = score >= 90 ? 'text-green-500' : score >= 75 ? 'text-yellow-500' : 'text-muted-foreground';
+  const isDead = product.status === 'dead';
 
   return (
     <TactileCard
       variant={isSelected ? "elevated" : "flat"}
       className={cn(
-        "overflow-hidden transition-all duration-300 group relative flex flex-col h-full",
-        isSelected && "shadow-[0_0_20px_rgba(255,107,0,0.2)] ring-1 ring-kinetic-orange/30",
-        !isSelected && score >= 90 && "shadow-[0_0_10px_rgba(255,107,0,0.1)] hover:shadow-glow-orange ring-1 ring-kinetic-orange/10"
+        "overflow-hidden transition-all duration-300 group relative flex flex-col h-full border-none",
+        isSelected && "shadow-[0_0_25px_rgba(255,107,0,0.25)] ring-1 ring-kinetic-orange/40",
+        !isSelected && score >= 90 && "hover:shadow-glow-orange ring-kinetic-orange/10",
+        isDead && "opacity-70 grayscale-[0.5]"
       )}
     >
-      {/* Imagem - Skeuo pressed cavity */}
-      <div className="relative h-52 overflow-hidden bg-deep-void shadow-skeuo-pressed m-2 rounded-xl">
+      {/* Imagem - Premium Cavity */}
+      <div className="relative h-48 overflow-hidden bg-deep-void shadow-skeuo-pressed m-1.5 rounded-[20px]">
         <img
           src={product.image_url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300&h=300&fit=crop'}
           alt={product.name}
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 opacity-80 group-hover:opacity-100"
+          className={cn(
+            "w-full h-full object-cover transition-all duration-700",
+            !isDead ? "opacity-90 group-hover:opacity-100 group-hover:scale-110" : "opacity-40"
+          )}
           onError={(e: any) => { e.target.src = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300&h=300&fit=crop'; }}
         />
 
-        {/* Badges no topo */}
-        <div className="absolute top-2 left-2 flex flex-col gap-1">
+        {/* Overlay Gradients */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+        {/* Top Badges */}
+        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5">
           {product.discount_percent && (
-            <Badge className="bg-red-500 text-white text-[10px] font-bold border-0 px-1.5 h-5">
+            <div className="bg-red-600 text-white text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-lg shadow-lg">
               -{product.discount_percent}%
-            </Badge>
+            </div>
           )}
           {product.coupon && (
-            <Badge className="bg-yellow-500/90 text-white text-[10px] border-0 px-1.5 h-5">
-              <Tag className="w-2.5 h-2.5 mr-0.5" />Cupom
-            </Badge>
+            <div className="bg-yellow-500 text-black text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg shadow-lg flex items-center">
+              <Tag className="w-3 h-3 mr-1" /> Cupom
+            </div>
           )}
         </div>
 
-        {/* Score - Neon Glow for top tier */}
-        <div className="absolute top-2 right-2">
+        {/* Score Ring */}
+        <div className="absolute top-2.5 right-2.5">
           <div className={cn(
-            "rounded-lg px-2 py-1 backdrop-blur-md shadow-skeuo-elevated",
-            score >= 90 ? "bg-kinetic-orange/20 shadow-glow-orange" : "bg-black/40"
+            "w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md shadow-skeuo-elevated border border-white/10",
+            score >= 90 ? "bg-kinetic-orange/20 shadow-glow-orange border-kinetic-orange/30" : "bg-black/60"
           )}>
             <span className={cn(
-              "text-[10px] font-black font-headline",
-              score >= 90 ? "text-kinetic-orange" : score >= 75 ? "text-yellow-500" : "text-white/40"
+              "text-[10px] font-black",
+              score >= 90 ? "text-kinetic-orange" : "text-white/60"
             )}>
               {score}
             </span>
           </div>
         </div>
 
-        {/* Botão de seleção - canto inferior esquerdo */}
-        {onSelect && (
+        {/* Quick Actions Overlay */}
+        <div className="absolute bottom-2.5 left-2.5 right-2.5 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
           <button
-            onClick={() => onSelect(product)}
+            onClick={(e) => { e.stopPropagation(); onSelect?.(product); }}
             className={cn(
-              "absolute bottom-2 left-2 w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300",
-              isSelected
-                ? "bg-kinetic-orange text-white shadow-glow-orange scale-110"
-                : "bg-black/40 backdrop-blur-md hover:bg-white/10 text-white/40 hover:text-white"
+              "w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-md transition-all shadow-lg",
+              isSelected ? "bg-kinetic-orange text-white" : "bg-white/10 text-white/70 hover:bg-white/20"
             )}
           >
-            {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+            {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
           </button>
-        )}
-
-        {/* Botão favorito */}
-        <button
-          onClick={() => onToggleFavorite && onToggleFavorite(product.id, !product.is_favorite)}
-          className="absolute bottom-2 right-2 w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-red-500/10 transition-all duration-300"
-        >
-          <Heart className={cn("w-4 h-4 transition-colors", product.is_favorite ? "fill-red-500 text-red-500" : "text-white/30")} />
-        </button>
+          
+          <div className="flex gap-1.5">
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite?.(product.id, !product.is_favorite); }}
+              className="w-8 h-8 rounded-lg bg-black/60 backdrop-blur-md flex items-center justify-center hover:bg-red-500/20 text-white/50 hover:text-red-500 transition-all shadow-lg"
+            >
+              <Heart className={cn("w-4 h-4", product.is_favorite && "fill-red-500 text-red-500")} />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Conteúdo */}
-      <div className="p-3 flex flex-col flex-1">
-        {/* Marketplace */}
-        <div className="flex items-center justify-between mb-2">
-          <Badge variant="outline" className={cn(
-            "text-[9px] px-2 h-4 font-bold uppercase tracking-widest border-none bg-white/5",
-            MARKETPLACE_COLORS[product.marketplace] ? "text-white/60" : "text-white/30"
-          )}>
-            <Store className="w-2.5 h-2.5 mr-1" />{product.marketplace}
-          </Badge>
-          {product.free_shipping && (
-            <span className="text-[9px] text-emerald-500 flex items-center gap-0.5 font-bold uppercase tracking-tighter">
-              <Truck className="w-3 h-3" /> Grátis
+      {/* Info Content */}
+      <div className="px-4 py-3 flex flex-col flex-1">
+        {/* Marketplace & Status */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <div className={cn("w-1.5 h-1.5 rounded-full", isDead ? "bg-red-500" : "bg-emerald-500 animate-pulse")} />
+            <span className={cn("text-[8px] font-black uppercase tracking-[0.2em]", MARKETPLACE_COLORS[product.marketplace] || "text-white/40")}>
+              {product.marketplace}
             </span>
-          )}
+          </div>
+
+          <div className="flex items-center gap-2">
+             {product.status && (
+              <span className={cn(
+                "text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md",
+                product.status === 'eligible' && "bg-emerald-500/10 text-emerald-500",
+                product.status === 'review_needed' && "bg-yellow-500/10 text-yellow-500",
+                product.status === 'dead' && "bg-red-500/10 text-red-500",
+                product.status === 'audit_failed' && "bg-white/10 text-white/30"
+              )}>
+                {product.status === 'eligible' ? 'Factual' : product.status === 'dead' ? 'Morto' : 'Revisar'}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Nome */}
-        <h3 className="text-sm font-bold line-clamp-2 mb-3 leading-tight h-10 text-white/90 group-hover:text-white transition-colors">
+        {/* Title */}
+        <h3 className="text-[13px] font-bold text-white/80 line-clamp-2 leading-snug mb-3 group-hover:text-white transition-colors h-9">
           {product.name}
         </h3>
 
-        {/* Preços - Deep-void cavity */}
-        <div className="bg-deep-void/50 rounded-xl px-3 py-2 shadow-skeuo-pressed mb-3 flex flex-col gap-1">
-          {product.original_price && product.original_price > (product.current_price || 0) && (
-            <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest leading-none">
-              De: <span className="line-through decoration-kinetic-orange/40 font-medium">R$ {product.original_price.toFixed(2)}</span>
-            </span>
-          )}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-black text-kinetic-orange uppercase tracking-widest opacity-70">🔥 Por:</span>
+        {/* Price Display - Skeuo Cavity */}
+        <div className="bg-deep-void shadow-skeuo-pressed rounded-[14px] p-2.5 mb-3 border border-white/[0.02]">
+          <div className="flex items-baseline gap-1.5 mb-0.5">
+            <span className="text-[10px] font-black text-kinetic-orange uppercase tracking-widest opacity-50">Por</span>
             <span className={cn(
-              "text-2xl font-black font-headline text-kinetic-orange tracking-tight",
-              score >= 90 && "shadow-glow-orange-intense neon-glow"
+              "text-xl font-black font-headline text-kinetic-orange tracking-tight",
+              score >= 90 && "drop-shadow-[0_0_8px_rgba(255,107,0,0.4)]"
             )}>
-              R$ {product.current_price?.toFixed(2)}
+              R$ {product.current_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            {product.original_price && product.original_price > (product.current_price || 0) ? (
+              <span className="text-[9px] text-white/20 font-bold line-through">
+                R$ {product.original_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
+            ) : <div />}
+            
+            <span className="text-[8px] text-white/10 font-black uppercase tracking-tighter">
+              Verificado {product.updated_at ? new Date(product.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recente'}
             </span>
           </div>
         </div>
 
-        {/* Comissão */}
-        <div className="flex items-center justify-between mb-4 px-1">
-          <div className="flex flex-col">
-            <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest leading-none mb-1">Comissão</span>
-            <span className="text-xs font-black text-emerald-500 font-headline">
+        {/* Operational Specs */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="bg-white/[0.03] rounded-lg p-1.5 flex flex-col">
+            <span className="text-[7px] font-black text-white/20 uppercase tracking-widest mb-0.5">Comissão</span>
+            <span className="text-[10px] font-black text-emerald-500 font-headline">
               {product.commission_percent}% · R$ {product.commission_value?.toFixed(2)}
             </span>
           </div>
-          <div className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-lg">
-            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-            <span className="text-[10px] font-bold text-white/50">{product.rating}</span>
+          <div className="bg-white/[0.03] rounded-lg p-1.5 flex flex-col">
+            <span className="text-[7px] font-black text-white/20 uppercase tracking-widest mb-0.5">Avaliação</span>
+            <div className="flex items-center gap-1">
+              <Star className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" />
+              <span className="text-[10px] font-black text-white/60">{product.rating || '4.8'}</span>
+            </div>
           </div>
         </div>
 
-        {/* Ações */}
+        {/* Actions Bar */}
         <div className="flex gap-2 mt-auto">
           <KineticButton
+            disabled={isDead}
+            onClick={() => onSelect?.(product)}
             className={cn(
-              "flex-1 h-10 text-[10px] font-bold uppercase tracking-widest",
-              isSelected && "bg-white/5 text-white/50 shadow-skeuo-pressed"
+              "flex-1 h-10 text-[10px] font-black uppercase tracking-widest",
+              isSelected && "bg-white/5 text-white/40 shadow-skeuo-pressed pointer-events-none"
             )}
-            onClick={() => onSelect && onSelect(product)}
           >
             {isSelected ? (
-              <><CheckCircle2 className="w-3 h-3 mr-2" />Selecionado</>
+              <><CheckCircle2 className="w-3.5 h-3.5 mr-2" /> Selecionado</>
             ) : (
-              <><Zap className="w-3 h-3 mr-2" />Selecionar</>
+              <><Zap className="w-3.5 h-3.5 mr-2" /> Selecionar</>
             )}
           </KineticButton>
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            className="h-10 w-10 p-0 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all shadow-skeuo-flat hover:shadow-skeuo-elevated" 
-            onClick={copyLink}
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button 
-                size="sm" 
                 variant="ghost" 
-                className="h-10 w-10 p-0 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all shadow-skeuo-flat hover:shadow-skeuo-elevated"
+                className="w-10 h-10 p-0 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white shadow-skeuo-flat border-none"
               >
-                <MoreVertical className="w-3.5 h-3.5" />
+                <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-anthracite-surface border-none shadow-skeuo-elevated rounded-2xl p-1">
-              <DropdownMenuItem onClick={() => onViewDetails && onViewDetails(product)} className="text-xs font-medium rounded-xl hover:bg-white/5 text-white/70">
-                <Eye className="w-4 h-4 mr-2" /> Ver detalhes
+            <DropdownMenuContent align="end" className="w-48 bg-anthracite-surface border-none shadow-skeuo-elevated rounded-xl p-1.5 z-50">
+              <DropdownMenuItem onClick={copyLink} className="text-[10px] font-black uppercase tracking-widest p-3 rounded-lg hover:bg-white/5">
+                <Copy className="w-3.5 h-3.5 mr-2" /> Copiar Link
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onAddToCampaign && onAddToCampaign(product)} className="text-xs font-medium rounded-xl hover:bg-white/5 text-white/70">
-                <Megaphone className="w-4 h-4 mr-2" /> Adicionar à campanha
+              <DropdownMenuItem onClick={() => onViewDetails?.(product)} className="text-[10px] font-black uppercase tracking-widest p-3 rounded-lg hover:bg-white/5">
+                <Eye className="w-3.5 h-3.5 mr-2" /> Ver Detalhes
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-xs font-medium rounded-xl hover:bg-white/5 text-kinetic-orange">
-                <Zap className="w-4 h-4 mr-2" /> Criar automação
+              <DropdownMenuSeparator className="bg-white/5 mx-1" />
+              <DropdownMenuItem 
+                onClick={handleAudit} 
+                disabled={isAuditing}
+                className="text-[10px] font-black uppercase tracking-widest p-3 rounded-lg hover:bg-kinetic-orange/10 text-kinetic-orange"
+              >
+                {isAuditing ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-2" />}
+                Auditoria On-Demand
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

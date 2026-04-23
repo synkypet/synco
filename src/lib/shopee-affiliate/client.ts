@@ -58,6 +58,9 @@ export class ShopeeAffiliateClient {
               itemId
               shopId
               shopName
+              shopType
+              sales
+              ratingStar
               productCatIds
               productLink
               offerLink
@@ -71,8 +74,8 @@ export class ShopeeAffiliateClient {
         itemId: itemId ? String(itemId) : undefined,
         limit,
         sortType,
-        listType,
-        page
+        listType: listType || 0,
+        page: page || 1
       }
     };
 

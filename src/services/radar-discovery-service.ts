@@ -114,7 +114,7 @@ export const radarDiscoveryService = {
         const products = await adapter.discoverProducts({
           sortType: task.sortType,
           keyword: task.keyword,
-          limit: 15,
+          limit: 20, // Etapa 2: Lote reduzido para 20 para garantir hidratação consistente
           connection: shopeeConnection as any
         });
 
@@ -122,6 +122,24 @@ export const radarDiscoveryService = {
 
         for (const p of products) {
           const url = p.productLink || p.offerLink;
+          
+          // Etapa 3: Guardrail de Completude
+          // Não processar produtos com dados obrigatórios ausentes ou comissão inválida
+          const hasRequiredFields = 
+            p.name && 
+            p.imageUrl && 
+            p.currentPriceFactual && 
+            p.currentPriceFactual > 0 &&
+            p.commissionValueFactual && 
+            p.commissionValueFactual > 0 &&
+            p.commissionRate && 
+            p.commissionRate > 0;
+
+          if (!hasRequiredFields) {
+            console.warn(`${logPrefix} Produto descartado por completude insuficiente: ${p.name || 'Sem nome'}`);
+            continue;
+          }
+
           capturedItemsMeta.push({
             name: p.name,
             url,

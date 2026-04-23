@@ -4,6 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { campaignService } from '@/services/supabase/campaign-service';
 import { automationService } from '@/services/supabase/automation-service';
 import { triggerWorker } from '@/lib/worker/trigger';
+import { resolveUserAccess } from '@/services/supabase/access-service';
+import { processLinks } from '@/lib/linkProcessor';
+import { marketplaceService } from '@/services/supabase/marketplace-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,11 +55,32 @@ export async function GET(request: Request) {
     }
 
     let totalCreated = 0;
+    const userAccessCache = new Map<string, any>();
+    const userConnectionsCache = new Map<string, any[]>();
 
     // 3. Cruzamento de Dados (Pipeline Operacional)
     for (const source of sources) {
       const routes = source.automation_routes || [];
       if (routes.length === 0) continue;
+
+      // ─── BILLING ENFORCEMENT ───────────────────────────────────────────────
+      let access = userAccessCache.get(source.user_id);
+      if (!access) {
+        access = await resolveUserAccess(source.user_id);
+        userAccessCache.set(source.user_id, access);
+      }
+
+      if (!access.isOperative) {
+        console.warn(`${logPrefix} [SKIP-BILLING] User ${source.user_id} não está operativo. Status: ${access.status}`);
+        continue;
+      }
+
+      // Buscar conexões do usuário para o processLinks (reafiliação correta)
+      let connections = userConnectionsCache.get(source.user_id);
+      if (!connections) {
+        connections = await marketplaceService.getEnrichedConnections(source.user_id, supabase);
+        userConnectionsCache.set(source.user_id, connections);
+      }
 
       for (const product of products) {
         for (const route of routes) {
@@ -70,31 +94,34 @@ export async function GET(request: Request) {
             continue;
           }
 
-          // B. Filtragem por Regras de Usuário
+          // B. Filtragem por Regras de Usuário (Baseada no snapshot do Radar)
           if (!applyRadarFilters(product, route.filters)) continue;
 
-          // C. Geração de Campanha
+          // C. Geração de Campanha com Hardening Factual
           try {
-            // --- REGRA DE ELEGIBILIDADE FACTUAL (HARDENING) ---
-            const reasons: string[] = [];
-            if (!product.name) reasons.push('Ausência de título');
-            if (!product.image_url) reasons.push('Ausência de imagem válida');
-            if (!product.current_price || product.current_price <= 0) reasons.push('Ausência de preço factual');
+            // ─── REPROCESSAMENTO FACTUAL EM TEMPO REAL ───────────────────────
+            console.log(`${logPrefix} [AUDIT] Revalidando factualidade para ${product.original_url}...`);
+            const [snapshot] = await processLinks([product.original_url], connections || [], 'auto');
+            
+            const factual = snapshot.factual;
+            const eligibility = factual.eligibility;
 
-            const isEligible = reasons.length === 0;
+            if (!eligibility.isEligible) {
+              console.warn(`${logPrefix} [AUDIT-REJECT] Item ${product.id} rejeitado: ${eligibility.reasons.join(', ')}`);
+              continue;
+            }
 
             const campaignData = {
-              name: `RADAR: ${product.name.substring(0, 30)}...`,
+              name: `RADAR: ${factual.title.substring(0, 30)}...`,
               items: [{
-                product_name: product.name,
-                image_url: product.image_url,
-                affiliate_url: product.original_url,
-                current_price: product.current_price,
-                original_price: product.original_price,
+                product_name: factual.title,
+                image_url: factual.image,
+                affiliate_url: factual.finalLinkToSend,
+                current_price: factual.price,
+                original_price: factual.originalPrice,
                 external_product_id: product.id,
-                // Requisitos de Elegibilidade (Fase 2)
-                eligibility_status: (isEligible ? 'eligible' : 'ineligible') as any,
-                eligibility_reasons: reasons
+                eligibility_status: 'eligible' as any,
+                eligibility_reasons: []
               }],
               destinations: [{
                 type: route.target_type,
@@ -109,7 +136,12 @@ export async function GET(request: Request) {
               user_id: source.user_id,
               status: 'processed',
               event_type: 'radar_dispatch',
-              details: { productId: product.id, routeId: route.id }
+              details: { 
+                productId: product.id, 
+                routeId: route.id,
+                factualPrice: factual.price,
+                reaffiliated: factual.reaffiliation_status
+              }
             }, supabase);
 
             totalCreated++;
