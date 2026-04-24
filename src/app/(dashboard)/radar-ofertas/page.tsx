@@ -72,7 +72,7 @@ export default function RadarOfertasPage() {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minCommission, setMinCommission] = useState('');
-  const [shopeeSort, setShopeeSort] = useState(SHOPEE_SORT_TYPE.RELEVANCE.toString()); 
+  const [shopeeSort, setShopeeSort] = useState<number>(SHOPEE_SORT_TYPE.RELEVANCE); 
   const [shopeeList, setShopeeList] = useState(SHOPEE_LIST_TYPE.DEFAULT.toString()); 
   const [shopeeLimit, setShopeeLimit] = useState('20'); // Quantidades (Ref: 3, 6, 9, 18, 36, 50)
   const [fallbackActivated, setFallbackActivated] = useState(false);
@@ -94,11 +94,9 @@ export default function RadarOfertasPage() {
     }
 
     const nextPage = isLoadMore ? garimpPage + 1 : 1;
-
-    // Determinação do sortType da Shopee baseada na intenção do usuário
-    let sortType = 1; // Default: Específico (Relevance) - Alinhado com referência
-    if (!garimpSearch.trim()) sortType = 3; // Se não houver keyword, usa 'Hot' (Em Alta)
-    if (sortBy === 'price_asc') sortType = 2; // Menor preço nativo
+    
+    // Log para validação no front
+    console.log("[RADAR-FRONT]", { sortType: shopeeSort, listType: shopeeList });
 
     try {
       const res = await fetch('/api/radar/fetch-shopee', {
@@ -107,7 +105,7 @@ export default function RadarOfertasPage() {
         body: JSON.stringify({ 
           keyword: garimpSearch.trim(),
           page: nextPage,
-          sortType: parseInt(shopeeSort),
+          sortType: shopeeSort,
           listType: parseInt(shopeeList),
           limit: parseInt(shopeeLimit),
           minPrice: minPrice ? parseFloat(minPrice) : undefined,
@@ -378,7 +376,7 @@ export default function RadarOfertasPage() {
                     <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20 ml-2">Ordenar</span>
                     <select 
                       value={shopeeSort} 
-                      onChange={(e) => setShopeeSort(e.target.value)}
+                      onChange={(e) => setShopeeSort(Number(e.target.value))}
                       className="w-full h-12 bg-deep-void border-none shadow-skeuo-pressed text-[10px] font-bold rounded-xl text-white/80 px-3 outline-none appearance-none"
                     >
                       <option value={SHOPEE_SORT_TYPE.RELEVANCE}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.RELEVANCE]}</option>
@@ -425,7 +423,7 @@ export default function RadarOfertasPage() {
                       variant="ghost" 
                       onClick={() => {
                         setMinPrice(''); setMaxPrice(''); setMinCommission(''); 
-                        setShopeeSort('1'); setShopeeList('0'); setShopeeLimit('20');
+                        setShopeeSort(SHOPEE_SORT_TYPE.RELEVANCE); setShopeeList(SHOPEE_LIST_TYPE.DEFAULT.toString()); setShopeeLimit('20');
                       }}
                       className="h-12 w-full bg-white/5 hover:bg-white/10 text-[9px] font-black uppercase tracking-widest rounded-xl"
                     >
