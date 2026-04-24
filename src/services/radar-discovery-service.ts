@@ -15,10 +15,10 @@ export const radarDiscoveryService = {
    */
   async executeDiscovery(
     supabase: SupabaseClient,
-    options: { sourceId?: string; userId?: string } = {}
+    options: { sourceId?: string; userId?: string; force?: boolean } = {}
   ): Promise<DiscoveryResult> {
     const adapter = new ShopeeAdapter();
-    const logPrefix = `[RADAR-DISCOVERY]`;
+    const logPrefix = `[RADAR-DISCOVERY]${options.force ? ' [FORCE]' : ''}`;
 
     const connectionCache = new Map<string, any>();
 
@@ -54,7 +54,7 @@ export const radarDiscoveryService = {
       const lastRun = config.last_discovery_at ? new Date(config.last_discovery_at).getTime() : 0;
       const cooldownMs = (config.cooldown_minutes || 60) * 60 * 1000;
       
-      if (NOW - lastRun < cooldownMs) {
+      if (NOW - lastRun < cooldownMs && !options.force) {
         console.log(`${logPrefix} [SKIP-COOLDOWN] Fonte "${s.name}" ainda em cooldown.`);
         continue;
       }
@@ -67,7 +67,7 @@ export const radarDiscoveryService = {
         .select('*', { count: 'exact', head: true })
         .ilike('category', `%${keyword}%`);
 
-      if (existingCount && existingCount > 15) {
+      if (existingCount && existingCount > 15 && !options.force) {
         console.log(`${logPrefix} [SKIP-BUFFER] Fonte "${s.name}" já possui ${existingCount} candidatos no banco.`);
         // Atualiza o timestamp para não ficar tentando em todo ciclo de 1 min, mas um cooldown menor
         await supabase.from('automation_sources').update({

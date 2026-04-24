@@ -23,11 +23,13 @@ export async function GET(request: Request) {
 
   const requestId = Math.random().toString(36).substring(7);
   const logPrefix = `[RADAR-DISCOVERY] [${requestId}]`;
-  console.log(`${logPrefix} Iniciando ciclo de descoberta autônoma...`);
-
+  
   try {
+    const { searchParams } = new URL(request.url);
+    const force = searchParams.get('force') === '1';
+    if (force) console.log(`${logPrefix} [FORCE-DISCOVERY] Ignorando cooldowns por comando manual.`);
     const supabase = createAdminClient();
-    const result = await radarDiscoveryService.executeDiscovery(supabase);
+    const result = await radarDiscoveryService.executeDiscovery(supabase, { force });
 
     console.log(`${logPrefix} Ciclo finalizado. Inseridos: ${result.totalInserted}`);
     
