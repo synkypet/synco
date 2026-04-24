@@ -197,15 +197,21 @@ export const radarDiscoveryService = {
             p.commissionValueFactual || 0
           );
 
+          const finalCategory = task.sourceId 
+            ? `[RADAR] [SRC:${task.sourceId}] ${task.keyword}` 
+            : `[RADAR] [SYSTEM] ${p.category || 'Global'}`;
+
+          if (task.sourceId) {
+            console.log(`${logPrefix} [DEBUG-INSERT] Source: ${task.sourceId} | Category: ${finalCategory}`);
+          }
+
           const { error: insError } = await supabase
             .from('products')
             .insert({
               name: p.name,
               marketplace: 'Shopee',
               // Linkagem forte: [RADAR] [SRC:ID] Keyword
-              category: task.sourceId 
-                ? `[RADAR] [SRC:${task.sourceId}] ${task.keyword}` 
-                : `[RADAR] [SYSTEM] ${p.category || 'Global'}`,
+              category: finalCategory,
               current_price: p.currentPriceFactual,
               original_price: p.originalPrice,
               discount_percent: p.discountPercent,

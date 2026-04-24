@@ -91,12 +91,21 @@ export const radarDispatcherService = {
       // ─── BUSCA DE CANDIDATOS PARA ESTA FONTE ──────────────────────────────
       // Prioridade 1: Linkagem forte via [SRC:ID]
       // Prioridade 2: Match textual por keyword
-      const { data: candidates } = await supabase
+      const ilikeTag = `%[SRC:${source.id}]%`;
+      const ilikeKeyword = `%${keyword}%`;
+
+      const { data: candidates, error: candidateError } = await supabase
         .from('products')
         .select('*')
-        .or(`category.ilike.%[SRC:${source.id}]%,category.ilike.%${keyword}%`)
+        .or(`category.ilike.${ilikeTag},category.ilike.${ilikeKeyword}`)
         .order('created_at', { ascending: false })
         .limit(20);
+
+      if (candidateError) {
+        console.error(`${logPrefix} [ERROR-QUERY] Falha ao buscar candidatos para fonte ${source.id}:`, candidateError);
+      }
+
+      console.log(`${logPrefix} [QUERY-MATCH] Fonte: ${source.id} | Padroes: ${ilikeTag}, ${ilikeKeyword} | Encontrados: ${candidates?.length || 0}`);
 
       if (!candidates || candidates.length === 0) {
         console.log(`${logPrefix} [NO-MATCH] Nenhum produto para "${keyword}" ou ID "${source.id}".`);
