@@ -48,6 +48,7 @@ import { ProductFilter } from '@/types/product';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import LayoutContainer from '@/components/layout/LayoutContainer';
+import { SHOPEE_SORT_TYPE, SHOPEE_LIST_TYPE, SHOPEE_SORT_TYPE_LABELS, SHOPEE_LIST_TYPE_LABELS } from '@/lib/constants/shopee';
 
 export default function RadarOfertasPage() {
   // --- STATE ---
@@ -71,8 +72,8 @@ export default function RadarOfertasPage() {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minCommission, setMinCommission] = useState('');
-  const [shopeeSort, setShopeeSort] = useState('1'); // Específico
-  const [shopeeList, setShopeeList] = useState('0'); // Padrão
+  const [shopeeSort, setShopeeSort] = useState(SHOPEE_SORT_TYPE.RELEVANCE.toString()); 
+  const [shopeeList, setShopeeList] = useState(SHOPEE_LIST_TYPE.DEFAULT.toString()); 
   const [shopeeLimit, setShopeeLimit] = useState('20'); // Quantidades (Ref: 3, 6, 9, 18, 36, 50)
   const [fallbackActivated, setFallbackActivated] = useState(false);
   const [similarResults, setSimilarResults] = useState<Product[] | null>(null);
@@ -380,9 +381,9 @@ export default function RadarOfertasPage() {
                       onChange={(e) => setShopeeSort(e.target.value)}
                       className="w-full h-12 bg-deep-void border-none shadow-skeuo-pressed text-[10px] font-bold rounded-xl text-white/80 px-3 outline-none appearance-none"
                     >
-                      <option value="1">Específico</option>
-                      <option value="2">Mais Recentes</option>
-                      <option value="5">Maior Comissão</option>
+                      <option value={SHOPEE_SORT_TYPE.RELEVANCE}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.RELEVANCE]}</option>
+                      <option value={SHOPEE_SORT_TYPE.BEST_SELLERS}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.BEST_SELLERS]}</option>
+                      <option value={SHOPEE_SORT_TYPE.TOP_COMMISSION}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.TOP_COMMISSION]}</option>
                     </select>
                   </div>
 
@@ -393,8 +394,8 @@ export default function RadarOfertasPage() {
                       onChange={(e) => setShopeeList(e.target.value)}
                       className="w-full h-12 bg-deep-void border-none shadow-skeuo-pressed text-[10px] font-bold rounded-xl text-white/80 px-3 outline-none appearance-none"
                     >
-                      <option value="0">Padrão</option>
-                      <option value="1">Em Promoção</option>
+                      <option value={SHOPEE_LIST_TYPE.DEFAULT}>{SHOPEE_LIST_TYPE_LABELS[SHOPEE_LIST_TYPE.DEFAULT]}</option>
+                      <option value={SHOPEE_LIST_TYPE.PROMOTION}>{SHOPEE_LIST_TYPE_LABELS[SHOPEE_LIST_TYPE.PROMOTION]}</option>
                     </select>
                   </div>
 

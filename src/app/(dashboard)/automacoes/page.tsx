@@ -52,6 +52,7 @@ import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
+import { SHOPEE_SORT_TYPE, SHOPEE_LIST_TYPE, SHOPEE_SORT_TYPE_LABELS, SHOPEE_LIST_TYPE_LABELS } from '@/lib/constants/shopee';
 
 export default function AutomacoesDashboardPage() {
   const { user } = useAuth();
@@ -79,8 +80,8 @@ export default function AutomacoesDashboardPage() {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minCommission, setMinCommission] = useState('');
-  const [shopeeSort, setShopeeSort] = useState('1'); 
-  const [shopeeList, setShopeeList] = useState('0');
+  const [shopeeSort, setShopeeSort] = useState(SHOPEE_SORT_TYPE.RELEVANCE.toString()); 
+  const [shopeeList, setShopeeList] = useState(SHOPEE_LIST_TYPE.DEFAULT.toString());
   const [shopeeLimit, setShopeeLimit] = useState('10');
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewResults, setPreviewResults] = useState<any[] | null>(null);
@@ -291,9 +292,9 @@ export default function AutomacoesDashboardPage() {
                                  <SelectValue />
                                </SelectTrigger>
                                <SelectContent>
-                                 <SelectItem value="1">Específico</SelectItem>
-                                 <SelectItem value="2">Mais Recentes</SelectItem>
-                                 <SelectItem value="5">Maior Comissão</SelectItem>
+                                 <SelectItem value={SHOPEE_SORT_TYPE.RELEVANCE.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.RELEVANCE]}</SelectItem>
+                                 <SelectItem value={SHOPEE_SORT_TYPE.BEST_SELLERS.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.BEST_SELLERS]}</SelectItem>
+                                 <SelectItem value={SHOPEE_SORT_TYPE.TOP_COMMISSION.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.TOP_COMMISSION]}</SelectItem>
                                </SelectContent>
                              </Select>
                            </div>
@@ -304,8 +305,8 @@ export default function AutomacoesDashboardPage() {
                                  <SelectValue />
                                </SelectTrigger>
                                <SelectContent>
-                                 <SelectItem value="0">Padrão</SelectItem>
-                                 <SelectItem value="1">Em Promoção</SelectItem>
+                                 <SelectItem value={SHOPEE_LIST_TYPE.DEFAULT.toString()}>{SHOPEE_LIST_TYPE_LABELS[SHOPEE_LIST_TYPE.DEFAULT]}</SelectItem>
+                                 <SelectItem value={SHOPEE_LIST_TYPE.PROMOTION.toString()}>{SHOPEE_LIST_TYPE_LABELS[SHOPEE_LIST_TYPE.PROMOTION]}</SelectItem>
                                </SelectContent>
                              </Select>
                            </div>

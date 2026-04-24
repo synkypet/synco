@@ -177,6 +177,7 @@ export const radarDiscoveryService = {
         }
 
         let taskInserted = 0;
+        console.log(`${logPrefix} source=${task.sourceId || 'system'} keyword="${task.keyword || 'Global'}" sortType=${task.sortType} listType=${task.listType} page=${task.page}`);
         const products = await adapter.discoverProducts({
           sortType: task.sortType,
           listType: task.listType,
