@@ -555,10 +555,9 @@ export class ShopeeAdapter extends MarketplaceAdapter {
           const commissionAmt = rawCommRate ? factualPrice * rawCommRate : 0;
           const cleanTitle = cleanProductName(node.productName);
           
-          const canonicalUrl = node.offerLink || node.productLink || 
-            (node.shopId && node.itemId 
-              ? `https://shopee.com.br/product/${node.shopId}/${node.itemId}` 
-              : '');
+          const canonicalUrl = (node.shopId && node.itemId)
+            ? `https://shopee.com.br/product/${node.shopId}/${node.itemId}`
+            : (node.productLink || node.offerLink || '');
           
           const brResult = isBrazilFriendlyProduct({ name: cleanTitle });
           

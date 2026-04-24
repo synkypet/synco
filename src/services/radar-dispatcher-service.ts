@@ -141,7 +141,17 @@ export const radarDispatcherService = {
           if (dispatchedForRoute) break; 
 
           // C. Deduplicação Atômica (Dedupe por Destino)
-          const hashKey = this.generateHash(`radar_v2:${source.id}:${product.id}:${route.id}`);
+          // Usamos uma identidade estável (shopId:itemId) para evitar duplicatas se o UUID mudar
+          let stableProductKey = product.id;
+          if (product.marketplace === 'Shopee') {
+            const shopeeMatch = product.original_url.match(/\/product\/(\d+)\/(\d+)/) || 
+                               product.original_url.match(/-i\.(\d+)\.(\d+)/);
+            if (shopeeMatch) {
+              stableProductKey = `shopee:${shopeeMatch[1]}:${shopeeMatch[2]}`;
+            }
+          }
+
+          const hashKey = this.generateHash(`radar_v3:${source.id}:${stableProductKey}:${route.id}`);
           const { error: dedupeError } = await supabase.from('automation_dedupe').insert({ hash_key: hashKey });
 
           if (dedupeError) {

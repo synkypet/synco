@@ -99,12 +99,30 @@ export const productService = {
     const supabase = client || createClient();
     
     if (!productData.original_url) return null;
+    
+    // 1. Normalizar URL (Remover tracking params) para estabilizar identidade
+    let normalizedUrl = productData.original_url;
+    try {
+      const urlObj = new URL(productData.original_url);
+      const paramsToRemove = ['sp_atk', 'xptdk', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'smtt', 's_kwcid'];
+      paramsToRemove.forEach(p => urlObj.searchParams.delete(p));
+      normalizedUrl = urlObj.toString().split('?')[0]; // Preferimos a base limpa para Shopee
+      
+      // Se for produto Shopee padrão, garantimos o formato canônico
+      const shopeeMatch = normalizedUrl.match(/\/product\/(\d+)\/(\d+)/) || 
+                         normalizedUrl.match(/-i\.(\d+)\.(\d+)/);
+      if (shopeeMatch) {
+        normalizedUrl = `https://shopee.com.br/product/${shopeeMatch[1]}/${shopeeMatch[2]}`;
+      }
+    } catch (e) {
+      // Fallback para URL original se falhar o parse
+    }
 
-    // 1. Verificar se já existe por URL
+    // 2. Verificar se já existe por URL normalizada
     const { data: existing } = await supabase
       .from('products')
       .select('*')
-      .eq('original_url', productData.original_url)
+      .eq('original_url', normalizedUrl)
       .maybeSingle();
 
     if (existing) {
@@ -128,7 +146,7 @@ export const productService = {
     // 2. Inserir novo
     const { data: inserted, error } = await supabase
       .from('products')
-      .insert([productData])
+      .insert([{ ...productData, original_url: normalizedUrl }])
       .select()
       .single();
 
