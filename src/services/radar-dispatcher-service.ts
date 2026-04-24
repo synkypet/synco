@@ -44,6 +44,8 @@ export const radarDispatcherService = {
       return { campaignsCreated: 0 };
     }
 
+    console.log(`${logPrefix} Encontradas ${sources.length} fontes Radar ativas.`);
+
     // 2. Buscar produtos recentes do Radar
     const { data: products } = await supabase
       .from('products')
@@ -53,18 +55,27 @@ export const radarDispatcherService = {
       .limit(30);
 
     if (!products || products.length === 0) {
-      console.log(`${logPrefix} Nenhum produto Radar encontrado no banco.`);
+      console.log(`${logPrefix} Nenhum produto Radar encontrado no banco para cruzamento.`);
       return { campaignsCreated: 0 };
     }
 
+    console.log(`${logPrefix} Analisando ${products.length} produtos recentes para cruzamento.`);
+
     let totalCreated = 0;
+    let totalSkippedBilling = 0;
+    let totalSkippedQueue = 0;
+    let totalSkippedDedupe = 0;
+    let totalSkippedFilter = 0;
     const userAccessCache = new Map<string, any>();
     const userConnectionsCache = new Map<string, any[]>();
 
     // 3. Cruzamento de Dados (Pipeline Operacional)
     for (const source of sources) {
       const routes = source.automation_routes || [];
-      if (routes.length === 0) continue;
+      if (routes.length === 0) {
+        console.log(`${logPrefix} [SKIP] Fonte "${source.name}" não possui rotas de destino.`);
+        continue;
+      }
 
       const keyword = (source.config as any)?.searchTerm || source.name;
 
@@ -77,6 +88,7 @@ export const radarDispatcherService = {
 
       if (!access.isOperative) {
         console.warn(`${logPrefix} [SKIP-BILLING] User ${source.user_id} não está operativo.`);
+        totalSkippedBilling++;
         continue;
       }
 
@@ -98,31 +110,43 @@ export const radarDispatcherService = {
 
         if (pendingJobs && pendingJobs >= 2) {
           console.log(`${logPrefix} [RADAR QUEUE] Rota ${route.id} já possui ${pendingJobs} itens pendentes. Pulando.`);
+          totalSkippedQueue++;
           continue;
         }
 
         // B. Seleção de Candidato
         const candidates = products.filter(p => p.category.toLowerCase().includes(keyword.toLowerCase()));
         
-        if (candidates.length === 0) continue;
+        if (candidates.length === 0) {
+          console.log(`${logPrefix} [NO-MATCH] Nenhum produto para keyword "${keyword}" na fonte "${source.name}".`);
+          continue;
+        }
 
         let dispatchedForRoute = false;
+        let candidatesAnalyzed = 0;
 
         for (const product of candidates) {
           if (dispatchedForRoute) break; 
+          candidatesAnalyzed++;
 
           // C. Deduplicação Atômica
           const hashKey = this.generateHash(`radar_v2:${source.id}:${product.id}:${route.id}`);
           const { error: dedupeError } = await supabase.from('automation_dedupe').insert({ hash_key: hashKey });
 
-          if (dedupeError) continue;
+          if (dedupeError) {
+            totalSkippedDedupe++;
+            continue;
+          }
 
           // D. Filtragem
-          if (!this.applyRadarFilters(product, route.filters)) continue;
+          if (!this.applyRadarFilters(product, route.filters)) {
+            totalSkippedFilter++;
+            continue;
+          }
 
           // E. Geração de Campanha
           try {
-            console.log(`${logPrefix} [RADAR DISPATCH] Abastecendo rota ${route.id} com produto ${product.id}...`);
+            console.log(`${logPrefix} [RADAR DISPATCH] Abastecendo rota ${route.id} com produto ${product.id} ("${product.name.substring(0,20)}...").`);
             
             const [snapshot] = await processLinks([product.original_url], connections || [], 'auto');
             const factual = snapshot.factual;
@@ -174,7 +198,16 @@ export const radarDispatcherService = {
       }
     }
 
-    // 4. Acionamento do Worker
+    // 4. Relatório Final de Observabilidade
+    console.log(`${logPrefix} --- Relatório de Despacho Radar ---`);
+    console.log(`  > Campanhas criadas: ${totalCreated}`);
+    console.log(`  > Pulados (Billing): ${totalSkippedBilling}`);
+    console.log(`  > Pulados (Fila):    ${totalSkippedQueue}`);
+    console.log(`  > Pulados (Dedupe):  ${totalSkippedDedupe}`);
+    console.log(`  > Pulados (Filtro):  ${totalSkippedFilter}`);
+    console.log(`${logPrefix} -----------------------------------`);
+
+    // 5. Acionamento do Worker
     if (totalCreated > 0) {
       await triggerWorker({ requestId: rid });
     }
