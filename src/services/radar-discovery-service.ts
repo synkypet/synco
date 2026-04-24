@@ -202,7 +202,10 @@ export const radarDiscoveryService = {
             .insert({
               name: p.name,
               marketplace: 'Shopee',
-              category: task.keyword ? `[RADAR] [PRO] ${task.keyword}` : `[RADAR] ${p.category}`,
+              // Linkagem forte: [RADAR] [SRC:ID] Keyword
+              category: task.sourceId 
+                ? `[RADAR] [SRC:${task.sourceId}] ${task.keyword}` 
+                : `[RADAR] [SYSTEM] ${p.category || 'Global'}`,
               current_price: p.currentPriceFactual,
               original_price: p.originalPrice,
               discount_percent: p.discountPercent,

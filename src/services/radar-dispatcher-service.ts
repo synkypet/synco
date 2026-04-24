@@ -46,20 +46,9 @@ export const radarDispatcherService = {
 
     console.log(`${logPrefix} Encontradas ${sources.length} fontes Radar ativas.`);
 
-    // 2. Buscar produtos recentes do Radar
-    const { data: products } = await supabase
-      .from('products')
-      .select('*')
-      .ilike('category', '[RADAR]%')
-      .order('created_at', { ascending: false })
-      .limit(30);
-
-    if (!products || products.length === 0) {
-      console.log(`${logPrefix} Nenhum produto Radar encontrado no banco para cruzamento.`);
-      return { campaignsCreated: 0 };
-    }
-
-    console.log(`${logPrefix} Analisando ${products.length} produtos recentes para cruzamento.`);
+    // 2. Otimização: Não buscamos mais um bloco global fixo de 30 produtos.
+    // Agora o despacho é feito sob demanda para cada fonte para garantir precisão.
+    console.log(`${logPrefix} Iniciando análise de cruzamento para ${sources.length} fontes.`);
 
     let totalCreated = 0;
     let totalSkippedBilling = 0;
@@ -99,6 +88,21 @@ export const radarDispatcherService = {
         userConnectionsCache.set(source.user_id, connections);
       }
 
+      // ─── BUSCA DE CANDIDATOS PARA ESTA FONTE ──────────────────────────────
+      // Prioridade 1: Linkagem forte via [SRC:ID]
+      // Prioridade 2: Match textual por keyword
+      const { data: candidates } = await supabase
+        .from('products')
+        .select('*')
+        .or(`category.ilike.%[SRC:${source.id}]%,category.ilike.%${keyword}%`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (!candidates || candidates.length === 0) {
+        console.log(`${logPrefix} [NO-MATCH] Nenhum produto para "${keyword}" ou ID "${source.id}".`);
+        continue;
+      }
+
       for (const route of routes) {
         // A. Verificação de Profundidade de Fila (Pacing do Heartbeat)
         const { count: pendingJobs } = await supabase
@@ -111,14 +115,6 @@ export const radarDispatcherService = {
         if (pendingJobs && pendingJobs >= 2) {
           console.log(`${logPrefix} [RADAR QUEUE] Rota ${route.id} já possui ${pendingJobs} itens pendentes. Pulando.`);
           totalSkippedQueue++;
-          continue;
-        }
-
-        // B. Seleção de Candidato
-        const candidates = products.filter(p => p.category.toLowerCase().includes(keyword.toLowerCase()));
-        
-        if (candidates.length === 0) {
-          console.log(`${logPrefix} [NO-MATCH] Nenhum produto para keyword "${keyword}" na fonte "${source.name}".`);
           continue;
         }
 
