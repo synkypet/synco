@@ -71,7 +71,7 @@ export const radarDispatcherService = {
       // ─── BILLING ENFORCEMENT ───────────────────────────────────────────────
       let access = userAccessCache.get(source.user_id);
       if (!access) {
-        access = await resolveUserAccess(source.user_id);
+        access = await resolveUserAccess(source.user_id, supabase);
         userAccessCache.set(source.user_id, access);
       }
 
