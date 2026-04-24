@@ -96,6 +96,7 @@ export default function RadarOfertasPage() {
     const nextPage = isLoadMore ? garimpPage + 1 : 1;
     
     // Log para validação no front
+    console.log("FINAL SORT", shopeeSort);
     console.log("[RADAR-FRONT]", { sortType: shopeeSort, listType: shopeeList });
 
     try {
@@ -154,7 +155,7 @@ export default function RadarOfertasPage() {
     } finally {
       setIsGarimping(false);
     }
-  }, [garimpSearch, isGarimping, garimpPage, sortBy, queryClient, minPrice, maxPrice, minCommission]);
+  }, [garimpSearch, isGarimping, garimpPage, sortBy, queryClient, minPrice, maxPrice, minCommission, shopeeSort, shopeeList, shopeeLimit]);
 
   const handleAuditProduct = async (product: Product) => {
     try {
@@ -376,7 +377,10 @@ export default function RadarOfertasPage() {
                     <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20 ml-2">Ordenar</span>
                     <select 
                       value={shopeeSort} 
-                      onChange={(e) => setShopeeSort(Number(e.target.value))}
+                      onChange={(e) => {
+                        console.log("CHANGE SORT", e.target.value);
+                        setShopeeSort(Number(e.target.value));
+                      }}
                       className="w-full h-12 bg-deep-void border-none shadow-skeuo-pressed text-[10px] font-bold rounded-xl text-white/80 px-3 outline-none appearance-none"
                     >
                       <option value={SHOPEE_SORT_TYPE.RELEVANCE}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.RELEVANCE]}</option>
