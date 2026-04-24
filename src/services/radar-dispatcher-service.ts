@@ -90,14 +90,18 @@ export const radarDispatcherService = {
 
       // ─── BUSCA DE CANDIDATOS PARA ESTA FONTE (Nova Arquitetura) ─────────
       // Buscamos via tabela de vínculo radar_discovered_products com JOIN em products
+      // Importante: Consumimos apenas status 'pending'
       const { data: rdpRelations, error: candidateError } = await supabase
         .from('radar_discovered_products')
         .select(`
+          id,
           product_id,
           discovered_at,
+          stable_product_key,
           products (*)
         `)
         .eq('source_id', source.id)
+        .eq('status', 'pending')
         .gte('discovered_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()) // Janela de 48h
         .order('discovered_at', { ascending: false })
         .limit(30);
@@ -106,15 +110,18 @@ export const radarDispatcherService = {
         console.error(`${logPrefix} [ERROR-QUERY] Falha ao buscar vínculos para fonte ${source.id}:`, candidateError);
       }
 
-      // Achatar os produtos para manter compatibilidade com o resto do loop
       const candidates = (rdpRelations || [])
-        .map((rel: any) => rel.products)
+        .map((rel: any) => ({
+          ...rel.products,
+          rdp_id: rel.id,
+          stable_product_key: rel.stable_product_key
+        }))
         .filter(p => p !== null);
 
-      console.log(`${logPrefix} [QUERY-RELATION] Fonte: ${source.id} | Vínculos Recentes: ${candidates.length}`);
+      console.log(`${logPrefix} [QUERY-RELATION] Fonte: ${source.id} | Candidatos Pendentes: ${candidates.length}`);
 
       if (candidates.length === 0) {
-        console.log(`${logPrefix} [NO-MATCH] Nenhum produto recente vinculado à fonte "${source.name}".`);
+        console.log(`${logPrefix} [NO-MATCH] Nenhum produto 'pending' vinculado à fonte "${source.name}".`);
         continue;
       }
 
@@ -141,22 +148,16 @@ export const radarDispatcherService = {
           if (dispatchedForRoute) break; 
 
           // C. Deduplicação Atômica (Dedupe por Destino)
-          // Usamos uma identidade estável (shopId:itemId) para evitar duplicatas se o UUID mudar
-          let stableProductKey = product.id;
-          if (product.marketplace === 'Shopee') {
-            const shopeeMatch = product.original_url.match(/\/product\/(\d+)\/(\d+)/) || 
-                               product.original_url.match(/-i\.(\d+)\.(\d+)/);
-            if (shopeeMatch) {
-              stableProductKey = `shopee:${shopeeMatch[1]}:${shopeeMatch[2]}`;
-            }
-          }
-
-          const hashKey = this.generateHash(`radar_v3:${source.id}:${stableProductKey}:${route.id}`);
+          // Usamos a stable_product_key se disponível, caso contrário fallback para ID
+          const productKey = product.stable_product_key || product.id;
+          const hashKey = this.generateHash(`radar_v3:${source.id}:${productKey}:${route.id}`);
           const { error: dedupeError } = await supabase.from('automation_dedupe').insert({ hash_key: hashKey });
 
           if (dedupeError) {
             routeSkippedDedupe++;
             totalSkippedDedupe++;
+            // IMPORTANTE: Se está dedupado para esta rota, apenas continuamos.
+            // Não alteramos o status do vínculo RDP, pois ele pode ser útil para outras rotas.
             continue;
           }
 
@@ -176,6 +177,17 @@ export const radarDispatcherService = {
 
             if (!factual.eligibility.isEligible) {
               console.warn(`${logPrefix} [AUDIT-REJECT] Item ${product.id} rejeitado na auditoria real: ${factual.eligibility.reasons.join(', ')}`);
+              
+              // Se o link é definitivamente inválido, marcamos o vínculo como 'exhausted'
+              await supabase
+                .from('radar_discovered_products')
+                .update({ 
+                  status: 'exhausted', 
+                  skipped_reason: `Ineligible: ${factual.eligibility.reasons.join(', ')}`,
+                  attempts: 1
+                })
+                .eq('id', product.rdp_id);
+
               continue;
             }
 
@@ -199,6 +211,18 @@ export const radarDispatcherService = {
 
             await campaignService.create(source.user_id, campaignData, supabase);
             
+            // F. Marcar Vínculo como Despachado (Consumo)
+            await supabase
+              .from('radar_discovered_products')
+              .update({ 
+                status: 'dispatched', 
+                dispatched_at: new Date().toISOString(),
+                attempts: 1
+              })
+              .eq('id', product.rdp_id);
+
+            console.log(`${logPrefix} [MARKED-DISPATCHED] Vínculo ${product.rdp_id} consumido com sucesso.`);
+
             await automationService.logEvent({
               source_id: source.id,
               user_id: source.user_id,
@@ -216,13 +240,23 @@ export const radarDispatcherService = {
             dispatchedForRoute = true;
           } catch (err: any) {
             console.error(`${logPrefix} Falha ao despachar produto ${product.id}:`, err.message);
+            
+            // Marcar como skipped para evitar loop infinito de erro neste ciclo
+            await supabase
+              .from('radar_discovered_products')
+              .update({ 
+                status: 'skipped', 
+                skipped_reason: err.message,
+                attempts: 1
+              })
+              .eq('id', product.rdp_id);
           }
         }
 
         if (!dispatchedForRoute) {
           console.log(`${logPrefix} [NO-ELIGIBLE] Rota ${route.id} percorreu ${candidates.length} candidatos mas todos foram filtrados ou já enviados.`);
           if (routeSkippedDedupe === candidates.length) {
-            console.log(`${logPrefix} [NEEDS-RESTOCK] Fonte "${source.name}" esgotou candidatos para esta rota. Requer nova descoberta.`);
+            console.log(`${logPrefix} [NEEDS-RESTOCK] Fonte "${source.name}" esgotou candidatos 'pending' para esta rota.`);
           }
         }
       }

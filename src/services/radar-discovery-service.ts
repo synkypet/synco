@@ -162,7 +162,18 @@ export const radarDiscoveryService = {
         let taskSaved = 0;
         let taskExisting = 0;
         let taskLinked = 0;
+        let taskUpdated = 0;
+        let taskSkippedVisual = 0;
         let taskFailed = 0;
+
+        // 4.B Buscar vínculos pendentes existentes para dedupe visual em memória
+        const { data: existingLinks } = await supabase
+          .from('radar_discovered_products')
+          .select('title_fingerprint')
+          .eq('source_id', task.sourceId)
+          .eq('status', 'pending');
+        
+        const pendingFingerprints = new Set((existingLinks || []).map(l => l.title_fingerprint).filter(Boolean));
 
         for (const p of products) {
           const url = p.productLink || p.offerLink;
@@ -190,14 +201,40 @@ export const radarDiscoveryService = {
             p.commissionValueFactual || 0
           );
 
+          // 1. Calcular Identidade Estável e Fingerprint
+          const stableKey = (p.shopId && p.itemId) 
+            ? `shopee:${p.shopId}:${p.itemId}`
+            : (url && (url.match(/\/product\/(\d+)\/(\d+)/) || url.match(/-i\.(\d+)\.(\d+)/))) 
+              ? `shopee:${(url.match(/\/product\/(\d+)\/(\d+)/) || url.match(/-i\.(\d+)\.(\d+)/))![1]}:${(url.match(/\/product\/(\d+)\/(\d+)/) || url.match(/-i\.(\d+)\.(\d+)/))![2]}`
+              : null;
+
+          const fingerprint = p.name.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9 ]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .split(" ")
+            .filter(w => w.length > 2)
+            .filter((w, i, self) => self.indexOf(w) === i)
+            .slice(0, 5)
+            .join(":");
+
+          // 2. Dedupe Visual (Apenas para novos itens pendentes da mesma fonte)
+          if (fingerprint && pendingFingerprints.has(fingerprint)) {
+            console.log(`${logPrefix} [SKIP-VISUAL] Similaridade detectada: "${p.name.substring(0, 30)}..."`);
+            taskSkippedVisual++;
+            continue;
+          }
+
           capturedItemsMeta.push({
             name: p.name,
             url,
             price: p.currentPriceFactual,
-            score: finalScore
+            score: finalScore,
+            fingerprint
           });
 
-          // 1. Garantir que o produto existe no catálogo global (Upsert)
+          // 3. Garantir que o produto existe no catálogo global (Upsert)
           const product = await productService.upsertFromAutomation({
             name: p.name,
             marketplace: 'Shopee',
@@ -225,23 +262,42 @@ export const radarDiscoveryService = {
             existingUrls.add(url);
           }
 
-          // 2. Criar Vínculo (Discovery Relation)
+          // 4. Criar ou Atualizar Vínculo (Discovery Relation)
           if (task.sourceId) {
+            // Verificar se já existe vínculo para evitar resetar o status 'dispatched'
+            const { data: currentLink } = await supabase
+              .from('radar_discovered_products')
+              .select('id, status')
+              .eq('source_id', task.sourceId)
+              .eq('product_id', product.id)
+              .maybeSingle();
+
+            const rdpPayload: any = {
+              product_id: product.id,
+              source_id: task.sourceId,
+              user_id: task.userId,
+              discovered_at: new Date().toISOString(),
+              score: products.indexOf(p) + 1,
+              stable_product_key: stableKey || product.id,
+              title_fingerprint: fingerprint
+            };
+
+            // Regra: Só seta 'pending' se o vínculo for novo
+            if (!currentLink) {
+              rdpPayload.status = 'pending';
+            }
+
             const { error: rdpError } = await supabase
               .from('radar_discovered_products')
-              .upsert({
-                product_id: product.id,
-                source_id: task.sourceId,
-                user_id: task.userId,
-                discovered_at: new Date().toISOString(),
-                score: products.indexOf(p) + 1 // Posição no ranking da Shopee
-              }, { onConflict: 'product_id,source_id' });
+              .upsert(rdpPayload, { onConflict: 'product_id,source_id' });
 
             if (rdpError) {
               console.error(`${logPrefix} Erro ao vincular produto ${product.id} à fonte ${task.sourceId}:`, rdpError.message);
               taskFailed++;
             } else {
-              taskLinked++;
+              if (currentLink) taskUpdated++;
+              else taskLinked++;
+              if (fingerprint) pendingFingerprints.add(fingerprint);
             }
           }
 
@@ -249,10 +305,10 @@ export const radarDiscoveryService = {
         }
 
         // 5. Logar evento de finalização com relatório detalhado de itens
-        const finalStatus = taskLinked > 0 ? 'captured' : 'finished';
-        const finalMsg = taskLinked > 0 
-          ? `Radar Pro: ${taskLinked} ofertas vinculadas (Novas: ${taskSaved}, Existentes: ${taskExisting}) para "${task.keyword || 'Global'}".` 
-          : `Radar Pro: Busca finalizada para "${task.keyword || 'Global'}". ${products.length} analisados, nenhum novo vínculo criado.`;
+        const finalStatus = (taskLinked > 0 || taskUpdated > 0) ? 'captured' : 'finished';
+        const finalMsg = (taskLinked > 0 || taskUpdated > 0)
+          ? `Radar Pro: ${taskLinked + taskUpdated} ofertas vinculadas (Novas: ${taskLinked}, Atualizadas: ${taskUpdated}, Puladas Visual: ${taskSkippedVisual}) para "${task.keyword || 'Global'}".` 
+          : `Radar Pro: Busca finalizada para "${task.keyword || 'Global'}". ${products.length} analisados, nenhum novo vínculo relevante.`;
 
         await automationService.logEvent({
           source_id: task.sourceId || '',
@@ -265,6 +321,8 @@ export const radarDiscoveryService = {
             saved_to_catalog: taskSaved,
             existing_in_catalog: taskExisting,
             links_created: taskLinked,
+            links_updated: taskUpdated,
+            links_skipped_visual: taskSkippedVisual,
             failed: taskFailed,
             capturedItems: capturedItemsMeta,
             url: `Busca: ${task.keyword || 'Global'}`,
