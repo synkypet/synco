@@ -78,10 +78,7 @@ export const radarDiscoveryService = {
 
       if (existingCount && existingCount > 15 && !options.force) {
         console.log(`${logPrefix} [SKIP-BUFFER] Fonte "${s.name}" já possui ${existingCount} candidatos no banco.`);
-        // Atualiza o timestamp para não ficar tentando em todo ciclo de 1 min, mas um cooldown menor
-        await supabase.from('automation_sources').update({
-           config: { ...config, last_discovery_at: new Date().toISOString() }
-        }).eq('id', s.id);
+        // Não alteramos o config aqui para não interferir no fluxo de restock se ele estiver ativo
         continue;
       }
 
@@ -173,7 +170,7 @@ export const radarDiscoveryService = {
           await automationService.logEvent({
             source_id: task.sourceId,
             user_id: task.userId,
-            status: 'processing' as any,
+            status: 'processed',
             event_type: 'radar_discovery',
             details: { message: `Iniciando busca na Shopee por "${task.keyword || 'Global'}"...`, url: `Busca: ${task.keyword || 'Global'}` }
           }, supabase);
@@ -338,7 +335,7 @@ export const radarDiscoveryService = {
         }
 
         // 5. Logar evento de finalização com relatório detalhado de itens
-        const finalStatus = (taskLinked > 0 || taskUpdated > 0) ? 'captured' : 'finished';
+        const finalStatus = (taskLinked > 0) ? 'captured' : 'processed';
         const finalMsg = (taskLinked > 0 || taskUpdated > 0)
           ? `Radar Pro: ${taskLinked + taskUpdated} ofertas vinculadas (Novas: ${taskLinked}, Atualizadas: ${taskUpdated}, Puladas Visual: ${taskSkippedVisual}) para "${task.keyword || 'Global'}".` 
           : `Radar Pro: Busca finalizada para "${task.keyword || 'Global'}". ${products.length} analisados, nenhum novo vínculo relevante.`;
@@ -357,7 +354,7 @@ export const radarDiscoveryService = {
             links_updated: taskUpdated,
             links_skipped_visual: taskSkippedVisual,
             failed: taskFailed,
-            capturedItems: capturedItemsMeta,
+            capturedItems: capturedItemsMeta.slice(0, 10), // Limitar para evitar payload gigante (Erro 400)
             url: `Busca: ${task.keyword || 'Global'}`,
             message: finalMsg
           }
