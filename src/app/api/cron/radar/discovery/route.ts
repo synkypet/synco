@@ -13,9 +13,12 @@ export const dynamic = 'force-dynamic';
  * Busca ofertas baseadas em Filtros de Usuário (Radar Pro) + Descoberta Global.
  */
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (process.env.NODE_ENV === 'production' && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    // return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const cronSecret = request.headers.get('x-cron-secret');
+  const expectedSecret = process.env.CRON_SECRET;
+  
+  if (process.env.NODE_ENV === 'production' && expectedSecret && cronSecret !== expectedSecret) {
+    console.warn(`[RADAR-DISCOVERY-UNAUTHORIZED] Tentativa de acesso sem secret válido.`);
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const requestId = Math.random().toString(36).substring(7);

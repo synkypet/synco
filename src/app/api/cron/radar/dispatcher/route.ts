@@ -10,6 +10,14 @@ export const dynamic = 'force-dynamic';
  * Cruza produtos descobertos com as regras de automação dos usuários.
  */
 export async function GET(request: Request) {
+  const cronSecret = request.headers.get('x-cron-secret');
+  const expectedSecret = process.env.CRON_SECRET;
+  
+  if (process.env.NODE_ENV === 'production' && expectedSecret && cronSecret !== expectedSecret) {
+    console.warn(`[RADAR-DISPATCHER-UNAUTHORIZED] Tentativa de acesso sem secret válido.`);
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const requestId = Math.random().toString(36).substring(7);
   const logPrefix = `[RADAR-DISPATCHER] [${requestId}]`;
   

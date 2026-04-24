@@ -3,8 +3,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { triggerWorker } from '@/lib/worker/trigger';
-import { radarDiscoveryService } from '@/services/radar-discovery-service';
-import { radarDispatcherService } from '@/services/radar-dispatcher-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,19 +62,6 @@ export async function GET(request: Request) {
 
     if (recoveredCount > 0) {
       console.log(`[HEARTBEAT] [${requestId}] Recuperados ${recoveredCount} jobs estagnados.`);
-    }
-
-    // 3. Radar Pipeline Phase (Discovery & Dispatch)
-    // Acoplando o motor de Radar ao ciclo de vida do heartbeat principal.
-    try {
-      // Discovery (Ingestão): Seguro chamar a cada min devido ao cooldown interno de 60m no serviço.
-      await radarDiscoveryService.executeDiscovery(supabase);
-      
-      // Dispatcher (Distribuição): Abastece a fila se houver espaço (Queue-Aware).
-      await radarDispatcherService.executeDispatch(supabase, { requestId });
-    } catch (radarError) {
-      console.warn(`[HEARTBEAT] [${requestId}] Falha isolada no pipeline Radar:`, radarError);
-      // Não interrompemos o fluxo do heartbeat por erro no Radar.
     }
 
     // 4. Verificar se existem jobs pendentes
