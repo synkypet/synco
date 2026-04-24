@@ -534,11 +534,9 @@ export class ShopeeAdapter extends MarketplaceAdapter {
         page
       });
 
-      // AUDITORIA TRULY RAW (Primeiro item)
+      // Log resumido apenas do volume
       if (nodes.length > 0) {
-        console.log('--- [TRULY-RAW-NODE-0] ---');
-        console.log(JSON.stringify(nodes[0], null, 2));
-        console.log('---------------------------');
+        console.log(`[SHOPEE-DISCOVERY] Obtidos ${nodes.length} nós brutos da API.`);
       }
 
       return nodes
