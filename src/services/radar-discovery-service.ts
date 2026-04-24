@@ -22,12 +22,17 @@ export const radarDiscoveryService = {
 
     const connectionCache = new Map<string, any>();
 
-    // 1. Buscar Automações para processar
+    // 1. Buscar Automações para processar (Filtrando por locks expirados)
+    const nowIso = new Date().toISOString();
     let query = supabase
       .from('automation_sources')
-      .select('id, name, config, user_id')
+      .select(`
+        id, name, config, user_id, 
+        needs_restock, last_restock_at, discovery_page, discovery_locked_until
+      `)
       .eq('source_type', 'radar_offers')
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .or(`discovery_locked_until.is.null,discovery_locked_until.lt.${nowIso}`);
 
     if (options.sourceId) {
       query = query.eq('id', options.sourceId);
@@ -42,7 +47,7 @@ export const radarDiscoveryService = {
     console.log(`${logPrefix} Processando ${sources?.length || 0} fontes de Radar.`);
 
     // 3. Montar Tarefas
-    const tasks: { label: string; keyword?: string; sortType: number; listType: number; limit: number; sourceId?: string; userId: string; config: any }[] = [];
+    const tasks: { label: string; keyword?: string; sortType: number; listType: number; limit: number; page?: number; sourceId?: string; userId: string; config: any; needsRestock?: boolean }[] = [];
 
     const NOW = Date.now();
 
@@ -51,11 +56,15 @@ export const radarDiscoveryService = {
       const keyword = config.searchTerm || s.name;
       
       // A. Cooldown Check (Discovery Pacing)
-      const lastRun = config.last_discovery_at ? new Date(config.last_discovery_at).getTime() : 0;
+      const lastRun = s.last_restock_at ? new Date(s.last_restock_at).getTime() : 0;
       const cooldownMs = (config.cooldown_minutes || 60) * 60 * 1000;
+      const needsRestock = s.needs_restock === true;
       
-      if (NOW - lastRun < cooldownMs && !options.force) {
-        console.log(`${logPrefix} [SKIP-COOLDOWN] Fonte "${s.name}" ainda em cooldown.`);
+      // Modo Restock (10 min) vs Modo Periódico (60 min default)
+      const effectiveCooldown = needsRestock ? 10 * 60 * 1000 : cooldownMs;
+      
+      if (NOW - lastRun < effectiveCooldown && !options.force) {
+        console.log(`${logPrefix} [SKIP-COOLDOWN] Fonte "${s.name}" em cooldown (${needsRestock ? 'RESTOCK' : 'NORMAL'}).`);
         continue;
       }
 
@@ -76,15 +85,20 @@ export const radarDiscoveryService = {
         continue;
       }
 
+      // B. Determinar Página de Busca
+      const pageToFetch = s.discovery_page || 1;
+
       tasks.push({ 
-        label: `Radar Pro: ${s.name}`, 
+        label: `Radar Pro: ${s.name}${needsRestock ? ` [RESTOCK-P${pageToFetch}]` : ` [PERIODIC-P${pageToFetch}]`}`, 
         keyword, 
         sortType: config.sortType || 1,
         listType: config.listType || 0,
         limit: config.batchLimit || 20,
+        page: pageToFetch,
         sourceId: s.id,
         userId: s.user_id,
-        config
+        config,
+        needsRestock
       });
     }
 
@@ -105,7 +119,25 @@ export const radarDiscoveryService = {
     // 4. Executar tarefas
     for (const task of tasks) {
       try {
-        console.log(`${logPrefix} Iniciando: ${task.label}...`);
+        console.log(`${logPrefix} Processando: ${task.label}...`);
+
+        // 0. Adquirir Lock Atômico (Prevenção de concorrência)
+        if (task.sourceId) {
+          const { data: locked, error: lockError } = await supabase
+            .from('automation_sources')
+            .update({ 
+              discovery_locked_until: new Date(Date.now() + 5 * 60 * 1000).toISOString() 
+            })
+            .eq('id', task.sourceId)
+            .or(`discovery_locked_until.is.null,discovery_locked_until.lt.${new Date().toISOString()}`)
+            .select('id')
+            .maybeSingle();
+
+          if (lockError || !locked) {
+            console.log(`${logPrefix} [LOCKED] Falha ao adquirir lock para "${task.label}". Pulando.`);
+            continue;
+          }
+        }
 
         // A. Resolver e Validar Conexão por Usuário (Cacheada)
         let shopeeConnection = connectionCache.get(task.userId);
@@ -152,7 +184,8 @@ export const radarDiscoveryService = {
           sortType: task.sortType,
           listType: task.listType,
           keyword: task.keyword,
-          limit: task.limit, 
+          limit: task.limit,
+          page: task.page, 
           connection: shopeeConnection
         });
 
@@ -330,11 +363,36 @@ export const radarDiscoveryService = {
           }
         }, supabase);
 
-        // 6. Atualizar timestamp de última descoberta bem sucedida
+        // 6. Atualizar Estado Operacional e Liberar Lock
         if (task.sourceId) {
-          await supabase.from('automation_sources').update({
-            config: { ...task.config, last_discovery_at: new Date().toISOString() }
-          }).eq('id', task.sourceId);
+          const updatePayload: any = {
+            last_restock_at: new Date().toISOString(),
+            discovery_locked_until: null // Liberar lock
+          };
+          
+          if (taskLinked > 0) {
+            // Sucesso: Encontramos produtos novos
+            updatePayload.needs_restock = false;
+            updatePayload.restock_attempts = 0;
+            updatePayload.discovery_page = (task.page || 1) + 1;
+            updatePayload.discovery_exhausted_at = null;
+          } else if (taskFromShopee > 0) {
+            // Tentativa: Shopee trouxe produtos, mas todos eram duplicatas
+            updatePayload.discovery_page = (task.page || 1) + 1;
+            updatePayload.restock_attempts = (task.config.restock_attempts || 0) + 1;
+          } else {
+            // Exaustão: Shopee retornou 0 produtos (fim da paginação)
+            updatePayload.discovery_page = 1; // Resetar
+            updatePayload.discovery_exhausted_at = new Date().toISOString();
+            updatePayload.restock_attempts = (task.config.restock_attempts || 0) + 1;
+          }
+
+          // Guardrail de página
+          if (updatePayload.discovery_page && updatePayload.discovery_page > 10) {
+            updatePayload.discovery_page = 1;
+          }
+
+          await supabase.from('automation_sources').update(updatePayload).eq('id', task.sourceId);
         }
 
       } catch (err) {

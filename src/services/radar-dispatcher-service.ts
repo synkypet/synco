@@ -122,6 +122,21 @@ export const radarDispatcherService = {
 
       if (candidates.length === 0) {
         console.log(`${logPrefix} [NO-MATCH] Nenhum produto 'pending' vinculado à fonte "${source.name}".`);
+        
+        // Sinalizar necessidade de reposição (Restock) via colunas dedicadas
+        if (!source.needs_restock) {
+          await supabase
+            .from('automation_sources')
+            .update({ 
+              needs_restock: true, 
+              restock_requested_at: new Date().toISOString()
+            })
+            .eq('id', source.id);
+          console.log(`${logPrefix} [RESTOCK-REQUESTED] Reposição sinalizada para "${source.name}".`);
+        } else {
+          console.log(`${logPrefix} [AWAITING-RESTOCK] Fonte "${source.name}" já está aguardando reposição.`);
+        }
+        
         continue;
       }
 
