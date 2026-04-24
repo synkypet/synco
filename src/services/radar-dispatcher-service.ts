@@ -194,14 +194,25 @@ export const radarDispatcherService = {
             const campaignData = {
               name: `RADAR: ${factual.title.substring(0, 30)}...`,
               items: [{
+                product_id: product.id,
                 product_name: factual.title,
+                custom_text: snapshot.copy.messageText,
                 image_url: factual.image,
                 affiliate_url: factual.finalLinkToSend,
                 current_price: factual.price,
                 original_price: factual.originalPrice,
                 external_product_id: product.id,
-                eligibility_status: 'eligible' as any,
-                eligibility_reasons: []
+                
+                // Rastreabilidade e Auditoria (Consistência com Envio Rápido)
+                incoming_url: factual.incoming_url,
+                resolved_url: factual.resolved_url,
+                canonical_url: factual.canonical_url,
+                generated_affiliate_url: factual.generated_affiliate_url,
+                reaffiliation_status: factual.reaffiliation_status,
+                
+                eligibility_status: factual.eligibility.status as any,
+                eligibility_reasons: factual.eligibility.reasons,
+                installments: factual.installments
               }],
               destinations: [{
                 type: route.target_type,
