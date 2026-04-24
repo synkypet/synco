@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { ShopeeAdapter } from '@/lib/marketplaces/ShopeeAdapter';
 import { productService } from '@/services/supabase/product-service';
 import { automationService } from '@/services/supabase/automation-service';
+import { marketplaceService } from '@/services/supabase/marketplace-service';
 
 export interface DiscoveryResult {
   totalInserted: number;
@@ -19,39 +20,9 @@ export const radarDiscoveryService = {
     const adapter = new ShopeeAdapter();
     const logPrefix = `[RADAR-DISCOVERY]`;
 
-    // 1. Resolver Conexão Shopee (Garantindo que tenha as chaves de API)
-    const { data: connection } = await supabase
-      .from('user_marketplaces')
-      .select('*, marketplaces(name)')
-      .eq('is_active', true)
-      .not('shopee_app_id', 'is', null)
-      .limit(1)
-      .maybeSingle();
+    const connectionCache = new Map<string, any>();
 
-    if (!connection) {
-      console.warn(`${logPrefix} Nenhuma conexão Shopee válida encontrada.`);
-      
-      // Registrar no log operacional para o usuário ver
-      if (options.sourceId || options.userId) {
-        await automationService.logEvent({
-          source_id: options.sourceId || '',
-          user_id: options.userId || '',
-          status: 'error',
-          event_type: 'radar_discovery',
-          details: { message: 'Erro: Nenhuma conexão Shopee com Chaves de API (App ID) ativa foi encontrada.' }
-        }, supabase);
-      }
-      
-      return { totalInserted: 0, tasksExecuted: 0 };
-    }
-
-    const shopeeConnection = {
-      ...connection,
-      shopee_app_id: connection.shopee_app_id,
-      shopee_app_secret: (connection as any).shopee_app_secret || process.env.SHOPEE_APP_SECRET
-    };
-
-    // 2. Buscar Automações para processar
+    // 1. Buscar Automações para processar
     let query = supabase
       .from('automation_sources')
       .select('id, name, config, user_id')
@@ -117,10 +88,14 @@ export const radarDiscoveryService = {
       });
     }
 
-    // Se for um ciclo global (sem sourceId específico), adicionamos as tarefas de sistema
-    if (!options.sourceId) {
-      tasks.push({ label: 'System: Hot Products', sortType: 3, listType: 0, limit: 20, userId: connection.user_id, config: {} });
-      tasks.push({ label: 'System: Recommendations', sortType: 5, listType: 0, limit: 20, userId: connection.user_id, config: {} });
+    // Se for um ciclo global (sem sourceId específico), podemos adicionar tarefas de sistema
+    // No MVP, usamos o contexto do primeiro usuário que tiver uma conexão válida para alimentar o estoque global
+    if (!options.sourceId && tasks.length > 0) {
+      const firstValidUserId = tasks[0].userId;
+      tasks.push({ label: 'System: Hot Products', sortType: 3, listType: 0, limit: 20, userId: firstValidUserId, config: {} });
+      tasks.push({ label: 'System: Recommendations', sortType: 5, listType: 0, limit: 20, userId: firstValidUserId, config: {} });
+    } else if (!options.sourceId && tasks.length === 0) {
+      console.log(`${logPrefix} [SKIP-SYSTEM] Nenhuma automação ativa para herdar contexto de conexão.`);
     }
 
     let globalInserted = 0;
@@ -131,6 +106,35 @@ export const radarDiscoveryService = {
     for (const task of tasks) {
       try {
         console.log(`${logPrefix} Iniciando: ${task.label}...`);
+
+        // A. Resolver e Validar Conexão por Usuário (Cacheada)
+        let shopeeConnection = connectionCache.get(task.userId);
+        if (!shopeeConnection) {
+          const connections = await marketplaceService.getEnrichedConnections(task.userId, supabase);
+          const found = connections.find(c => c.marketplace_name === 'Shopee');
+          if (found) {
+            shopeeConnection = {
+              ...found,
+              shopee_app_id: found.shopee_app_id,
+              shopee_app_secret: found.shopee_app_secret // Vem descriptografado do serviço
+            };
+            connectionCache.set(task.userId, shopeeConnection);
+          }
+        }
+
+        if (!shopeeConnection?.shopee_app_id || !shopeeConnection?.shopee_app_secret) {
+          console.warn(`${logPrefix} [SKIP-CREDENTIALS] Usuário ${task.userId} não possui App ID ou Secret válido.`);
+          if (task.sourceId) {
+            await automationService.logEvent({
+              source_id: task.sourceId,
+              user_id: task.userId,
+              status: 'error',
+              event_type: 'radar_discovery',
+              details: { message: 'Erro: Credenciais Shopee (App ID/Secret) ausentes ou inválidas.' }
+            }, supabase);
+          }
+          continue;
+        }
         
         // Registrar início da busca para feedback imediato
         if (task.sourceId) {
@@ -149,7 +153,7 @@ export const radarDiscoveryService = {
           listType: task.listType,
           keyword: task.keyword,
           limit: task.limit, 
-          connection: shopeeConnection as any
+          connection: shopeeConnection
         });
 
         const capturedItemsMeta: any[] = [];
