@@ -88,27 +88,33 @@ export const radarDispatcherService = {
         userConnectionsCache.set(source.user_id, connections);
       }
 
-      // ─── BUSCA DE CANDIDATOS PARA ESTA FONTE ──────────────────────────────
-      // Prioridade 1: Linkagem forte via [SRC:ID]
-      // Prioridade 2: Match textual por keyword
-      const ilikeTag = `%[SRC:${source.id}]%`;
-      const ilikeKeyword = `%${keyword}%`;
-
-      const { data: candidates, error: candidateError } = await supabase
-        .from('products')
-        .select('*')
-        .or(`category.ilike.${ilikeTag},category.ilike.${ilikeKeyword}`)
-        .order('created_at', { ascending: false })
-        .limit(20);
+      // ─── BUSCA DE CANDIDATOS PARA ESTA FONTE (Nova Arquitetura) ─────────
+      // Buscamos via tabela de vínculo radar_discovered_products com JOIN em products
+      const { data: rdpRelations, error: candidateError } = await supabase
+        .from('radar_discovered_products')
+        .select(`
+          product_id,
+          discovered_at,
+          products (*)
+        `)
+        .eq('source_id', source.id)
+        .gte('discovered_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()) // Janela de 48h
+        .order('discovered_at', { ascending: false })
+        .limit(30);
 
       if (candidateError) {
-        console.error(`${logPrefix} [ERROR-QUERY] Falha ao buscar candidatos para fonte ${source.id}:`, candidateError);
+        console.error(`${logPrefix} [ERROR-QUERY] Falha ao buscar vínculos para fonte ${source.id}:`, candidateError);
       }
 
-      console.log(`${logPrefix} [QUERY-MATCH] Fonte: ${source.id} | Padroes: ${ilikeTag}, ${ilikeKeyword} | Encontrados: ${candidates?.length || 0}`);
+      // Achatar os produtos para manter compatibilidade com o resto do loop
+      const candidates = (rdpRelations || [])
+        .map((rel: any) => rel.products)
+        .filter(p => p !== null);
 
-      if (!candidates || candidates.length === 0) {
-        console.log(`${logPrefix} [NO-MATCH] Nenhum produto para "${keyword}" ou ID "${source.id}".`);
+      console.log(`${logPrefix} [QUERY-RELATION] Fonte: ${source.id} | Vínculos Recentes: ${candidates.length}`);
+
+      if (candidates.length === 0) {
+        console.log(`${logPrefix} [NO-MATCH] Nenhum produto recente vinculado à fonte "${source.name}".`);
         continue;
       }
 

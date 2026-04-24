@@ -91,24 +91,45 @@ export const productService = {
     return Math.min(100, Math.round(rawScore));
   },
 
-  async insertFromAutomation(productData: Partial<Product>, client?: any): Promise<Product | null> {
+  /**
+   * Insere ou atualiza um produto vindo de automação.
+   * Diferente do insert normal, este garante que retornamos o produto mesmo que ele já exista.
+   */
+  async upsertFromAutomation(productData: Partial<Product>, client?: any): Promise<Product | null> {
     const supabase = client || createClient();
     
-    // 1. Deduplicação Layer 1: URL Original
-    if (productData.original_url) {
-      const { data: existing } = await supabase
+    if (!productData.original_url) return null;
+
+    // 1. Verificar se já existe por URL
+    const { data: existing } = await supabase
+      .from('products')
+      .select('*')
+      .eq('original_url', productData.original_url)
+      .maybeSingle();
+
+    if (existing) {
+      // Opcional: Atualizar preço/comissão se mudou
+      const { data: updated } = await supabase
         .from('products')
-        .select('id')
-        .eq('original_url', productData.original_url)
-        .maybeSingle();
+        .update({
+          current_price: productData.current_price,
+          commission_value: productData.commission_value,
+          commission_percent: productData.commission_percent,
+          opportunity_score: productData.opportunity_score,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
       
-      if (existing) return null;
+      return updated as Product;
     }
 
-    const { data, error } = await supabase
+    // 2. Inserir novo
+    const { data: inserted, error } = await supabase
       .from('products')
       .insert([productData])
-      .select('id')
+      .select()
       .single();
 
     if (error) {
@@ -116,7 +137,7 @@ export const productService = {
       return null;
     }
 
-    return data as Product;
+    return inserted as Product;
   },
 
   async getById(id: string): Promise<Product | null> {

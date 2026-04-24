@@ -189,7 +189,10 @@ export const radarDiscoveryService = {
             )
           });
 
-          if (!url || existingUrls.has(url)) continue;
+          if (!url || existingUrls.has(url)) {
+            // Se já existe no ciclo atual, pulamos o processamento pesado
+            if (existingUrls.has(url)) continue;
+          }
 
           const finalScore = productService.calculateOpportunityScore(
             p.currentPriceFactual || 0,
@@ -197,36 +200,45 @@ export const radarDiscoveryService = {
             p.commissionValueFactual || 0
           );
 
-          const finalCategory = task.sourceId 
-            ? `[RADAR] [SRC:${task.sourceId}] ${task.keyword}` 
-            : `[RADAR] [SYSTEM] ${p.category || 'Global'}`;
+          // 1. Garantir que o produto existe no catálogo global
+          const product = await productService.upsertFromAutomation({
+            name: p.name,
+            marketplace: 'Shopee',
+            category: p.category || (task.keyword ? task.keyword : 'Geral'),
+            current_price: p.currentPriceFactual,
+            original_price: p.originalPrice,
+            discount_percent: p.discountPercent,
+            commission_percent: (p.commissionRate || 0) * 100,
+            commission_value: p.commissionValueFactual,
+            image_url: p.imageUrl,
+            original_url: url,
+            opportunity_score: finalScore
+          }, supabase);
 
+          if (!product) continue;
+
+          // 2. Criar Vínculo (Discovery Relation)
           if (task.sourceId) {
-            console.log(`${logPrefix} [DEBUG-INSERT] Source: ${task.sourceId} | Category: ${finalCategory}`);
+            const { error: rdpError } = await supabase
+              .from('radar_discovered_products')
+              .upsert({
+                product_id: product.id,
+                source_id: task.sourceId,
+                user_id: task.userId,
+                discovered_at: new Date().toISOString(),
+                score: products.indexOf(p) + 1 // Posição no ranking da Shopee
+              }, { onConflict: 'product_id,source_id' });
+
+            if (rdpError) {
+              console.error(`${logPrefix} Erro ao vincular produto ${product.id} à fonte ${task.sourceId}:`, rdpError.message);
+            } else {
+              console.log(`${logPrefix} [LINKED] Produto ${product.id} vinculado à fonte ${task.sourceId}.`);
+            }
           }
 
-          const { error: insError } = await supabase
-            .from('products')
-            .insert({
-              name: p.name,
-              marketplace: 'Shopee',
-              // Linkagem forte: [RADAR] [SRC:ID] Keyword
-              category: finalCategory,
-              current_price: p.currentPriceFactual,
-              original_price: p.originalPrice,
-              discount_percent: p.discountPercent,
-              commission_percent: (p.commissionRate || 0) * 100,
-              commission_value: p.commissionValueFactual,
-              image_url: p.imageUrl,
-              original_url: url,
-              opportunity_score: finalScore
-            });
-
-          if (!insError) {
-            taskInserted++;
-            globalInserted++;
-            existingUrls.add(url);
-          }
+          taskInserted++;
+          globalInserted++;
+          existingUrls.add(url);
         }
 
         // 5. Logar evento de finalização com relatório detalhado de itens

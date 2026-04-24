@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       const productLink = node.productLink || `https://shopee.com.br/product/${node.shopId}/${node.itemId}`;
       
       try {
-        const inserted = await productService.insertFromAutomation({
+        const inserted = await productService.upsertFromAutomation({
           name: `[TOP SHOPEE] ${node.productName}`,
           marketplace: 'Shopee',
           original_url: productLink,

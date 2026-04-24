@@ -229,7 +229,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
 
             const opportunityScore = Math.min(100, Math.round((discountPercent * 0.4) + (commissionRate * 100 * 0.6)));
 
-            const insertedProduct = await productService.insertFromAutomation({
+            const insertedProduct = await productService.upsertFromAutomation({
               name: snapshot.factual.title,
               marketplace: snapshot.factual.marketplace || 'Shopee',
               original_url: snapshot.factual.originalUrl || rawUrl,

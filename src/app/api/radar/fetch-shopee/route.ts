@@ -201,7 +201,7 @@ export async function POST(request: Request) {
     const persistencePromises = productsToPersist.map(async (productData) => {
       try {
         const { id, metadata, brazil_friendly, ...dbPayload } = productData;
-        const persisted = await productService.insertFromAutomation(dbPayload, supabaseAdmin);
+        const persisted = await productService.upsertFromAutomation(dbPayload, supabaseAdmin);
         if (persisted && persisted.id) {
           productData.id = persisted.id;
           persistedCount++;
