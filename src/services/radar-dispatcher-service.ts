@@ -134,36 +134,38 @@ export const radarDispatcherService = {
         }
 
         let dispatchedForRoute = false;
-        let candidatesAnalyzed = 0;
+        let routeSkippedDedupe = 0;
+        let routeSkippedFilter = 0;
 
         for (const product of candidates) {
           if (dispatchedForRoute) break; 
-          candidatesAnalyzed++;
 
-          // C. Deduplicação Atômica
+          // C. Deduplicação Atômica (Dedupe por Destino)
           const hashKey = this.generateHash(`radar_v2:${source.id}:${product.id}:${route.id}`);
           const { error: dedupeError } = await supabase.from('automation_dedupe').insert({ hash_key: hashKey });
 
           if (dedupeError) {
+            routeSkippedDedupe++;
             totalSkippedDedupe++;
             continue;
           }
 
           // D. Filtragem
           if (!this.applyRadarFilters(product, route.filters)) {
+            routeSkippedFilter++;
             totalSkippedFilter++;
             continue;
           }
 
           // E. Geração de Campanha
           try {
-            console.log(`${logPrefix} [RADAR DISPATCH] Abastecendo rota ${route.id} com produto ${product.id} ("${product.name.substring(0,20)}...").`);
+            console.log(`${logPrefix} [RADAR-SELECT] Rota ${route.id} escolheu produto ${product.id} após analisar ${routeSkippedDedupe + routeSkippedFilter + 1} candidatos.`);
             
             const [snapshot] = await processLinks([product.original_url], connections || [], 'auto');
             const factual = snapshot.factual;
 
             if (!factual.eligibility.isEligible) {
-              console.warn(`${logPrefix} [AUDIT-REJECT] Item ${product.id} rejeitado: ${factual.eligibility.reasons.join(', ')}`);
+              console.warn(`${logPrefix} [AUDIT-REJECT] Item ${product.id} rejeitado na auditoria real: ${factual.eligibility.reasons.join(', ')}`);
               continue;
             }
 
@@ -204,6 +206,13 @@ export const radarDispatcherService = {
             dispatchedForRoute = true;
           } catch (err: any) {
             console.error(`${logPrefix} Falha ao despachar produto ${product.id}:`, err.message);
+          }
+        }
+
+        if (!dispatchedForRoute) {
+          console.log(`${logPrefix} [NO-ELIGIBLE] Rota ${route.id} percorreu ${candidates.length} candidatos mas todos foram filtrados ou já enviados.`);
+          if (routeSkippedDedupe === candidates.length) {
+            console.log(`${logPrefix} [NEEDS-RESTOCK] Fonte "${source.name}" esgotou candidatos para esta rota. Requer nova descoberta.`);
           }
         }
       }

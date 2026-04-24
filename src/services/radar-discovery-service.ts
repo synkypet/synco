@@ -157,12 +157,17 @@ export const radarDiscoveryService = {
         });
 
         const capturedItemsMeta: any[] = [];
+        // Contadores de tarefa
+        let taskFromShopee = products.length;
+        let taskSaved = 0;
+        let taskExisting = 0;
+        let taskLinked = 0;
+        let taskFailed = 0;
 
         for (const p of products) {
           const url = p.productLink || p.offerLink;
           
           // Etapa 3: Guardrail de Completude
-          // Não processar produtos com dados obrigatórios ausentes ou comissão inválida
           const hasRequiredFields = 
             p.name && 
             p.imageUrl && 
@@ -175,23 +180,8 @@ export const radarDiscoveryService = {
 
           if (!hasRequiredFields) {
             console.warn(`${logPrefix} Produto descartado por completude insuficiente: ${p.name || 'Sem nome'}`);
+            taskFailed++;
             continue;
-          }
-
-          capturedItemsMeta.push({
-            name: p.name,
-            url,
-            price: p.currentPriceFactual,
-            score: productService.calculateOpportunityScore(
-              p.currentPriceFactual || 0,
-              p.originalPrice || null,
-              p.commissionValueFactual || 0
-            )
-          });
-
-          if (!url || existingUrls.has(url)) {
-            // Se já existe no ciclo atual, pulamos o processamento pesado
-            if (existingUrls.has(url)) continue;
           }
 
           const finalScore = productService.calculateOpportunityScore(
@@ -200,7 +190,14 @@ export const radarDiscoveryService = {
             p.commissionValueFactual || 0
           );
 
-          // 1. Garantir que o produto existe no catálogo global
+          capturedItemsMeta.push({
+            name: p.name,
+            url,
+            price: p.currentPriceFactual,
+            score: finalScore
+          });
+
+          // 1. Garantir que o produto existe no catálogo global (Upsert)
           const product = await productService.upsertFromAutomation({
             name: p.name,
             marketplace: 'Shopee',
@@ -215,7 +212,18 @@ export const radarDiscoveryService = {
             opportunity_score: finalScore
           }, supabase);
 
-          if (!product) continue;
+          if (!product) {
+            taskFailed++;
+            continue;
+          }
+
+          // Incrementar contadores de catálogo
+          if (existingUrls.has(url)) {
+            taskExisting++;
+          } else {
+            taskSaved++;
+            existingUrls.add(url);
+          }
 
           // 2. Criar Vínculo (Discovery Relation)
           if (task.sourceId) {
@@ -231,21 +239,20 @@ export const radarDiscoveryService = {
 
             if (rdpError) {
               console.error(`${logPrefix} Erro ao vincular produto ${product.id} à fonte ${task.sourceId}:`, rdpError.message);
+              taskFailed++;
             } else {
-              console.log(`${logPrefix} [LINKED] Produto ${product.id} vinculado à fonte ${task.sourceId}.`);
+              taskLinked++;
             }
           }
 
-          taskInserted++;
           globalInserted++;
-          existingUrls.add(url);
         }
 
         // 5. Logar evento de finalização com relatório detalhado de itens
-        const finalStatus = taskInserted > 0 ? 'captured' : 'finished';
-        const finalMsg = taskInserted > 0 
-          ? `Radar Pro: ${taskInserted} novas ofertas exclusivas injetadas para "${task.keyword || 'Global'}".` 
-          : `Radar Pro: Busca finalizada para "${task.keyword || 'Global'}". ${products.length} itens analisados, mas todos já constavam no seu Radar.`;
+        const finalStatus = taskLinked > 0 ? 'captured' : 'finished';
+        const finalMsg = taskLinked > 0 
+          ? `Radar Pro: ${taskLinked} ofertas vinculadas (Novas: ${taskSaved}, Existentes: ${taskExisting}) para "${task.keyword || 'Global'}".` 
+          : `Radar Pro: Busca finalizada para "${task.keyword || 'Global'}". ${products.length} analisados, nenhum novo vínculo criado.`;
 
         await automationService.logEvent({
           source_id: task.sourceId || '',
@@ -254,8 +261,11 @@ export const radarDiscoveryService = {
           event_type: 'radar_discovery',
           details: {
             keyword: task.keyword,
-            found: products.length,
-            inserted: taskInserted,
+            found: taskFromShopee,
+            saved_to_catalog: taskSaved,
+            existing_in_catalog: taskExisting,
+            links_created: taskLinked,
+            failed: taskFailed,
             capturedItems: capturedItemsMeta,
             url: `Busca: ${task.keyword || 'Global'}`,
             message: finalMsg
