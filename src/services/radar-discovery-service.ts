@@ -73,9 +73,18 @@ export const radarDiscoveryService = {
         sortType = 1; cooldownMinutes = 60;
       }
 
-      // B. Cooldown Check
+      // B. Ciclo Start & Cooldown Check
+      console.log(`${logPrefix} [RADAR-CYCLE-START]`, {
+        source_id: s.id,
+        needs_restock: s.needs_restock,
+        last_restock_at: s.last_restock_at,
+        discovery_page: s.discovery_page
+      });
+
       const lastRun = s.last_restock_at ? new Date(s.last_restock_at).getTime() : 0;
-      const cooldownMs = (s.needs_restock ? 10 : cooldownMinutes) * 60 * 1000;
+      // Se needs_restock estiver ativo, ignoramos o cooldown normal (threshold de 1min para segurança)
+      const effectiveCooldownMin = s.needs_restock ? 1 : cooldownMinutes;
+      const cooldownMs = effectiveCooldownMin * 60 * 1000;
       
       if (NOW - lastRun < cooldownMs && !options.force) {
         continue;
@@ -121,8 +130,8 @@ export const radarDiscoveryService = {
 
         // 5. Preparar Filtros e Anti-Fadiga
         const firstRouteFilters = s.automation_routes?.[0]?.filters || {};
-        // TEST HYPOTHESIS: Redução temporária para 20 para diagnóstico em produção
-        const minScoreRequired = firstRouteFilters.min_score || 20; 
+        // Ajuste permanente conforme solicitação: Base 15 para Shopee Radar
+        const minScoreRequired = firstRouteFilters.min_score || 15; 
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
         // Contadores do Funil Consolidado
@@ -169,6 +178,12 @@ export const radarDiscoveryService = {
 
             funnelTotalFetched += rawProducts.length;
 
+            console.log('[PRE-FILTER]', { 
+              total_bruto: rawProducts.length, 
+              source_id: s.id,
+              keyword: kw.term
+            });
+
             // Pipeline por Item (Trace Mode Ativado)
             for (const p of rawProducts) {
               const url = p.productLink || p.offerLink;
@@ -190,7 +205,13 @@ export const radarDiscoveryService = {
                 .maybeSingle();
 
               if (recent) {
-                kwDeduped++; continue;
+                console.log('[DEDUPE-DETAIL]', { 
+                  stable_key: stableKey, 
+                  source_id: s.id,
+                  existing_id: recent?.id 
+                });
+                kwDeduped++; 
+                continue; 
               }
 
               // Scoring
@@ -201,6 +222,12 @@ export const radarDiscoveryService = {
               });
 
               if (finalScore < minScoreRequired) {
+                console.log('[SCORE-DETAIL]', { 
+                  score: finalScore, 
+                  threshold: minScoreRequired, 
+                  item_id: p.itemId,
+                  reason: scoreReason
+                });
                 kwScoreSkipped++;
                 continue;
               }
