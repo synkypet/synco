@@ -205,7 +205,7 @@ export const radarDiscoveryService = {
                 continue;
               }
 
-              // Ingestão
+              // Ingestão (Base de Produtos)
               const product = await productService.upsertFromAutomation({
                 name: p.name,
                 marketplace: 'Shopee',
@@ -220,9 +220,24 @@ export const radarDiscoveryService = {
                 opportunity_score: finalScore
               }, supabase);
 
-              if (!product) continue;
+              if (!product || !product.id) {
+                console.error(`${logPrefix} [RADAR-FATAL] product.id é null/undefined para item:`, {
+                  shopee_item_id: p.itemId,
+                  shopee_shop_id: p.shopId,
+                  product_name: p.name?.slice(0, 50)
+                });
+                continue;
+              }
 
-              const { data: inserted } = await supabase
+              // LOG DE DIAGNÓSTICO DE INTEGRIDADE
+              console.log(`${logPrefix} [RADAR-PRODUCT-DEBUG]`, {
+                product_id: product.id,
+                product_type: typeof product.id,
+                has_product: !!product
+              });
+
+              // Vínculo Operacional (Radar Discovered)
+              const { data: inserted, error: insertedError } = await supabase
                 .from('radar_discovered_products')
                 .upsert({
                   product_id: product.id,
@@ -236,6 +251,10 @@ export const radarDiscoveryService = {
                 }, { onConflict: 'product_id,source_id', ignoreDuplicates: true })
                 .select('id')
                 .maybeSingle();
+
+              if (insertedError) {
+                console.error(`${logPrefix} [RADAR-INSERT-ERROR] Erro ao inserir em radar_discovered_products:`, insertedError);
+              }
 
               if (inserted) {
                 funnelTotalNew++;
