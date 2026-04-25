@@ -121,13 +121,15 @@ export const radarDiscoveryService = {
 
         // 5. Preparar Filtros e Anti-Fadiga
         const firstRouteFilters = s.automation_routes?.[0]?.filters || {};
-        const minScoreRequired = firstRouteFilters.min_score || 40;
+        // TEST HYPOTHESIS: Redução temporária para 20 para diagnóstico em produção
+        const minScoreRequired = firstRouteFilters.min_score || 20; 
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
         // Contadores do Funil Consolidado
         let funnelTotalBudget = totalBudget;
         let funnelTotalNew = 0;
         let funnelCacheHits = 0;
+        let funnelTotalFetched = 0; // Rastreio real para avanço de página
 
         // Log do estado do cache antes do loop
         console.log(`${logPrefix} [RADAR-CACHE] size: ${radarCacheService.getSize()} entries`);
@@ -162,11 +164,18 @@ export const radarDiscoveryService = {
 
             let kwNewLinks = 0;
             let kwDeduped = 0;
+            let kwScoreSkipped = 0;
+            let kwValidationSkipped = 0;
 
-            // Pipeline por Item
+            funnelTotalFetched += rawProducts.length;
+
+            // Pipeline por Item (Trace Mode Ativado)
             for (const p of rawProducts) {
               const url = p.productLink || p.offerLink;
-              if (!p.name || !p.imageUrl || !p.currentPriceFactual || p.currentPriceFactual <= 0 || !p.commissionRate) continue;
+              if (!p.name || !p.imageUrl || !p.currentPriceFactual || p.currentPriceFactual <= 0 || !p.commissionRate) {
+                kwValidationSkipped++;
+                continue;
+              }
 
               const stableKey = (p.shopId && p.itemId) ? `shopee:${p.shopId}:${p.itemId}` : null;
               if (!stableKey) continue;
@@ -191,7 +200,10 @@ export const radarDiscoveryService = {
                 sales: p.sales || 0
               });
 
-              if (finalScore < minScoreRequired) continue;
+              if (finalScore < minScoreRequired) {
+                kwScoreSkipped++;
+                continue;
+              }
 
               // Ingestão
               const product = await productService.upsertFromAutomation({
@@ -233,8 +245,8 @@ export const radarDiscoveryService = {
               }
             }
 
-            // LOG POR KEYWORD
-            console.log(`${logPrefix} [RADAR-KEYWORD] ${kw.term} → budget:${budget} fetched:${rawProducts.length} new_links:${kwNewLinks} deduped:${kwDeduped}`);
+            // LOG POR KEYWORD (TRACE MODE)
+            console.log(`${logPrefix} [RADAR-TRACE] ${kw.term} | fetch:${rawProducts.length} | val_skip:${kwValidationSkipped} | dedupe_skip:${kwDeduped} | score_skip:${kwScoreSkipped} | ok:${kwNewLinks}`);
           } catch (kwErr: any) {
             console.error(`${logPrefix} [RADAR-FAIL] Erro na keyword "${kw.term}":`, kwErr.message);
             // Continua para a próxima keyword
@@ -251,7 +263,7 @@ export const radarDiscoveryService = {
             config: { ...config, keywords },
             last_restock_at: new Date().toISOString(),
             discovery_locked_until: null,
-            discovery_page: funnelTotalNew > 0 ? (s.discovery_page || 1) + 1 : (s.discovery_page || 1),
+            discovery_page: funnelTotalFetched > 0 ? (s.discovery_page || 1) + 1 : (s.discovery_page || 1),
             needs_restock: funnelTotalNew > 0 ? false : s.needs_restock
           })
           .eq('id', s.id);
