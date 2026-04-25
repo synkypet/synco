@@ -92,6 +92,50 @@ export const productService = {
   },
 
   /**
+   * Calcula o Score de Qualidade (0-100) para o Radar Pro.
+   * Baseado em Comissão, Desconto e Vendas Normalizadas (Logarítmica).
+   */
+  calculateQualityScore(options: { 
+    commissionRate: number; 
+    discountPercent: number; 
+    sales: number 
+  }): { score: number; reason: string } {
+    const { commissionRate = 0, discountPercent = 0, sales = 0 } = options;
+
+    // 1. Normalização de Variáveis (0.0 - 1.0)
+    // 1. Normalização de Comissão (Foco em 20% como teto de excelência)
+    const commissionNorm = Math.min(1, commissionRate / 0.20);
+    
+    // 2. Normalização de Desconto (Escala 0-1)
+    const discountNorm = Math.min(1, discountPercent / 100);
+    
+    // 3. Normalização de Vendas (Logarítmica para evitar que volume domine margem)
+    const salesNorm = Math.min(1, Math.log10(sales + 1) / 4);
+    
+    // 4. Cálculo do Score Final com novos pesos (Comissão: 50%, Desconto: 20%, Vendas: 30%)
+    const score = ((commissionNorm * 0.5) + (discountNorm * 0.2) + (salesNorm * 0.3)) * 100;
+    
+    // 5. Geração do Reason (Explicabilidade Operacional)
+    let reason = '';
+    if (commissionRate >= 0.15) {
+      reason = 'Alta comissão';
+    } else if (sales >= 500 && commissionRate >= 0.08) {
+      reason = 'Best-seller com boa margem';
+    } else if (discountPercent >= 40) {
+      reason = 'Super desconto';
+    } else if (sales >= 1000) {
+      reason = 'Popularidade extrema';
+    } else {
+      reason = 'Equilíbrio custo-benefício';
+    }
+
+    return {
+      score: Math.round(score),
+      reason
+    };
+  },
+
+  /**
    * Insere ou atualiza um produto vindo de automação.
    * Diferente do insert normal, este garante que retornamos o produto mesmo que ele já exista.
    */

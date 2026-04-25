@@ -23,7 +23,9 @@ import { TemplateBlock } from '@/components/automation/TemplateBlock';
 import { DestinationBlock } from '@/components/automation/DestinationBlock';
 import { DeliveryBanner } from '@/components/automation/DeliveryBanner';
 import { LogFeed } from '@/components/automation/LogFeed';
-import { AutomationCampaignSection } from '@/components/automation/AutomationCampaignSection';
+import { AutomationStatusHeader } from '@/components/automation/AutomationStatusHeader';
+import { ActiveFilterHUD } from '@/components/automation/ActiveFilterHUD';
+import { AutomationAuditTrail } from '@/components/automation/AutomationAuditTrail';
 
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Save, Zap, Trash2 } from 'lucide-react';
@@ -166,65 +168,14 @@ export default function AutomationDetailPage() {
   });
 
   return (
-    <div className="max-w-6xl mx-auto space-y-12 pb-32 animate-in fade-in duration-1000">
-      {/* 0. Top Bar (Row 0) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" className="p-0 h-10 w-10 rounded-2xl hover:bg-white/5 border border-white/5" onClick={() => router.push('/automacoes')}>
-            <ArrowLeft size={18} className="text-white/40" />
-          </Button>
-          <div>
-            <h2 className="text-2xl font-black italic text-white/90 uppercase tracking-tight flex items-center gap-2">
-              {source.name}
-              <Zap size={16} className="text-kinetic-orange" />
-            </h2>
-            <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Ambiente de Gerenciamento de Pipeline</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                className="h-12 w-12 rounded-2xl hover:bg-red-500/10 hover:text-red-500 border border-white/5 transition-all"
-              >
-                <Trash2 size={18} className="opacity-40" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-anthracite-surface border-white/5 shadow-skeuo-elevated max-w-sm">
-              <DialogHeader>
-                <DialogTitle className="uppercase tracking-[0.2em] font-black text-xs text-white/80 mb-2">Confirmar Exclusão</DialogTitle>
-                <p className="text-zinc-500 text-[11px] font-medium leading-relaxed">
-                  Esta ação é irreversível. Todas as regras, rotas e logs desta esteira operacional serão removidos permanentemente.
-                </p>
-              </DialogHeader>
-              <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-4">
-                <Button variant="ghost" onClick={() => setIsDeleteOpen(false)} className="flex-1 rounded-xl h-12 uppercase text-[10px] font-black tracking-widest">
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleDeleteSource}
-                  disabled={deleteSource.isPending}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl h-12 uppercase text-[10px] font-black tracking-widest shadow-glow-orange-intense shadow-red-500/20"
-                >
-                  {deleteSource.isPending ? <Loader2 className="animate-spin" /> : 'Excluir Agora'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+    <div className="max-w-6xl mx-auto space-y-10 pb-32 animate-in fade-in duration-1000">
+      {/* 0. Status & Strategic Header */}
+      <AutomationStatusHeader 
+        source={source} 
+        onBack={() => router.push('/automacoes')} 
+      />
 
-          <Button 
-            onClick={handleSavePipeline}
-            disabled={isSaving}
-            className="gap-2 bg-kinetic-orange hover:bg-kinetic-orange/80 shadow-glow-orange font-black uppercase tracking-[0.2em] text-[10px] h-12 px-8 rounded-2xl transition-all disabled:opacity-50"
-          >
-            {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-            {isSaving ? 'Salvando...' : 'Salvar Esteira'}
-          </Button>
-        </div>
-      </div>
-
-      {/* Row 1: ENTRADA + DESTINOS (Layout Operacional) */}
+      {/* Row 1: MOTOR (Discovery) + DESTINOS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <OriginBlock
           source={source}
@@ -239,32 +190,51 @@ export default function AutomationDetailPage() {
         />
       </div>
 
-      {/* Row 2: CURADORIA (Largura Total) */}
+      {/* Row 2: HUD DE FILTROS (Transparência) */}
       <div className="animate-in slide-in-from-bottom-4 duration-500 delay-100">
-        <InboundRuleManager
-          filters={filters}
-          onUpdate={setFilters}
+        <ActiveFilterHUD 
+          filters={filters} 
+          config={source.config} 
         />
       </div>
 
-      {/* Row 3: TEMPLATE (Largura Total) */}
+      {/* Row 3: AUDIT TRAIL (Histórico de Envios) */}
       <div className="animate-in slide-in-from-bottom-4 duration-500 delay-200">
-        <TemplateBlock
-          template={template}
-          onUpdate={setTemplate}
+        <AutomationAuditTrail 
+          campaigns={recentCampaigns || []} 
+          isLoading={loadingRecent} 
         />
       </div>
 
-      {/* Row 4: RECENT CAMPAIGNS */}
-      <AutomationCampaignSection 
-        campaigns={recentCampaigns || []} 
-        isLoading={loadingRecent} 
-      />
+      {/* Row 4: CONFIGURAÇÕES DE ENTREGA (Colapsável/Secundário) */}
+      <div className="pt-10 border-t border-white/5 space-y-8 opacity-60 hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-between">
+          <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Configurações Avançadas de Esteira</h4>
+          <Button 
+            variant="ghost" 
+            onClick={handleSavePipeline}
+            disabled={isSaving}
+            className="h-8 text-[9px] font-black uppercase tracking-widest text-kinetic-orange hover:bg-kinetic-orange/10"
+          >
+            {isSaving ? 'Salvando...' : 'Aplicar Alterações Manuais'}
+          </Button>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <InboundRuleManager
+            filters={filters}
+            onUpdate={setFilters}
+          />
+          <TemplateBlock
+            template={template}
+            onUpdate={setTemplate}
+          />
+        </div>
+      </div>
 
-      {/* Row 5: LOGS (Largura Total) */}
-      <div className="animate-in slide-in-from-bottom-4 duration-500 delay-300 space-y-8">
-        <LogFeed logs={logs || []} title="5. Histórico e Atividade Operacional" />
-        {/* Row 5: BANNER */}
+      {/* Footer Audit Logs */}
+      <div className="space-y-8 opacity-40">
+        <LogFeed logs={logs || []} title="Atividade Técnica do Sistema" />
         <DeliveryBanner />
       </div>
 

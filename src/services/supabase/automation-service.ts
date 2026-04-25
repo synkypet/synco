@@ -375,7 +375,10 @@ export const automationService = {
       .from('campaigns')
       .select(`
         *,
-        items:campaign_items(*),
+        items:campaign_items(
+          *,
+          product:products(*)
+        ),
         destinations:campaign_destinations(*)
       `)
       .in('id', campaignIds)
