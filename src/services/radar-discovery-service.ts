@@ -195,6 +195,13 @@ export const radarDiscoveryService = {
               const stableKey = (p.shopId && p.itemId) ? `shopee:${p.shopId}:${p.itemId}` : null;
               if (!stableKey) continue;
 
+              console.log('[STABLE-KEY-FINAL]', {
+                itemId: p.itemId,
+                shopId: p.shopId,
+                title: p.name?.slice(0, 30),
+                stableKey
+              });
+
               // Anti-Fadiga (Check individual)
               const { data: recent } = await supabase
                 .from('radar_discovered_products')
@@ -203,6 +210,13 @@ export const radarDiscoveryService = {
                 .eq('stable_product_key', stableKey)
                 .gte('dispatched_at', sevenDaysAgo)
                 .maybeSingle();
+
+              console.log('[DEDUPE-DECISION]', {
+                stable_key: stableKey,
+                exists: !!recent,
+                recent_record: recent,
+                source_id: s.id
+              });
 
               if (recent) {
                 console.log('[DEDUPE-DETAIL]', { 
