@@ -272,7 +272,7 @@ export const radarDiscoveryService = {
                   user_id: s.user_id,
                   discovered_at: new Date().toISOString(),
                   score: finalScore,
-                  reason: scoreReason,
+                  skipped_reason: scoreReason,
                   stable_product_key: stableKey,
                   status: 'pending'
                 }, { onConflict: 'product_id,source_id', ignoreDuplicates: true })
