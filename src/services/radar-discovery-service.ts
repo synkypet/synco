@@ -3,7 +3,7 @@ import { ShopeeAdapter } from '@/lib/marketplaces/ShopeeAdapter';
 import { productService } from '@/services/supabase/product-service';
 import { marketplaceService } from '@/services/supabase/marketplace-service';
 import { radarCacheService } from './supabase/radar-cache-service';
-import { normalizeKeywords, calculateKeywordBudgets, getBudgetByPreset } from '@/lib/automation/keyword-utils';
+import { normalizeKeywords, calculateKeywordBudgets, getBudgetByPreset, hasKeywordMatch } from '@/lib/automation/keyword-utils';
 
 export interface DiscoveryResult {
   totalInserted: number;
@@ -175,6 +175,7 @@ export const radarDiscoveryService = {
             let kwDeduped = 0;
             let kwScoreSkipped = 0;
             let kwValidationSkipped = 0;
+            let kwHardFilterSkipped = 0;
 
             funnelTotalFetched += rawProducts.length;
 
@@ -187,8 +188,17 @@ export const radarDiscoveryService = {
             // Pipeline por Item (Trace Mode Ativado)
             for (const p of rawProducts) {
               const url = p.productLink || p.offerLink;
+              
+              // 1. PRE-FILTER (Validação básica)
               if (!p.name || !p.imageUrl || !p.currentPriceFactual || p.currentPriceFactual <= 0 || !p.commissionRate) {
                 kwValidationSkipped++;
+                continue;
+              }
+
+              // 2. KEYWORD HARD FILTER (NOVO)
+              if (!hasKeywordMatch(p.name, kw.term, kw.aliases || [])) {
+                kwHardFilterSkipped++;
+                console.log(`${logPrefix} [KEYWORD-FILTER-SKIP] "${p.name.slice(0, 30)}..." não deu match em "${kw.term}" (incluindo variantes e aliases)`);
                 continue;
               }
 
@@ -306,7 +316,7 @@ export const radarDiscoveryService = {
             }
 
             // LOG POR KEYWORD (TRACE MODE)
-            console.log(`${logPrefix} [RADAR-TRACE] ${kw.term} | fetch:${rawProducts.length} | val_skip:${kwValidationSkipped} | dedupe_skip:${kwDeduped} | score_skip:${kwScoreSkipped} | ok:${kwNewLinks}`);
+            console.log(`${logPrefix} [RADAR-TRACE] ${kw.term} | fetch:${rawProducts.length} | hard_filter_skip:${kwHardFilterSkipped} | val_skip:${kwValidationSkipped} | dedupe_skip:${kwDeduped} | score_skip:${kwScoreSkipped} | ok:${kwNewLinks}`);
           } catch (kwErr: any) {
             console.error(`${logPrefix} [RADAR-FAIL] Erro na keyword "${kw.term}":`, kwErr.message);
             // Continua para a próxima keyword

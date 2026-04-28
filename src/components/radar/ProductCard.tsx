@@ -5,8 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { KineticButton } from '@/components/ui/KineticButton';
 import { Button } from '@/components/ui/button';
 import {
-  Heart, Copy, MoreVertical, Eye, Megaphone,
-  Zap, Truck, Tag, CheckSquare, Square, Store, CheckCircle2, Star, Loader2, AlertTriangle, ExternalLink, RefreshCw
+  Zap, Truck, Tag, CheckSquare, Square, Store, CheckCircle2, Star, Loader2, AlertTriangle, ExternalLink, RefreshCw, Pin, PinOff, TrendingUp, Copy, MoreVertical, Eye
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -27,6 +26,8 @@ interface ProductCardProps {
   onViewDetails?: (product: Product) => void;
   onAddToCampaign?: (product: Product) => void;
   onAudit?: (product: Product) => Promise<void>;
+  onTogglePin?: (product: Product) => void;
+  isPinned?: boolean;
 }
 
 const MARKETPLACE_COLORS: Record<string, string> = {
@@ -45,24 +46,14 @@ const ProductCard: React.FC<ProductCardProps> = ({
   onSelect,
   onViewDetails,
   onAddToCampaign,
-  onAudit
+  onAudit,
+  onTogglePin,
+  isPinned
 }) => {
-  const [isAuditing, setIsAuditing] = React.useState(false);
-
   const copyLink = () => {
     const link = product.original_url || '#';
     navigator.clipboard.writeText(link);
     toast.success('Link copiado!');
-  };
-
-  const handleAudit = async () => {
-    if (!onAudit || isAuditing) return;
-    setIsAuditing(true);
-    try {
-      await onAudit(product);
-    } finally {
-      setIsAuditing(false);
-    }
   };
 
   const score = product.opportunity_score || 0;
@@ -96,7 +87,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         {/* Top Badges */}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5">
           {product.discount_percent && (
-            <div className="bg-red-600 text-white text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-lg shadow-lg">
+            <div className="bg-emerald-500 text-white text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-lg shadow-[0_0_10px_rgba(16,185,129,0.3)]">
               -{product.discount_percent}%
             </div>
           )}
@@ -134,14 +125,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
             {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
           </button>
           
-          <div className="flex gap-1.5">
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleFavorite?.(product.id, !product.is_favorite); }}
-              className="w-8 h-8 rounded-lg bg-black/60 backdrop-blur-md flex items-center justify-center hover:bg-red-500/20 text-white/50 hover:text-red-500 transition-all shadow-lg"
-            >
-              <Heart className={cn("w-4 h-4", product.is_favorite && "fill-red-500 text-red-500")} />
-            </button>
-          </div>
         </div>
       </div>
 
@@ -210,10 +193,12 @@ const ProductCard: React.FC<ProductCardProps> = ({
             </span>
           </div>
           <div className="bg-white/[0.03] rounded-lg p-1.5 flex flex-col">
-            <span className="text-[7px] font-black text-white/20 uppercase tracking-widest mb-0.5">Avaliação</span>
+            <span className="text-[7px] font-black text-white/20 uppercase tracking-widest mb-0.5">Vendas</span>
             <div className="flex items-center gap-1">
-              <Star className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" />
-              <span className="text-[10px] font-black text-white/60">{product.rating || '4.8'}</span>
+              <TrendingUp className="w-2.5 h-2.5 text-emerald-500" />
+              <span className="text-[10px] font-black text-white/60">
+                {(product.sales_count || 0).toLocaleString('pt-BR')}+
+              </span>
             </div>
           </div>
         </div>
@@ -250,15 +235,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onViewDetails?.(product)} className="text-[10px] font-black uppercase tracking-widest p-3 rounded-lg hover:bg-white/5">
                 <Eye className="w-3.5 h-3.5 mr-2" /> Ver Detalhes
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-white/5 mx-1" />
-              <DropdownMenuItem 
-                onClick={handleAudit} 
-                disabled={isAuditing}
-                className="text-[10px] font-black uppercase tracking-widest p-3 rounded-lg hover:bg-kinetic-orange/10 text-kinetic-orange"
-              >
-                {isAuditing ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-2" />}
-                Auditoria On-Demand
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

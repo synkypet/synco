@@ -5,6 +5,7 @@ import { ShopeeAdapter } from '@/lib/marketplaces/ShopeeAdapter';
 import { isBrazilFriendlyProduct } from '@/lib/filters/brazil-friendly';
 import { marketplaceService } from '@/services/supabase/marketplace-service';
 import { productService } from '@/services/supabase/product-service';
+import { hasKeywordMatch } from '@/lib/automation/keyword-utils';
 
 export async function POST(request: Request) {
   try {
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
 
     const { 
       keyword, 
+      aliases = [],
       page = 1, 
       sortType = 1,
       listType = 0,
@@ -53,6 +55,7 @@ export async function POST(request: Request) {
 
     const metrics = {
       raw_from_shopee: rawNodes.length,
+      dropped_keyword_filter: 0,
       dropped_missing_fields: 0,
       dropped_cjk: 0,
       dropped_low_quality: 0,
@@ -136,7 +139,13 @@ export async function POST(request: Request) {
         return false;
       }
 
-      // B. Integridade Semântica (CJK Veto)
+      // B. Keyword Hard Filter (NOVO)
+      if (keyword && !hasKeywordMatch(node.name, keyword, aliases)) {
+        metrics.dropped_keyword_filter++;
+        return false;
+      }
+
+      // C. Integridade Semântica (CJK Veto)
       if (node.brazil_friendly === 'reject') {
         metrics.dropped_cjk++;
         return false;
@@ -178,23 +187,26 @@ export async function POST(request: Request) {
       return true;
     });
 
-    // 3.4. Detecção de Fallback (Sugestões Semelhantes)
+    // 3.4. Detecção de Fallback (P2: Status de Observabilidade)
     const filters_zeroed_results = filteredProducts.length === 0 && baseIntegrityProducts.length > 0;
-    const similarProducts = filters_zeroed_results ? baseIntegrityProducts : [];
+    
+    let pageStatus: 'ok' | 'few' | 'zero' | 'fallback' = 'ok';
+    if (filters_zeroed_results) pageStatus = 'fallback';
+    else if (filteredProducts.length === 0) pageStatus = 'zero';
+    else if (filteredProducts.length < 5) pageStatus = 'few';
 
     metrics.final_returned = filteredProducts.length;
 
     // --- STEP 4: Audit Logs ---
     console.log(`--- [RADAR-AUDIT-PIPELINE] keyword="${keyword}" ---`);
     console.log(`  > RAW FROM SHOPEE: ${metrics.raw_from_shopee}`);
-    console.log(`  > FINAL RETURNED:   ${metrics.final_returned} ${filters_zeroed_results ? '(FILTERS ZEROED)' : ''}`);
-    if (filters_zeroed_results) {
-      console.log(`  > SIMILAR (FALLBACK): ${similarProducts.length}`);
-    }
+    console.log(`  > [FETCH-SHOPEE-FILTER] Dropped by keyword: ${metrics.dropped_keyword_filter}`);
+    console.log(`  > STATUS: ${pageStatus.toUpperCase()}`);
+    console.log(`  > FINAL RETURNED:   ${metrics.final_returned}`);
     console.log('------------------------------------------');
 
-    // --- STEP 5: Persistence (Persiste todos que passaram na integridade técnica) ---
-    const productsToPersist = filters_zeroed_results ? similarProducts : filteredProducts;
+    // --- STEP 5: Persistence ---
+    const productsToPersist = filteredProducts;
     const persistenceErrors: string[] = [];
     let persistedCount = 0;
 
@@ -216,10 +228,12 @@ export async function POST(request: Request) {
     // --- STEP 6: Response ---
     return NextResponse.json({
       status: 'SUCCESS',
+      pageStatus,
       products: filteredProducts,
-      similar_products: similarProducts,
-      filters_zeroed_results,
-      fallback_reason: filters_zeroed_results ? 'price_or_commission_filters' : null,
+      rawCount: metrics.raw_from_shopee,
+      filteredCount: metrics.final_returned,
+      hasNextPage: metrics.raw_from_shopee === limit, // Se veio menos que o limite, não tem próxima
+      page,
       persisted: persistedCount,
       metrics,
       errors: persistenceErrors.length > 0 ? persistenceErrors : undefined

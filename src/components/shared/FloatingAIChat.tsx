@@ -72,12 +72,12 @@ export default function FloatingAIChat() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+    <div className="fixed bottom-6 right-8 z-50 flex flex-col items-end pointer-events-none">
       
       {/* Container Aberto do Chat */}
       <div 
         className={cn(
-          "transition-all duration-300 ease-in-out origin-bottom-right rounded-2xl overflow-hidden shadow-skeuo-elevated bg-anthracite-surface border border-white/5 flex flex-col mb-4",
+          "transition-all duration-300 ease-in-out origin-bottom-right rounded-2xl overflow-hidden shadow-skeuo-elevated bg-anthracite-surface border border-white/5 flex flex-col mb-4 pointer-events-auto",
           isOpen ? "opacity-100 scale-100 h-[450px] w-[350px] sm:w-[400px]" : "opacity-0 scale-95 h-0 w-[400px] pointer-events-none"
         )}
       >
@@ -170,7 +170,7 @@ export default function FloatingAIChat() {
       </div>
 
       {/* Botão Flutuante (Fechado) */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 pointer-events-auto">
         {!isOpen && (
           <div className="bg-white px-4 py-2 rounded-2xl rounded-br-none shadow-skeuo-elevated border border-zinc-200 animate-in fade-in slide-in-from-right-4 duration-500 hidden sm:block">
             <p className="text-sm font-bold text-deep-void">Precisa de ajuda?</p>
