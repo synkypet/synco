@@ -1,13 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { AccessResolution } from '@/types/billing';
+import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * Hook central de Acesso e Billing (Fase 3).
  * Consome a rota oficial /api/user/access para determinar o estado do usuário na UI.
  */
 export function useAccess() {
+  const { user } = useAuth();
+  
   const { data, isLoading, error, refetch } = useQuery<AccessResolution & { userId: string }>({
-    queryKey: ['user-access'],
+    queryKey: ['user-access', user?.id],
     queryFn: async () => {
       const res = await fetch('/api/user/access');
       if (!res.ok) {
