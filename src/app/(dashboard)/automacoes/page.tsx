@@ -6,7 +6,8 @@ import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   useAutomationSources,
-  useCreateAutomationPipeline
+  useCreateAutomationPipeline,
+  useDeleteAutomationSource
 } from '@/hooks/use-automations';
 import { useChannels } from '@/hooks/use-channels';
 import { useGroups } from '@/hooks/use-groups';
@@ -37,7 +38,8 @@ import {
   ShieldCheck,
   FileText,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -47,6 +49,17 @@ import {
   DialogTrigger,
   DialogFooter
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -68,6 +81,7 @@ export default function AutomacoesDashboardPage() {
   
   // Mutations
   const createPipeline = useCreateAutomationPipeline();
+  const deleteAutomation = useDeleteAutomationSource();
 
   // New Creation State
   const [isNewMonitorOpen, setIsNewMonitorOpen] = useState(false);
@@ -192,6 +206,16 @@ export default function AutomacoesDashboardPage() {
     } finally {
       setSyncingId(null);
     }
+  };
+
+  const handleDeleteSource = async (id: string) => {
+    const promise = deleteAutomation.mutateAsync(id);
+    
+    toast.promise(promise, {
+      loading: 'Excluindo automação...',
+      success: 'Automação removida permanentemente.',
+      error: 'Erro ao excluir automação.'
+    });
   };
 
   if (isLoading) {
@@ -519,9 +543,9 @@ export default function AutomacoesDashboardPage() {
                        <div className="flex items-center gap-1.5 opacity-40">
                          <Activity size={12} className="text-emerald-500 animate-pulse" />
                          <span className="text-[10px] font-bold uppercase tracking-tight italic">Live Feed</span>
-                       </div>
+                      </div>
                     </div>
-                     <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                       {source.source_type === 'radar_offers' && (
                         <Button
                           variant="ghost"
@@ -533,6 +557,35 @@ export default function AutomacoesDashboardPage() {
                           <RefreshCw size={14} className={syncingId === source.id ? 'animate-spin' : ''} />
                         </Button>
                       )}
+
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 rounded-xl bg-white/5 border border-white/5 hover:bg-red-500/20 hover:text-red-500 transition-all text-white/20"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-anthracite-surface border-white/5">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-white">Excluir Automação?</AlertDialogTitle>
+                            <AlertDialogDescription className="text-white/40 text-xs">
+                              Esta ação não pode ser desfeita. Todo o histórico de logs desta esteira e suas rotas serão removidos permanentemente.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="bg-white/5 border-none hover:bg-white/10 text-white/60">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction 
+                              onClick={() => handleDeleteSource(source.id)}
+                              className="bg-red-500 hover:bg-red-600 text-white border-none shadow-glow-orange-intense/10"
+                            >
+                              Sim, Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                       
                       <Button 
                         variant="ghost" 
