@@ -14,19 +14,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { planId } = await request.json();
+    const { planId, planSlug } = await request.json();
 
-    if (!planId) {
-      return NextResponse.json({ error: 'Missing planId' }, { status: 400 });
+    if (!planId && !planSlug) {
+      return NextResponse.json({ error: 'Missing planId or planSlug' }, { status: 400 });
     }
 
-    // Buscando dados do plano oficial do DB (motor headless)
+    // Buscando dados do plano oficial do DB
     const adminSupabase = createAdminClient();
-    const { data: plan, error: planError } = await adminSupabase
-      .from('plans')
-      .select('*')
-      .eq('id', planId)
-      .single();
+    const query = adminSupabase.from('plans').select('*');
+    
+    if (planId) {
+      query.eq('id', planId);
+    } else {
+      query.eq('slug', planSlug);
+    }
+
+    const { data: plan, error: planError } = await query.single();
 
     if (planError || !plan) {
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
@@ -48,7 +52,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ 
-      url: preapproval.init_point 
+      checkoutUrl: preapproval.init_point 
     });
 
   } catch (error: any) {

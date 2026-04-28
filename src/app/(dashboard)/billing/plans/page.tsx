@@ -15,26 +15,40 @@ export default function PlansPage() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [loadingBase, setLoadingBase] = useState(true);
+  const [errorBase, setErrorBase] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadPlans() {
-      const supabase = createClient();
-      const { data } = await supabase.from('plans').select('*').order('price_monthly', { ascending: true });
-      if (data) {
-        setPlans(data);
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('plans')
+          .select('*')
+          .eq('is_active', true)
+          .order('price_monthly', { ascending: true });
+
+        if (error) throw error;
+        
+        if (data) {
+          setPlans(data);
+        }
+      } catch (err: any) {
+        console.error('Erro ao carregar planos:', err);
+        setErrorBase('Não foi possível carregar os planos. Tente novamente.');
+      } finally {
+        setLoadingBase(false);
       }
-      setLoadingBase(false);
     }
     loadPlans();
   }, []);
 
-  const handleSubscribe = async (planId: string) => {
+  const handleSubscribe = async (planSlug: string) => {
     try {
-      setLoadingPlan(planId);
+      setLoadingPlan(planSlug);
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId })
+        body: JSON.stringify({ planSlug })
       });
       
       const data = await res.json();
@@ -43,11 +57,16 @@ export default function PlansPage() {
         throw new Error(data.error || "Erro ao iniciar checkout");
       }
 
+      if (!data.checkoutUrl) {
+        throw new Error("URL de checkout não retornada pelo servidor.");
+      }
+
       // Redireciona pro Mercado Pago
-      window.location.href = data.url;
+      window.location.href = data.checkoutUrl;
 
     } catch (err: any) {
-      toast.error(err.message);
+      console.error("[CHECKOUT] Erro:", err);
+      toast.error(err.message || "Não foi possível iniciar o checkout.");
       setLoadingPlan(null);
     }
   };
@@ -65,8 +84,22 @@ export default function PlansPage() {
       </div>
 
       {loadingBase ? (
-          <div className="flex justify-center p-12">
-              <Loader2 className="w-8 h-8 animate-spin text-zinc-500" />
+          <div className="flex flex-col items-center justify-center p-24 bg-anthracite-surface/40 rounded-[56px] border border-white/[0.01] max-w-4xl mx-auto shadow-skeuo-pressed">
+              <Loader2 className="w-12 h-12 animate-spin text-kinetic-orange mb-4" />
+              <p className="text-white/30 font-bold uppercase text-[10px] tracking-[0.3em]">Carregando planos táticos...</p>
+          </div>
+      ) : errorBase ? (
+          <div className="p-20 text-center bg-red-500/5 rounded-[48px] shadow-skeuo-pressed border border-red-500/10 max-w-4xl mx-auto animate-in fade-in zoom-in-95 duration-500">
+            <h3 className="text-2xl font-black uppercase tracking-[0.2em] text-white/90 font-headline italic">Erro de Conexão</h3>
+            <p className="text-white/30 mt-4 leading-relaxed font-bold uppercase text-[10px] tracking-widest">{errorBase}</p>
+            <Button onClick={() => window.location.reload()} className="mt-8 px-10 h-14 rounded-2xl bg-white/5 hover:bg-white/10 text-white/60 border-none">
+              Tentar Novamente
+            </Button>
+          </div>
+      ) : plans.length === 0 ? (
+          <div className="p-24 text-center bg-anthracite-surface/40 rounded-[56px] shadow-skeuo-pressed border border-white/[0.01] max-w-4xl mx-auto">
+            <h3 className="text-2xl font-black uppercase tracking-[0.2em] text-white/20 font-headline italic">Nenhum plano disponível</h3>
+            <p className="text-white/10 mt-4 leading-relaxed font-bold uppercase text-[9px] tracking-[0.3em]">No momento não há planos ativos para contratação.</p>
           </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mt-8">
@@ -136,14 +169,15 @@ export default function PlansPage() {
               </ul>
  
               <KineticButton 
-                onClick={() => handleSubscribe(plan.id)}
+                type="button"
+                onClick={() => handleSubscribe(plan.slug)}
                 disabled={loadingPlan !== null}
                 className={cn(
                   "w-full h-16 text-[11px] uppercase font-black tracking-[0.2em]",
                   plan.name !== 'Pro' && "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white shadow-skeuo-flat"
                 )}
               >
-                {loadingPlan === plan.id ? <Loader2 className="w-5 h-5 animate-spin" /> : 'CONTRATAR AGORA'}
+                {loadingPlan === plan.slug ? <Loader2 className="w-5 h-5 animate-spin" /> : 'CONTRATAR AGORA'}
               </KineticButton>
             </TactileCard>
           ))}
