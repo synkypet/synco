@@ -3,17 +3,16 @@ import { createClient } from '@/lib/supabase/server';
 import { WasenderClient } from '@/lib/wasender/client';
 import fs from 'fs';
 import path from 'path';
+import { requireOperationalAccess, requireGroupLimit } from '@/lib/access/require-operational-access';
 
 export async function POST(request: Request) {
   const logPrefix = `[MESH-SYNC] [${new Date().toISOString()}]`;
   
   try {
+    const gate = await requireOperationalAccess();
+    if (!gate.ok) return gate.response;
+    const { user, access } = gate;
     const supabase = createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { channel_id, force_restart = false } = await request.json();
 
@@ -212,6 +211,12 @@ export async function POST(request: Request) {
       .from('groups')
       .select('*', { count: 'exact', head: true })
       .eq('channel_id', channel_id);
+
+    // GATE 2: Group Limit
+    if (detectedNewIds.length > 0) {
+      const limitError = await requireGroupLimit(user.id, detectedNewIds.length, access.quotas);
+      if (limitError) return limitError;
+    }
 
     const { data: syncedData, error: upsertError } = await supabase
       .from('groups')

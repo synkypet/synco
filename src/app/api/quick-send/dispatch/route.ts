@@ -2,30 +2,37 @@
 import { NextResponse } from 'next/server';
 import { campaignService } from '@/services/supabase/campaign-service';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireOperationalAccess, requireSendLimit } from '@/lib/access/require-operational-access';
 
 export async function POST(req: Request) {
   try {
-    const { userId, campaignData } = await req.json();
+    // 1. e 2. Autenticar usuário pela sessão e IGNORAR qualquer userId do body
+    const gate = await requireOperationalAccess();
+    if (!gate.ok) return gate.response;
 
-    if (!userId || !campaignData) {
+    const { user, access } = gate;
+    const userId = user.id; // SSOT (Single Source of Truth)
+
+    // Body parser (ignoramos o userId fornecido)
+    const body = await req.json();
+    const campaignData = body.campaignData;
+
+    if (!campaignData || !campaignData.items || !campaignData.destinations) {
       return NextResponse.json({ error: 'Payload incompleto' }, { status: 400 });
     }
 
-    console.log(`[QUICK-SEND-API] Recebida solicitação de despacho manual para user ${userId}...`);
+    console.log(`[QUICK-SEND-API] Recebida solicitação de despacho manual validada para user ${userId}...`);
 
-    // ─── BILLING ENFORCEMENT (Fase 2) ──────────────────────────────────────────
-    const { resolveUserAccess } = await import('@/services/supabase/access-service');
-    const access = await resolveUserAccess(userId);
+    // 4. Calcular quantidade (Estimativa básica por item x destinos informados)
+    const itemsCount = campaignData.items.length;
+    const destsCount = campaignData.destinations.length;
+    let requestedSends = itemsCount * destsCount;
+    // Se quiser expandir listas antes, precisaria bater no DB. 
+    // Por hora estimamos com base no payload raw:
 
-    if (!access.isOperative) {
-      console.warn(`[QUICK-SEND-API] Acesso negado para user ${userId}. Status: ${access.status}`);
-      return NextResponse.json({ 
-        error: 'Acesso Operacional Restrito', 
-        code: 'BILLING_RESTRICTED',
-        accessResolution: access.status,
-        message: 'Seu plano atual ou status de pagamento não permite realizar novos disparos.'
-      }, { status: 403 });
-    }
+    // 5. e 6. Validar limite do plano mensal
+    const limitError = await requireSendLimit(userId, requestedSends, access.quotas);
+    if (limitError) return limitError;
 
     // Usar cliente admin para garantir que a expansão de listas e criação de jobs funcione 
     // com bypass de RLS se necessário, mantendo a consistência operacional.

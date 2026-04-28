@@ -8,8 +8,8 @@ import { resolveUserAccess } from '@/services/supabase/access-service';
  */
 export async function GET() {
   // Segurança: Bloquear em produção
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
   try {

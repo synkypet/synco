@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { triggerWorker } from '@/lib/worker/trigger';
 import { waitUntil } from '@vercel/functions';
@@ -13,13 +14,20 @@ export async function GET(request: Request) {
   }
 
   try {
+    const supabaseSession = createClient();
+    const { data: { user } } = await supabaseSession.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const supabase = createAdminClient();
     let nudgeAttempted = false;
 
     // 1. Buscar o canal e created_at do primeiro job pending desta campanha
     const { data: campaignJobs } = await supabase
       .from('send_jobs')
-      .select('id, channel_id, created_at, status')
+      .select('id, channel_id, created_at, status, user_id')
       .eq('campaign_id', campaignId)
       .in('status', ['pending', 'processing'])
       .order('created_at', { ascending: true })
@@ -31,6 +39,12 @@ export async function GET(request: Request) {
       // Nenhum job active — campanha finalizada
       return NextResponse.json({ position: 0, pendingInCampaign: 0, channelId: null, operationalStatus: 'completed', nudgeAttempted: false });
     }
+
+    // Validação de Propriedade: O usuário só pode ver a posição da sua própria campanha
+    if (firstJob.user_id !== user.id) {
+       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
 
     // ─── LÓGICA DE AUTO-NUDGE (Despertar da Fila) ───────────────────────────
     // Se o job desta campanha está 'pending', vamos conferir a saúde global da fila.

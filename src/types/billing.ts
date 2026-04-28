@@ -1,10 +1,31 @@
-export type AccessStatus = 
-  | 'internal_license'       // Bypass Administrativo (Server-side allowlist)
-  | 'active_subscription'    // Pagante regular
-  | 'trial'                  // Em período de testes ativo
-  | 'past_due_restricted'    // Inadimplente (Acesso interface liberado, operação bloqueada)
-  | 'expired_blocked'        // Vencido / Cancelado de fato
-  | 'no_subscription';       // Não possui contrato
+export type SubscriptionStatus =
+  | 'active'
+  | 'trialing'
+  | 'past_due'
+  | "canceled"
+  | "expired"
+  | "incomplete"
+  | "none";
+
+// Mantém suporte pra compatibilidade antiga mas alinha o status interno correto
+export type AccessStatus = SubscriptionStatus | 'internal_license' | 'past_due_restricted' | 'expired_blocked' | 'no_subscription';
+
+export function normalizeMercadoPagoSubscriptionStatus(mpStatus: string): SubscriptionStatus {
+  switch (mpStatus?.toLowerCase()) {
+    case "authorized":
+      return "active";
+    case "paused":
+      return "past_due";
+    case "cancelled":
+      return "canceled";
+    case "finished":
+      return "expired";
+    case "pending":
+      return "incomplete";
+    default:
+      return "incomplete";
+  }
+}
 
 export interface Quotas {
   max_channels: number;
@@ -41,7 +62,7 @@ export interface Subscription {
   id: string;
   user_id: string;
   plan_id: string | null;
-  status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired' | 'incomplete';
+  status: SubscriptionStatus;
   provider: string | null;
   provider_customer_id: string | null;
   current_period_start: string | null;
@@ -50,4 +71,10 @@ export interface Subscription {
   trial_ends_at: string | null;
   cancel_at_period_end: boolean;
   plan?: Plan;
+  provider_subscription_id?: string | null;
+  provider_payment_id?: string | null;
+  provider_status?: string | null;
+  canceled_at?: string | null;
+  grace_period_end?: string | null;
+  metadata?: any;
 }

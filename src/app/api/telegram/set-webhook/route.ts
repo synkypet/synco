@@ -3,17 +3,16 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { TelegramClient } from '@/lib/telegram/client';
+import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    const gate = await requireOperationalAccess();
+    if (!gate.ok) return gate.response;
+    const { user } = gate;
     const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { channelId } = await request.json();
 
@@ -26,7 +25,7 @@ export async function POST(request: Request) {
       .from('channel_secrets')
       .select('session_api_key')
       .eq('channel_id', channelId)
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .single();
 
     if (!secretData?.session_api_key) {

@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 // src/components/radar/ProductInspector.tsx
 import React from 'react';
 import {

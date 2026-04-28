@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities, @next/next/no-img-element */
 import React, { useState } from 'react';
 import { Drawer } from 'vaul';
 import { Campaign, CampaignStatus } from '@/types/campaign';

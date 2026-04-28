@@ -2,17 +2,16 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { WasenderClient } from '@/lib/wasender/client';
 import { WasenderConfig } from '@/types/group';
+import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    const gate = await requireOperationalAccess();
+    if (!gate.ok) return gate.response;
+    const { user } = gate;
     const supabase = createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { channel_id, phone_number } = await request.json();
 

@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities, @next/next/no-img-element */
 // src/components/automation/AutomationAuditTrail.tsx
 'use client';
 

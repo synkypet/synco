@@ -13,6 +13,7 @@ import LayoutContainer from '@/components/layout/LayoutContainer';
 import PageHeader from '@/components/shared/PageHeader';
 import { KineticButton } from '@/components/ui/KineticButton';
 import { toast } from 'sonner';
+import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
 
 export default function GruposPage() {
   const { user } = useAuth();
@@ -50,6 +51,7 @@ export default function GruposPage() {
 
   return (
     <LayoutContainer type="operational">
+      <OperationalAccessBanner />
       <PageHeader
         title="Grupos"
         description="Espelho operacional da malha de grupos sincronizada via WasenderAPI."

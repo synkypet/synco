@@ -2,9 +2,13 @@
 // Cancela apenas os jobs `pending` de uma campanha específica.
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 
 export async function PATCH(request: Request) {
   try {
+    const gate = await requireOperationalAccess();
+    if (!gate.ok) return gate.response;
+
     const { campaign_id } = await request.json();
 
     if (!campaign_id) {

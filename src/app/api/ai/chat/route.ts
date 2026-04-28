@@ -2,6 +2,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText, tool } from 'ai';
 import { z } from 'zod';
 import { processLinks } from '@/lib/linkProcessor';
+import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 
 // Precisaremos acessar o Supabase para pegar as chaves do afiliado, se existir. 
 // Para este chat, podemos ter user/session, mas temporariamente chamaremos "processLinks" com array vazio de conexões caso não tenha.
@@ -15,6 +16,9 @@ export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
+    const gate = await requireOperationalAccess();
+    if (!gate.ok) return gate.response;
+    
     const { messages } = await req.json();
 
     // O SDK no seu servidor não possui o 'convertToCoreMessages' exportado, então vamos mapear estritamente

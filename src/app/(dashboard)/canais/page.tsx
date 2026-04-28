@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import LayoutContainer from '@/components/layout/LayoutContainer';
 import PageHeader from '@/components/shared/PageHeader';
+import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
 
 export default function CanaisPage() {
   const { user } = useAuth();
@@ -67,6 +68,7 @@ export default function CanaisPage() {
 
   return (
     <LayoutContainer type="operational">
+      <OperationalAccessBanner />
       <PageHeader 
         title="Canais" 
         description="Gerencie seus canais de transmissão. Os canais agrupam seus grupos e destinos de envio."

@@ -57,7 +57,7 @@ function getStatusConfig(status: AccessStatus) {
         shadowColor: 'shadow-[0_0_12px_rgba(99,102,241,0.1)]',
         pingColor: ''
       };
-    case 'active_subscription':
+    case 'active':
       return {
         label: 'Assinatura Ativa',
         icon: CheckCircle2,
@@ -68,7 +68,7 @@ function getStatusConfig(status: AccessStatus) {
         shadowColor: 'shadow-[0_0_12px_rgba(16,185,129,0.15)]',
         pingColor: ''
       };
-    case 'trial':
+    case 'trialing':
       return {
         label: 'Período de Teste',
         icon: Sparkles,
@@ -77,6 +77,28 @@ function getStatusConfig(status: AccessStatus) {
         textColor: 'text-purple-400',
         iconColor: 'text-purple-400',
         shadowColor: 'shadow-[0_0_12px_rgba(168,85,247,0.15)]',
+        pingColor: ''
+      };
+    case 'past_due':
+      return {
+        label: 'Em Atraso (Tolerância)',
+        icon: AlertCircle,
+        bgColor: 'bg-amber-500/10',
+        borderColor: 'border-amber-500/20',
+        textColor: 'text-amber-400',
+        iconColor: 'text-amber-400',
+        shadowColor: 'shadow-[0_0_8px_rgba(245,158,11,0.1)]',
+        pingColor: ''
+      };
+    case 'canceled':
+      return {
+        label: 'Cancelada',
+        icon: Lock,
+        bgColor: 'bg-zinc-500/10',
+        borderColor: 'border-zinc-500/20',
+        textColor: 'text-zinc-400',
+        iconColor: 'text-zinc-400',
+        shadowColor: 'shadow-skeuo-pressed',
         pingColor: ''
       };
     case 'past_due_restricted':
@@ -101,7 +123,7 @@ function getStatusConfig(status: AccessStatus) {
         shadowColor: 'shadow-[0_0_12px_rgba(244,63,94,0.15)]',
         pingColor: 'bg-rose-500'
       };
-    case 'no_subscription':
+    case 'none':
       return {
         label: 'Sem Assinatura',
         icon: Lock,

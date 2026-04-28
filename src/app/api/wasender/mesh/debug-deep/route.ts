@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { WasenderClient } from '@/lib/wasender/client';
 
 export async function GET() {
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
   const supabase = createClient();
   
   try {

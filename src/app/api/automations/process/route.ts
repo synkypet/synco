@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { processInboundAutomation } from '@/lib/automation/processor';
 import { triggerWorker } from '@/lib/worker/trigger';
+import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 
 export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
@@ -10,21 +11,12 @@ export async function POST(request: Request) {
     const { userId } = payload;
     console.log(`[PROCESS-ROUTE] [${requestId}] Payload recebido para user ${userId}:`, JSON.stringify(payload, null, 2));
 
-    // ─── BILLING ENFORCEMENT (Fase 2) ──────────────────────────────────────────
-    if (userId) {
-      const { resolveUserAccess } = await import('@/services/supabase/access-service');
-      const access = await resolveUserAccess(userId);
+    const gate = await requireOperationalAccess();
+    if (!gate.ok) return gate.response;
+    const { user, access } = gate;
 
-      if (!access.isOperative) {
-        console.warn(`[PROCESS-ROUTE] [${requestId}] Acesso negado para user ${userId}. Status: ${access.status}`);
-        return NextResponse.json({ 
-          error: 'Acesso Operacional Restrito', 
-          code: 'BILLING_RESTRICTED',
-          accessResolution: access.status,
-          message: 'Seu plano atual ou status de pagamento não permite realizar novos disparos automáticos.'
-        }, { status: 403 });
-      }
-    }
+    // Overwrite any forged userId carefully in payload
+    payload.userId = user.id;
     
     const result = await processInboundAutomation(payload);
     

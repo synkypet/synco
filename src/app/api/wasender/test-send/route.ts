@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { WasenderClient } from '@/lib/wasender/client';
 import { NextResponse } from 'next/server';
+import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 
 /**
  * POST /api/wasender/test-send
@@ -8,12 +9,10 @@ import { NextResponse } from 'next/server';
  */
 export async function POST(request: Request) {
   const logPrefix = `[TEST-SEND] [${new Date().toISOString()}]`;
+  const gate = await requireOperationalAccess();
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
   const supabase = createClient();
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   try {
     const { channelId, phone, message } = await request.json();

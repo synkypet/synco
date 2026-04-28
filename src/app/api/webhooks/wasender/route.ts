@@ -98,21 +98,33 @@ export async function POST(request: Request) {
       .eq('channel_id', channel.id)
       .single();
 
-    const webhookSecret = secrets?.webhook_secret;
+    const webhookSecret = secrets?.webhook_secret || process.env.WASENDER_WEBHOOK_SECRET;
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
 
-    if (webhookSecret && signature) {
+    if (webhookSecret) {
+      if (!signature) {
+        console.warn(`[WEBHOOK-UNAUTHORIZED] [${requestId}] Signature missing for channel ${channel.id}`);
+        return NextResponse.json({ error: 'Webhook signature required' }, { status: 401 });
+      }
+
       const expectedSignature = crypto
         .createHmac('sha256', webhookSecret)
         .update(rawBody)
         .digest('hex');
 
       if (signature !== expectedSignature) {
-        console.warn(`Webhook signature mismatch for channel ${channel.id}`);
+        console.warn(`[WEBHOOK-UNAUTHORIZED] [${requestId}] Signature mismatch for channel ${channel.id}`);
         return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
       }
-    } else if (!webhookSecret) {
-      // Sem secret configurado — log de aviso mas processa
-      console.warn(`No webhook_secret for channel ${channel.id}. Accepting request without validation.`);
+      
+      console.log(`[WEBHOOK-AUTH] [${requestId}] Signature validated successfully.`);
+    } else {
+      if (isProduction) {
+        console.error(`[WEBHOOK-FATAL] [${requestId}] No webhook_secret found in production. Failing closed.`);
+        return NextResponse.json({ error: 'Webhook configuration error' }, { status: 500 });
+      }
+      // Fallback permitido apenas em Dev
+      console.warn(`[WEBHOOK-WARNING] [${requestId}] No webhook_secret for channel ${channel.id} and no global WASENDER_WEBHOOK_SECRET. Proceeding without validation (DEV ONLY).`);
     }
 
     // ─── 3. Tratamento dos Eventos ─────────────────────────────────────────

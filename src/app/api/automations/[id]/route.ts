@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { automationService } from '@/services/supabase/automation-service';
 import { NextResponse } from 'next/server';
+import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 
 /**
  * DELETE /api/automations/[id]
@@ -12,12 +13,10 @@ export async function DELETE(
 ) {
   const { id } = params;
   const logPrefix = `[AUTOMATION-DELETE] [${id}] [${new Date().toISOString()}]`;
+  const gate = await requireOperationalAccess();
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
   const supabase = createClient();
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   try {
     // 1. Verificar se a automação pertence ao usuário

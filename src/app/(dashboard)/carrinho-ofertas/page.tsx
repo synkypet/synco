@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 // src/app/(dashboard)/carrinho-ofertas/page.tsx
 'use client';
 

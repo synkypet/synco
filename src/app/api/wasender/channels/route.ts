@@ -1,6 +1,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { WasenderClient } from '@/lib/wasender/client';
+import { requireOperationalAccess, requireChannelLimit } from '@/lib/access/require-operational-access';
 import { NextResponse } from 'next/server';
 
 /**
@@ -9,12 +10,13 @@ import { NextResponse } from 'next/server';
  */
 export async function POST(request: Request) {
   const logPrefix = `[CHANNEL-CREATE] [${new Date().toISOString()}]`;
+  const gate = await requireOperationalAccess();
+  if (!gate.ok) return gate.response;
+  const { user, access } = gate;
+
+  const limitError = await requireChannelLimit(user.id, access.quotas);
+  if (limitError) return limitError;
   const supabase = createClient();
-  
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   try {
     const body = await request.json();

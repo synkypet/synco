@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 // src/components/radar/ProductCard.tsx
 import React from 'react';
 import { TactileCard } from '@/components/ui/TactileCard';

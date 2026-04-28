@@ -1,16 +1,21 @@
 // src/app/api/monitoring/queue/route.ts
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const supabase = createAdminClient();
-    const userId = request.headers.get('x-user-id');
-    if (!userId) {
+    // Auth via sessão real (nunca confiar em header do frontend)
+    const authClient = createClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const userId = user.id;
+
+    const supabase = createAdminClient();
 
     // 1. Automações de Grupos (group_monitor)
     const { data: groupSources } = await supabase

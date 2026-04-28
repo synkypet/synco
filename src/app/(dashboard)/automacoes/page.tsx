@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element, jsx-a11y/alt-text */
 // src/app/(dashboard)/automacoes/page.tsx
 'use client';
 

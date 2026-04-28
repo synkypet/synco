@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import React, { useState, useEffect } from 'react';
 import { Campaign } from '@/types/campaign';
 import { useCampaignStats, useQueuePosition, QueuePosition } from '@/hooks/use-campaigns';

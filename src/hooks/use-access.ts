@@ -31,11 +31,12 @@ export function useAccess() {
     isOperative: data?.isOperative ?? false,
     
     // Status Específicos
+    // Status Específicos
     isInternal: data?.status === 'internal_license',
-    isTrial: data?.status === 'trial',
-    isActive: data?.status === 'active_subscription',
-    isRestricted: data?.status === 'past_due_restricted',
-    isBlocked: data?.status === 'expired_blocked' || data?.status === 'no_subscription',
+    isTrial: data?.status === 'trialing',
+    isActive: data?.status === 'active',
+    isRestricted: data?.status === 'past_due_restricted' || data?.status === 'canceled',
+    isBlocked: data?.status === 'expired_blocked' || data?.status === 'none' || data?.status === 'expired',
     
     // Nome amigável do status
     statusLabel: getStatusLabel(data?.status),
@@ -50,11 +51,14 @@ export function useAccess() {
 function getStatusLabel(status?: string) {
   switch (status) {
     case 'internal_license': return 'Licença Interna';
-    case 'active_subscription': return 'Assinatura Ativa';
-    case 'trial': return 'Período de Teste';
+    case 'active': return 'Assinatura Ativa';
+    case 'trialing': return 'Período de Teste';
+    case 'past_due': return 'Em Atraso (Tolerância)';
     case 'past_due_restricted': return 'Pagamento Pendente';
+    case 'canceled': return 'Cancelada';
+    case 'expired': return 'Expirada';
     case 'expired_blocked': return 'Assinatura Expirada';
-    case 'no_subscription': return 'Sem Assinatura';
+    case 'none': return 'Sem Assinatura';
     default: return 'Verificando...';
   }
 }

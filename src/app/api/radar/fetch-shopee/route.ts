@@ -6,16 +6,14 @@ import { isBrazilFriendlyProduct } from '@/lib/filters/brazil-friendly';
 import { marketplaceService } from '@/services/supabase/marketplace-service';
 import { productService } from '@/services/supabase/product-service';
 import { hasKeywordMatch } from '@/lib/automation/keyword-utils';
+import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 
 export async function POST(request: Request) {
   try {
-    // --- STEP 1: Auth & Setup ---
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // --- STEP 1: Operations Gate ---
+    const gate = await requireOperationalAccess();
+    if (!gate.ok) return gate.response;
+    const { user, access } = gate;
 
     const { 
       keyword, 

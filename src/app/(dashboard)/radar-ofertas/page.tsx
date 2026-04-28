@@ -55,6 +55,7 @@ import { ProductFilter } from '@/types/product';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import LayoutContainer from '@/components/layout/LayoutContainer';
+import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
 import { SHOPEE_SORT_TYPE, SHOPEE_LIST_TYPE, SHOPEE_SORT_TYPE_LABELS, SHOPEE_LIST_TYPE_LABELS } from '@/lib/constants/shopee';
 
 interface DiscoveryPage {
@@ -265,6 +266,7 @@ export default function RadarOfertasPage() {
 
   return (
     <LayoutContainer type="operational">
+      <OperationalAccessBanner />
       {/* 1. Page Header — Design consistent with "Grupos" */}
       <PageHeader
         title="Radar de Ofertas"

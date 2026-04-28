@@ -1,17 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { TelegramClient } from '@/lib/telegram/client';
+import { requireOperationalAccess, requireChannelLimit } from '@/lib/access/require-operational-access';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    const gate = await requireOperationalAccess();
+    if (!gate.ok) return gate.response;
+    const { user, access } = gate;
 
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const limitError = await requireChannelLimit(user.id, access.quotas);
+    if (limitError) return limitError;
+
+    const supabase = createClient();
 
     const { channelId, botToken } = await request.json();
 
@@ -33,7 +36,7 @@ export async function POST(request: Request) {
       .from('channel_secrets')
       .upsert({
         channel_id: channelId,
-        user_id: session.user.id,
+        user_id: user.id,
         session_api_key: botToken, // Usaremos a mesma coluna de api_key pro bot token pra não criar outra migração desnecessária no MVP
       });
 

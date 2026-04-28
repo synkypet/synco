@@ -66,46 +66,79 @@ export async function resolveUserAccessCore(userId: string, supabase: any): Prom
 
   const planLimits = sub.plan?.limits || { quotas: BLOCKED_QUOTAS, features: NO_FEATURES };
 
-  // 3. Resolução de Status
-  switch (sub.status) {
-    case 'active':
+  // 3. Resolução de Status Hierárquico
+  const now = new Date();
+  const gracePeriodEnd = sub.grace_period_end ? new Date(sub.grace_period_end) : null;
+  const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end) : null;
+
+  if (sub.status === 'active') {
+    return {
+      status: 'active',
+      isOperative: true,
+      planId: sub.plan_id,
+      planName: sub.plan?.name,
+      quotas: planLimits.quotas,
+      features: planLimits.features,
+    };
+  }
+
+  if (sub.status === 'trialing') {
+    return {
+      status: 'trialing',
+      isOperative: true,
+      planId: sub.plan_id,
+      planName: sub.plan?.name,
+      quotas: planLimits.quotas,
+      features: planLimits.features,
+    };
+  }
+
+  if (sub.status === 'past_due') {
+    const isWithinGracePeriod = gracePeriodEnd && now <= gracePeriodEnd;
+    
+    if (isWithinGracePeriod) {
       return {
-        status: 'active_subscription',
-        isOperative: true,
+        status: 'past_due',
+        isOperative: true, // Ainda opera por conta da carência
         planId: sub.plan_id,
         planName: sub.plan?.name,
         quotas: planLimits.quotas,
         features: planLimits.features,
       };
-
-    case 'trialing':
-      return {
-        status: 'trial',
-        isOperative: true,
-        planId: sub.plan_id,
-        planName: sub.plan?.name,
-        quotas: planLimits.quotas,
-        features: planLimits.features,
-      };
-
-    case 'past_due':
+    } else {
       return {
         status: 'past_due_restricted',
-        isOperative: false, 
+        isOperative: false, // Fora do grace period, bloqueia operações
         planId: sub.plan_id,
         planName: sub.plan?.name,
         quotas: planLimits.quotas,
         features: planLimits.features,
       };
+    }
+  }
 
-    default:
+  if (sub.status === 'canceled') {
+    const isStillPaid = currentPeriodEnd && now <= currentPeriodEnd;
+
+    if (isStillPaid) {
       return {
-        status: 'expired_blocked',
-        isOperative: false,
+        status: 'canceled', // Canceled mas pago
+        isOperative: true,
         planId: sub.plan_id,
         planName: sub.plan?.name,
-        quotas: BLOCKED_QUOTAS,
-        features: NO_FEATURES,
+        quotas: planLimits.quotas,
+        features: planLimits.features,
       };
+    }
   }
+
+  // Fallback para expired, incomplete, none, ou canceled(vencido)
+  return {
+    status: 'expired_blocked',
+    isOperative: false,
+    planId: sub.plan_id,
+    planName: sub.plan?.name,
+    quotas: BLOCKED_QUOTAS,
+    features: NO_FEATURES,
+  };
 }

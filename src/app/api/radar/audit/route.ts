@@ -4,15 +4,13 @@ import { processLinks } from '@/lib/linkProcessor';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { marketplaceService } from '@/services/supabase/marketplace-service';
+import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireOperationalAccess();
+    if (!gate.ok) return gate.response;
+    const { user, access } = gate;
 
     const { productId } = await request.json();
 
