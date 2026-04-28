@@ -49,12 +49,17 @@ export function OperationalAccessBanner() {
           </div>
         </div>
 
-        <Link href="/configuracoes?tab=billing" className="relative z-10 w-full md:w-auto">
+        <Link href={status === 'no_subscription' ? "/billing/plans" : "/billing"} className="relative z-10 w-full md:w-auto">
           <Button 
             variant="outline" 
-            className="w-full md:w-auto h-10 px-6 text-[10px] font-black uppercase tracking-widest border-white/10 hover:bg-white/5 bg-transparent text-white/60 hover:text-white"
+            className={cn(
+              "w-full md:w-auto h-10 px-6 text-[10px] font-black uppercase tracking-widest transition-all",
+              status === 'no_subscription' 
+                ? "bg-kinetic-orange text-white border-none shadow-glow-orange hover:bg-orange-600" 
+                : "border-white/10 hover:bg-white/5 bg-transparent text-white/60 hover:text-white"
+            )}
           >
-            Ver detalhes do plano
+            {status === 'no_subscription' ? 'Assinar Plano Agora' : 'Ver detalhes do plano'}
             <ChevronRight className="w-3 h-3 ml-2 opacity-50" />
           </Button>
         </Link>

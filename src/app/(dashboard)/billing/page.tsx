@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Loader2, ExternalLink, AlertTriangle, ShieldCheck } from "lucide-react";
+import { KineticButton } from "@/components/ui/KineticButton";
+import { TactileCard } from "@/components/ui/TactileCard";
+import { Loader2, ExternalLink, AlertTriangle, ShieldCheck, CreditCard, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -60,17 +62,20 @@ export default function BillingDashboardPage() {
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2 mb-8">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Assinatura</h2>
-          <p className="text-muted-foreground">Gerencie seu plano e operações de pagamento</p>
+        <div className="flex flex-col">
+          <h2 className="text-3xl font-black uppercase tracking-[0.2em] italic font-headline text-white/90">Assinatura</h2>
+          <p className="text-white/30 font-bold uppercase text-[10px] tracking-widest mt-1">Gerencie seu plano e limites operacionais</p>
         </div>
-        <Button onClick={() => router.push('/billing/plans')} variant="default">
+        <KineticButton onClick={() => router.push('/billing/plans')} className="h-12 px-8">
+          <Sparkles className="w-4 h-4 mr-2" />
           Ver Planos
-        </Button>
+        </KineticButton>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="border bg-card p-6 rounded-2xl shadow-skeuo-flat flex flex-col">
+      <div className="grid gap-8 md:grid-cols-2">
+        <TactileCard className="p-8 flex flex-col relative overflow-hidden">
+           {/* Glow Decoration */}
+           <div className="absolute -top-20 -right-20 w-40 h-40 bg-kinetic-orange/10 blur-[80px] rounded-full pointer-events-none" />
           <div className="flex items-center justify-between mb-4">
              <h3 className="font-semibold text-xl">Seu Plano Atual: {planName || "Nenhum"}</h3>
              {status === 'active' && <span className="bg-emerald-500/20 text-emerald-500 px-3 py-1 rounded-full text-xs font-bold uppercase">Ativo</span>}
@@ -108,41 +113,47 @@ export default function BillingDashboardPage() {
           </div>
 
           {['active', 'past_due', 'trialing'].includes(status) && (
-            <div className="mt-auto">
+            <div className="mt-auto pt-6">
                 <Button 
-                    variant="destructive" 
-                    className="w-full sm:w-auto"
+                    variant="ghost" 
+                    className="text-[10px] uppercase font-black tracking-widest text-white/20 hover:text-red-500 hover:bg-red-500/10 transition-all border-none"
                     onClick={handleCancel}
                     disabled={canceling}
                 >
                     {canceling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                    Cancelar Assinatura
+                    Solicitar Cancelamento
                 </Button>
             </div>
           )}
-        </div>
+        </TactileCard>
 
-        <div className="border bg-card p-6 rounded-2xl shadow-skeuo-flat">
-          <h3 className="font-semibold text-xl mb-4">Limites da Operação</h3>
+        <TactileCard className="p-8">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="p-2 bg-kinetic-orange/10 rounded-xl">
+              <CreditCard className="w-5 h-5 text-kinetic-orange" />
+            </div>
+            <h3 className="font-black uppercase tracking-[0.15em] text-white/80">Limites da Operação</h3>
+          </div>
+          
           {quotas ? (
-            <div className="space-y-4">
-              <div className="flex justify-between border-b pb-2 border-white/5">
-                 <span className="text-muted-foreground">Canais do WhatsApp</span>
-                 <span className="font-mono font-medium">{quotas.max_channels >= 999 ? 'Ilimitado' : quotas.max_channels}</span>
+            <div className="space-y-6">
+              <div className="flex justify-between items-center bg-white/[0.02] p-4 rounded-xl shadow-skeuo-pressed">
+                 <span className="text-white/40 text-[10px] uppercase font-black tracking-widest">Canais do WhatsApp</span>
+                 <span className="font-headline font-black text-white/90">{quotas.max_channels >= 999 ? 'ILIMITADO' : quotas.max_channels}</span>
               </div>
-              <div className="flex justify-between border-b pb-2 border-white/5">
-                 <span className="text-muted-foreground">Grupos Sincronizados</span>
-                 <span className="font-mono font-medium">{quotas.max_groups_sync >= 999 ? 'Ilimitado' : quotas.max_groups_sync}</span>
+              <div className="flex justify-between items-center bg-white/[0.02] p-4 rounded-xl shadow-skeuo-pressed">
+                 <span className="text-white/40 text-[10px] uppercase font-black tracking-widest">Grupos Sincronizados</span>
+                 <span className="font-headline font-black text-white/90">{quotas.max_groups_sync >= 999 ? 'ILIMITADO' : quotas.max_groups_sync}</span>
               </div>
-              <div className="flex justify-between pb-2">
-                 <span className="text-muted-foreground">Envios por Mês</span>
-                 <span className="font-mono font-medium">{quotas.max_sends_per_month >= 99999 ? 'Ilimitado' : quotas.max_sends_per_month.toLocaleString('pt-BR')}</span>
+              <div className="flex justify-between items-center bg-white/[0.02] p-4 rounded-xl shadow-skeuo-pressed">
+                 <span className="text-white/40 text-[10px] uppercase font-black tracking-widest">Envios por Mês</span>
+                 <span className="font-headline font-black text-white/90 text-kinetic-orange">{quotas.max_sends_per_month >= 99999 ? 'ILIMITADO' : quotas.max_sends_per_month.toLocaleString('pt-BR')}</span>
               </div>
             </div>
           ) : (
-            <p className="text-muted-foreground">Nenhum limite ativo encontrado.</p>
+            <p className="text-white/20 text-center py-10 font-bold uppercase text-[10px] tracking-widest">Nenhum limite ativo encontrado.</p>
           )}
-        </div>
+        </TactileCard>
       </div>
     </div>
   );

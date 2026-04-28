@@ -14,6 +14,7 @@ import {
   Bot,
   List,
   DollarSign,
+  CreditCard,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -45,6 +46,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Principal',
     items: [
       { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+      { path: '/billing', label: 'Assinatura', icon: CreditCard },
     ],
   },
   {
