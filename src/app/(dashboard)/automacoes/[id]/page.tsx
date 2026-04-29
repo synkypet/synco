@@ -26,6 +26,7 @@ import { LogFeed } from '@/components/automation/LogFeed';
 import { AutomationStatusHeader } from '@/components/automation/AutomationStatusHeader';
 import { ActiveFilterHUD } from '@/components/automation/ActiveFilterHUD';
 import { AutomationAuditTrail } from '@/components/automation/AutomationAuditTrail';
+import { RadarActivityFeed } from '@/components/automation/RadarActivityFeed';
 
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Save, Zap, Trash2 } from 'lucide-react';
@@ -198,7 +199,17 @@ export default function AutomationDetailPage() {
         />
       </div>
 
-      {/* Row 3: AUDIT TRAIL (Histórico de Envios) */}
+      {/* Row 3: RADAR ACTIVITY (Feed de Descoberta) */}
+      {source.source_type === 'radar_offers' && (
+        <div className="animate-in slide-in-from-bottom-4 duration-500 delay-150">
+          <div className="mb-4">
+            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 ml-1">Observabilidade do Radar Pro</h4>
+          </div>
+          <RadarActivityFeed sourceId={id} />
+        </div>
+      )}
+
+      {/* Row 4: AUDIT TRAIL (Histórico de Envios) */}
       <div className="animate-in slide-in-from-bottom-4 duration-500 delay-200">
         <AutomationAuditTrail 
           campaigns={recentCampaigns || []} 
@@ -206,7 +217,7 @@ export default function AutomationDetailPage() {
         />
       </div>
 
-      {/* Row 4: CONFIGURAÇÕES DE ENTREGA (Colapsável/Secundário) */}
+      {/* Row 5: CONFIGURAÇÕES DE ENTREGA (Colapsável/Secundário) */}
       <div className="pt-10 border-t border-white/5 space-y-8 opacity-60 hover:opacity-100 transition-opacity">
         <div className="flex items-center justify-between">
           <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Configurações Avançadas de Esteira</h4>

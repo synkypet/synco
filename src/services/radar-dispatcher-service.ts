@@ -10,6 +10,50 @@ export interface DispatchResult {
   campaignsCreated: number;
 }
 
+/**
+ * Fire-and-forget helper for activity logging.
+ * Ensuring zero impact on the main pipeline.
+ */
+const logActivity = (supabase: SupabaseClient, event: {
+  source_id: string;
+  user_id: string;
+  event_type: string;
+  product_id?: string;
+  campaign_id?: string;
+  keyword?: string;
+  score?: number;
+  commission_value?: number;
+  discard_reason?: string;
+  title?: string;
+  page?: number;
+}) => {
+  // Fire-and-forget logic using async wrapper to avoid TS PromiseLike issues
+  (async () => {
+    try {
+      await supabase
+        .from('radar_activity_log')
+        .insert({
+          source_id: event.source_id,
+          user_id: event.user_id,
+          event_type: event.event_type,
+          product_id: event.product_id,
+          campaign_id: event.campaign_id,
+          keyword: event.keyword,
+          score: event.score,
+          commission_value: event.commission_value,
+          discard_reason: event.discard_reason,
+          metadata: {
+            title: (event.title ?? '').substring(0, 100),
+            page: event.page ?? null,
+            source_id: event.source_id
+          }
+        });
+    } catch (err) {
+      console.warn('[RADAR-LOG-FAIL]', err);
+    }
+  })();
+};
+
 export const radarDispatcherService = {
   /**
    * Cruza produtos descobertos com as regras de automação dos usuários.
@@ -152,6 +196,12 @@ export const radarDispatcherService = {
         if (pendingJobs && pendingJobs >= 2) {
           console.log(`${logPrefix} [RADAR QUEUE] Rota ${route.id} já possui ${pendingJobs} itens pendentes. Pulando.`);
           totalSkippedQueue++;
+          logActivity(supabase, {
+            source_id: source.id,
+            user_id: source.user_id,
+            event_type: 'skipped_pacing',
+            discard_reason: `Queue full: ${pendingJobs} pending`
+          });
           continue;
         }
 
@@ -171,6 +221,14 @@ export const radarDispatcherService = {
           if (dedupeError) {
             routeSkippedDedupe++;
             totalSkippedDedupe++;
+            logActivity(supabase, {
+              source_id: source.id,
+              user_id: source.user_id,
+              event_type: 'skipped_dedupe',
+              product_id: product.id,
+              title: product.name,
+              discard_reason: 'Already sent to this destination (last 7 days)'
+            });
             // IMPORTANTE: Se está dedupado para esta rota, apenas continuamos.
             // Não alteramos o status do vínculo RDP, pois ele pode ser útil para outras rotas.
             continue;
@@ -235,7 +293,7 @@ export const radarDispatcherService = {
               }]
             };
 
-            await campaignService.create(source.user_id, campaignData, supabase);
+            const campaign = await campaignService.create(source.user_id, campaignData, supabase);
             
             // F. Marcar Vínculo como Despachado (Consumo)
             await supabase
@@ -243,9 +301,22 @@ export const radarDispatcherService = {
               .update({ 
                 status: 'dispatched', 
                 dispatched_at: new Date().toISOString(),
+                campaign_id: campaign.id,
                 attempts: 1
               })
               .eq('id', product.rdp_id);
+
+            logActivity(supabase, {
+              source_id: source.id,
+              user_id: source.user_id,
+              event_type: 'dispatched',
+              product_id: product.id,
+              campaign_id: campaign.id,
+              keyword: product.category,
+              score: product.opportunity_score,
+              commission_value: product.commission_value,
+              title: product.name
+            });
 
             console.log(`${logPrefix} [MARKED-DISPATCHED] Vínculo ${product.rdp_id} consumido com sucesso.`);
 

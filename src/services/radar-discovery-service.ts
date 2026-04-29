@@ -10,6 +10,50 @@ export interface DiscoveryResult {
   tasksExecuted: number;
 }
 
+/**
+ * Fire-and-forget helper for activity logging.
+ * Ensuring zero impact on the main pipeline.
+ */
+const logActivity = (supabase: SupabaseClient, event: {
+  source_id: string;
+  user_id: string;
+  event_type: string;
+  product_id?: string;
+  campaign_id?: string;
+  keyword?: string;
+  score?: number;
+  commission_value?: number;
+  discard_reason?: string;
+  title?: string;
+  page?: number;
+}) => {
+  // Fire-and-forget logic using async wrapper to avoid TS PromiseLike issues
+  (async () => {
+    try {
+      await supabase
+        .from('radar_activity_log')
+        .insert({
+          source_id: event.source_id,
+          user_id: event.user_id,
+          event_type: event.event_type,
+          product_id: event.product_id,
+          campaign_id: event.campaign_id,
+          keyword: event.keyword,
+          score: event.score,
+          commission_value: event.commission_value,
+          discard_reason: event.discard_reason,
+          metadata: {
+            title: (event.title ?? '').substring(0, 100),
+            page: event.page ?? null,
+            source_id: event.source_id
+          }
+        });
+    } catch (err) {
+      console.warn('[RADAR-LOG-FAIL]', err);
+    }
+  })();
+};
+
 export const radarDiscoveryService = {
   /**
    * Executa a descoberta de produtos para uma fonte específica ou para todas as ativas.
@@ -51,6 +95,27 @@ export const radarDiscoveryService = {
     if (sourcesError) throw sourcesError;
 
     console.log(`${logPrefix} Processando ${sources?.length || 0} fontes de Radar.`);
+
+    // ─── RETENÇÃO AUTOMÁTICA (Fase 1: 30 dias) ───────────────────────────────
+    // Fire-and-forget: Não bloqueia o início do processamento
+    (async () => {
+      try {
+        await supabase
+          .from('radar_activity_log')
+          .delete()
+          .lt('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+      } catch (err) {
+        console.warn('[RETENTION-FAIL]', err);
+      }
+    })();
+
+    const { count: totalLogs } = await supabase
+      .from('radar_activity_log')
+      .select('*', { count: 'estimated', head: true });
+
+    if (totalLogs && totalLogs > 15000000) {
+      console.error(`${logPrefix} [ADMIN-ALERT] [CRITICAL] radar_activity_log capacity exceeded: ${totalLogs} records. Check retention job!`);
+    }
 
     const NOW = Date.now();
     let globalInserted = 0;
@@ -185,6 +250,9 @@ export const radarDiscoveryService = {
               keyword: kw.term
             });
 
+            // Contagem de descartes por keyword (Limites de cardinalidade)
+            let skippedMatchCount = 0;
+
             // Pipeline por Item (Trace Mode Ativado)
             for (const p of rawProducts) {
               const url = p.productLink || p.offerLink;
@@ -192,12 +260,32 @@ export const radarDiscoveryService = {
               // 1. PRE-FILTER (Validação básica)
               if (!p.name || !p.imageUrl || !p.currentPriceFactual || p.currentPriceFactual <= 0 || !p.commissionRate) {
                 kwValidationSkipped++;
+                logActivity(supabase, {
+                  source_id: s.id,
+                  user_id: s.user_id,
+                  event_type: 'ineligible',
+                  keyword: kw.term,
+                  title: p.name,
+                  discard_reason: 'Incomplete metadata',
+                  page: s.discovery_page
+                });
                 continue;
               }
 
               // 2. KEYWORD HARD FILTER (NOVO)
               if (!hasKeywordMatch(p.name, kw.term, kw.aliases || [])) {
                 kwHardFilterSkipped++;
+                if (skippedMatchCount < 10) {
+                  logActivity(supabase, {
+                    source_id: s.id,
+                    user_id: s.user_id,
+                    event_type: 'skipped_match',
+                    keyword: kw.term,
+                    title: p.name,
+                    page: s.discovery_page
+                  });
+                  skippedMatchCount++;
+                }
                 console.log(`${logPrefix} [KEYWORD-FILTER-SKIP] "${p.name.slice(0, 30)}..." não deu match em "${kw.term}" (incluindo variantes e aliases)`);
                 continue;
               }
@@ -253,6 +341,16 @@ export const radarDiscoveryService = {
                   reason: scoreReason
                 });
                 kwScoreSkipped++;
+                logActivity(supabase, {
+                  source_id: s.id,
+                  user_id: s.user_id,
+                  event_type: 'skipped_score',
+                  keyword: kw.term,
+                  score: finalScore,
+                  title: p.name,
+                  discard_reason: scoreReason,
+                  page: s.discovery_page
+                });
                 continue;
               }
 
@@ -310,6 +408,16 @@ export const radarDiscoveryService = {
               if (inserted) {
                 funnelTotalNew++;
                 kwNewLinks++;
+                logActivity(supabase, {
+                  source_id: s.id,
+                  user_id: s.user_id,
+                  event_type: 'discovered',
+                  product_id: product.id,
+                  keyword: kw.term,
+                  score: finalScore,
+                  title: p.name,
+                  page: s.discovery_page
+                });
               } else {
                 kwDeduped++;
               }
@@ -319,6 +427,14 @@ export const radarDiscoveryService = {
             console.log(`${logPrefix} [RADAR-TRACE] ${kw.term} | fetch:${rawProducts.length} | hard_filter_skip:${kwHardFilterSkipped} | val_skip:${kwValidationSkipped} | dedupe_skip:${kwDeduped} | score_skip:${kwScoreSkipped} | ok:${kwNewLinks}`);
           } catch (kwErr: any) {
             console.error(`${logPrefix} [RADAR-FAIL] Erro na keyword "${kw.term}":`, kwErr.message);
+            logActivity(supabase, {
+              source_id: s.id,
+              user_id: s.user_id,
+              event_type: 'api_error',
+              keyword: kw.term,
+              discard_reason: kwErr.message,
+              page: s.discovery_page
+            });
             // Continua para a próxima keyword
           }
         }
