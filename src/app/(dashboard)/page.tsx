@@ -67,7 +67,7 @@ export default function DashboardPage() {
       <LayoutContainer type="analytical">
         <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-kinetic-orange" />
-          <span className="text-[10px] font-black uppercase tracking-[0.3em] font-headline italic">Sincronizando Dashboard...</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.3em] font-headline italic">Carregando dados...</span>
         </div>
       </LayoutContainer>
     );
@@ -77,41 +77,41 @@ export default function DashboardPage() {
   // Hero Command Center Metrics
   const HERO_KPIs = [
     {
-      label: 'Campanhas Ativas',
+      label: 'Envios Ativos',
       value: summary?.active_campaigns_count || 0,
-      description: 'Estruturas de disparo',
+      description: 'Modelos de envio',
       icon: <Send />,
       colorScheme: 'kinetic' as const,
       href: '/campanhas',
     },
     {
-      label: 'Monitoramentos',
+      label: 'Rastreadores ativos',
       value: summary?.monitorings_count || 0,
-      description: 'Fontes de entrada',
+      description: 'Grupos rastreados',
       icon: <Users />,
       colorScheme: 'kinetic' as const,
       href: '/monitoramento',
     },
     {
-      label: 'Automações Ativas',
+      label: 'Envios automáticos',
       value: summary?.active_automations_count || 0,
-      description: 'Pipelines em execução',
+      description: 'Ações automáticas',
       icon: <Zap />,
       colorScheme: 'kinetic' as const,
       href: '/automacoes',
     },
     {
-      label: 'Grupos Conectados',
+      label: 'Grupos do WhatsApp',
       value: summary?.total_groups || 0,
-      description: 'Conexões operacionais',
+      description: 'Canais ativos',
       icon: <Users />,
       colorScheme: 'kinetic' as const,
       href: '/grupos',
     },
     {
-      label: 'Listas de Destino',
+      label: 'Listas de envio',
       value: summary?.destination_lists_count || 0,
-      description: 'Segmentações ativa',
+      description: 'Contatos na lista',
       icon: <LayoutList />,
       colorScheme: 'kinetic' as const,
       href: '/listas-destino',
@@ -130,7 +130,7 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <PageHeader 
           title="Dashboard Operacional" 
-          description="Monitoramento centralizado de envios e performance."
+          description="Acompanhamento geral de envios e resultados."
           icon={<LayoutDashboard size={24} />}
           className="mb-0"
         />
@@ -221,7 +221,7 @@ export default function DashboardPage() {
                         <TrendingUp className="w-4 h-4 text-kinetic-orange" />
                     </div>
                     <div>
-                        <h3 className="text-xs font-black uppercase tracking-widest text-white/90">Comparativo de Envios</h3>
+                        <h3 className="text-xs font-black uppercase tracking-widest text-white/90">Resumo de Envios</h3>
                     </div>
                 </div>
                 
@@ -292,11 +292,11 @@ export default function DashboardPage() {
 
                     <div className="flex items-center gap-6 border-l border-white/5 pl-4">
                         <div className="text-right">
-                            <span className="block text-[8px] font-black text-white/20 uppercase tracking-widest">Sucesso</span>
+                            <span className="block text-[8px] font-black text-white/20 uppercase tracking-widest">Enviados</span>
                             <span className="text-sm font-black text-emerald-400">{successRate.toFixed(1)}%</span>
                         </div>
                         <div className="text-right">
-                            <span className="block text-[8px] font-black text-white/20 uppercase tracking-widest">Total</span>
+                            <span className="block text-[8px] font-black text-white/20 uppercase tracking-widest">Tentativas</span>
                             <span className="text-sm font-black text-white">{totalAttempts.toLocaleString()}</span>
                         </div>
                     </div>
@@ -348,8 +348,8 @@ export default function DashboardPage() {
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-widest text-white/90">Evolução Temporal</h3>
-                  <p className="text-[8px] text-white/20 uppercase tracking-widest">Ritmo de envios ({period})</p>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-white/90">Envios por dia</h3>
+                  <p className="text-[8px] text-white/20 uppercase tracking-widest">Quantidade enviada por dia ({period})</p>
                 </div>
               </div>
             </div>
@@ -386,7 +386,7 @@ export default function DashboardPage() {
                       textTransform: 'uppercase'
                     }} 
                   />
-                  <Bar dataKey="enviados" name="Sucesso" fill="url(#barGradient)" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="enviados" name="Enviados" fill="url(#barGradient)" radius={[2, 2, 0, 0]} />
                   <Bar dataKey="falhas" name="Falhas" fill="#ef4444" radius={[2, 2, 0, 0]} opacity={0.6} />
                 </BarChart>
               </ResponsiveContainer>
@@ -406,8 +406,8 @@ export default function DashboardPage() {
                     <Zap className="w-4 h-4 text-kinetic-orange animate-pulse" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-black uppercase tracking-widest text-white/90">Pulso Operacional</h3>
-                    <p className="text-[8px] text-white/20 uppercase tracking-[0.2em] font-bold">Atividade em tempo real</p>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-white/90">Últimas atividades</h3>
+                    <p className="text-[8px] text-white/20 uppercase tracking-[0.2em] font-bold">Atividades recentes</p>
                   </div>
                 </div>
                 <Link href="/relatorios" className="p-2 hover:bg-white/5 rounded-lg transition-colors group">
@@ -473,8 +473,8 @@ export default function DashboardPage() {
                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-dashed border-white/10">
                      <Clock className="w-6 h-6 text-white/20" />
                    </div>
-                   <h4 className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Pulso Ausente</h4>
-                   <p className="text-[8px] font-bold uppercase text-white/20 tracking-tighter">Nenhuma atividade operacional detectada no período selecionado.</p>
+                   <h4 className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Sem atividades</h4>
+                   <p className="text-[8px] font-bold uppercase text-white/20 tracking-tighter">Nada foi enviado neste período.</p>
                 </div>
               )}
             </div>

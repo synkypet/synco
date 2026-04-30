@@ -37,4 +37,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-.env*.local
+# synco diagnostics & security
+/scratch/
+/schema_dump.sql
+/backup/
+/synco-backup.bundle
+*.log
+*.bundle

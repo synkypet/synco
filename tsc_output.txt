@@ -1,1 +1,0 @@
-src/components/channels/ChannelWasenderConnectDialog.tsx(7,20): error TS2307: Cannot find module 'react-qr-code' or its corresponding type declarations.
