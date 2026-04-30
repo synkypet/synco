@@ -45,6 +45,7 @@ import LayoutContainer from '@/components/layout/LayoutContainer';
 import { Zap } from 'lucide-react';
 import { useSelectedProducts } from '@/contexts/SelectedProductsContext';
 import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
+import { QuickSendConfirmationDialog } from '@/components/campaigns/QuickSendConfirmationDialog';
 
 // Opções de Tonalidade da IA (Base44)
 const TONE_OPTIONS = [
@@ -75,7 +76,7 @@ export default function EnvioRapidoPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-  const [isSaveListOpen, setIsSaveListOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const { data: savedLists, isLoading: loadingLists } = useDestinations(user?.id);
 
@@ -277,12 +278,17 @@ export default function EnvioRapidoPage() {
       isPartial: selected > 0 && selected < total
     };
   };
-
   const handleSend = () => {
     if (selectedDestinations.length === 0) {
       toast.error('Selecione pelo menos um grupo de destino.');
       return;
     }
+
+    setIsConfirmOpen(true);
+  };
+
+  const handleFinalConfirm = () => {
+    setIsConfirmOpen(false);
 
     const selectedProducts = processedProducts.filter(p => selectedProductIds.includes(p.id));
 
@@ -313,7 +319,16 @@ export default function EnvioRapidoPage() {
       destinations: selectedDestinations.map(id => ({
         id,
         type: 'group' as const,
-      }))
+      })),
+      metadata: {
+        confirmed_at: new Date().toISOString(),
+        confirmed_by: user?.email,
+        audit: {
+          products_count: selectedProducts.length,
+          destinations_count: selectedDestinations.length,
+          originating_channels: [...new Set(groups?.filter(g => selectedDestinations.includes(g.id)).map(g => g.channel_name))].filter(Boolean)
+        }
+      }
     };
 
     dispatchQuickSend(
@@ -337,22 +352,13 @@ export default function EnvioRapidoPage() {
     <LayoutContainer type="operational">
       <PageHeader
         title="Envio Rápido"
-        description="Core Operational Unit: Extração, Gestão e Broadcast Multiponto."
+        description="Envio rápido e simplificado de ofertas para seus grupos."
         icon={<Zap size={24} />}
       />
 
       <OperationalAccessBanner />
 
       <Tabs defaultValue="broadcast" className="w-full">
-        <TabsList className="mb-6 bg-deep-void/50 shadow-skeuo-pressed p-1 rounded-2xl border-none h-12">
-          <TabsTrigger
-            value="broadcast"
-            className="text-[10px] font-black uppercase tracking-[0.2em] px-8 h-full rounded-xl data-[state=active]:bg-kinetic-orange/10 data-[state=active]:text-kinetic-orange data-[state=active]:shadow-skeuo-pressed font-headline italic"
-          >
-            🚀 Broadcast Operacional
-          </TabsTrigger>
-        </TabsList>
-
         <TabsContent value="broadcast" className="mt-0">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             <div className="lg:col-span-7 space-y-8">
@@ -366,10 +372,10 @@ export default function EnvioRapidoPage() {
                     </div>
                     <div className="flex flex-col">
                       <span className="font-black text-[11px] uppercase tracking-[0.2em] font-headline italic text-white/90">
-                        Entrada de Links
+                        Cole seus links aqui
                       </span>
                       <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
-                        Protocolo de Extração Factual
+                        Identificação automática do produto
                       </span>
                     </div>
                   </div>
@@ -402,11 +408,11 @@ export default function EnvioRapidoPage() {
                   >
                     {isProcessing ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Sincronizando...
+                        <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Lendo informações...
                       </>
                     ) : (
                       <>
-                        <Sparkles className="w-3.5 h-3.5 mr-2" /> Iniciar Extração
+                        <Sparkles className="w-3.5 h-3.5 mr-2" /> Verificar Links
                       </>
                     )}
                   </KineticButton>
@@ -465,7 +471,7 @@ export default function EnvioRapidoPage() {
               {processedProducts.length > 0 && (
                 <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
                   <div className="flex items-center gap-3 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/30 italic">
-                    Resultados Operacionais ({processedProducts.length})
+                    Produtos Encontrados ({processedProducts.length})
                   </div>
 
                   {processedProducts.map(product => (
@@ -538,7 +544,7 @@ export default function EnvioRapidoPage() {
 
                                 {!product.factual.eligibility.isEligible && (
                                   <Badge className="bg-red-500/10 text-red-500 border border-red-500/20 text-[9px] font-black uppercase tracking-widest font-headline italic">
-                                    ⚠️ Inelegível
+                                    ⚠️ Link não reconhecido
                                   </Badge>
                                 )}
 
@@ -611,7 +617,7 @@ export default function EnvioRapidoPage() {
                                     <PopoverContent className="w-64 bg-deep-void border-none shadow-skeuo-elevated p-5 animate-in fade-in zoom-in duration-200 rounded-2xl ring-1 ring-white/5">
                                       <div className="space-y-4">
                                         <h5 className="text-[10px] font-black uppercase tracking-widest text-white/30 border-b border-white/5 pb-2">
-                                          Auditoria Factual Pro
+                                          Verificação de Preço
                                         </h5>
                                         
                                         <div className="space-y-2.5 text-[11px] font-bold text-white/40">
@@ -654,7 +660,7 @@ export default function EnvioRapidoPage() {
                                   variant="outline"
                                   className="bg-kinetic-orange/10 text-kinetic-orange border border-kinetic-orange/20 px-2 h-5 text-[8px] font-black uppercase tracking-widest shadow-glow-orange/5"
                                 >
-                                  Tracking Oficial Ativo
+                                  Link Seguro e Rastreado
                                 </Badge>
 
                                 {product.factual.commissionValueFactual && product.factual.commissionValueFactual > 0 && (
@@ -729,24 +735,14 @@ export default function EnvioRapidoPage() {
                     </div>
                     <div className="flex flex-col">
                       <span className="font-black text-[11px] uppercase tracking-[0.2em] font-headline italic text-white/90">
-                        Estrutura de Destino
+                        Onde enviar?
                       </span>
                       <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
-                        Vetores de Propagação Multiponto
+                        Escolha os grupos de destino
                       </span>
                     </div>
                   </div>
 
-                  {selectedDestinations.length > 1 && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => setIsSaveListOpen(true)}
-                      className="h-8 px-3 bg-kinetic-orange/10 hover:bg-kinetic-orange/20 text-kinetic-orange border-none text-[9px] font-black uppercase tracking-widest gap-2 rounded-lg transition-all"
-                    >
-                      <Sparkles className="w-3 h-3" /> Salvar Coleção
-                    </Button>
-                  )}
                 </div>
 
                 {loadingDestinations || loadingLists ? (
@@ -798,11 +794,16 @@ export default function EnvioRapidoPage() {
                     )}
                     {Object.entries(groupedDestinations).map(([channelId, channelData]) => (
                       <div key={channelId} className="space-y-3">
-                        <div className="flex items-center gap-2 px-1">
-                          <div className="w-1.5 h-1.5 rounded-full bg-kinetic-orange shadow-glow-orange" />
-                          <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                             {channelData.name} {channelData.phone ? `• ${channelData.phone}` : '• Sessão Ativa'}
-                          </span>
+                        <div className="flex items-center justify-between px-2 pt-2 pb-1 border-b border-white/5 mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-kinetic-orange shadow-glow-orange" />
+                            <span className="text-[11px] font-black uppercase tracking-[0.1em] text-white/80 font-headline italic">
+                               {channelData.name}
+                            </span>
+                          </div>
+                          {channelData.phone && (
+                            <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest">{channelData.phone}</span>
+                          )}
                         </div>
                         
                         <div className="space-y-2">
@@ -870,7 +871,7 @@ export default function EnvioRapidoPage() {
               ) : (
                 <TactileCard className="p-8 border-none ring-1 ring-kinetic-orange/20 bg-gradient-to-br from-anthracite-surface to-deep-void shadow-skeuo-elevated sticky top-24">
                   <h3 className="text-xs font-black uppercase tracking-widest text-kinetic-orange mb-6 font-headline">
-                    Sumário Operacional
+                    Resumo do Envio
                   </h3>
 
                   <div className="space-y-4 mb-8">
@@ -911,21 +912,15 @@ export default function EnvioRapidoPage() {
                   >
                     {isSending ? (
                       <>
-                        <Loader2 className="w-5 h-5 mr-3 animate-spin" /> Sincronizando Satélites...
+                        <Loader2 className="w-5 h-5 mr-3 animate-spin" /> Iniciando envios...
                       </>
                     ) : (
                       <>
-                        <SendHorizonal className="w-4 h-4 mr-3" /> ATIVAR BROADCAST
+                        <SendHorizonal className="w-4 h-4 mr-3" /> ENVIAR AGORA
                       </>
                     )}
                   </KineticButton>
 
-                  <div className="mt-6 flex items-start gap-3 p-4 bg-deep-void/50 rounded-xl border-none shadow-skeuo-pressed">
-                    <AlertCircle className="w-4 h-4 text-kinetic-orange flex-shrink-0 mt-0.5" />
-                    <p className="text-[9px] font-bold leading-relaxed uppercase text-white/30">
-                      ALERTA: A transmissão real depende das APIs externas. No modo atual, os registros são persistidos no Supabase.
-                    </p>
-                  </div>
                 </TactileCard>
               )}
             </div>
@@ -1147,11 +1142,14 @@ export default function EnvioRapidoPage() {
           </div>
         </TabsContent>}
       </Tabs>
-      <SaveListDialog 
-        open={isSaveListOpen}
-        onOpenChange={setIsSaveListOpen}
-        selectedGroupIds={selectedDestinations}
-        userId={user?.id as string}
+      <QuickSendConfirmationDialog 
+        open={isConfirmOpen}
+        onOpenChange={setIsConfirmOpen}
+        onConfirm={handleFinalConfirm}
+        productsCount={selectedProductIds.length}
+        groupsCount={selectedDestinations.length}
+        channelNames={[...new Set(groups?.filter(g => selectedDestinations.includes(g.id)).map(g => g.channel_name || 'Desconhecido'))].filter(Boolean) as string[]}
+        destinationsNames={groups?.filter(g => selectedDestinations.includes(g.id)).map(g => g.name || 'Grupo sem nome') || []}
       />
     </LayoutContainer>
   );

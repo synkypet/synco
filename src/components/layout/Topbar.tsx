@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Search, Bell, User, LogOut, ChevronDown, Menu } from 'lucide-react';
+import { Search, Bell, User, LogOut, ChevronDown, Menu, ShieldCheck, Zap } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useChannels } from '@/hooks/use-channels';
 import { cn } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,6 +45,54 @@ export default function Topbar({ onMobileMenuToggle }: TopbarProps) {
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
   const initials = getInitials(displayName);
 
+  const { data: channels } = useChannels(user?.id);
+  const activeChannel = channels?.[0]; // O backend já ordena por is_primary e data de criação
+  const rawStatus = activeChannel?.config?.wasender_status ?? activeChannel?.config?.status ?? 'unknown';
+
+  // Mapeamento explícito de status conforme regra de produto
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'connected':
+        return { 
+          label: 'Conectado', 
+          color: 'text-emerald-500', 
+          dot: 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)]',
+          icon: <ShieldCheck size={10} className="text-emerald-500/50" />
+        };
+      case 'disconnected':
+        return { 
+          label: 'Desconectado', 
+          color: 'text-red-400', 
+          dot: 'bg-red-500/50',
+          icon: null
+        };
+      case 'qrcode_pending':
+      case 'need_scan':
+        return { 
+          label: 'Aguardando QR', 
+          color: 'text-amber-400', 
+          dot: 'bg-amber-500 animate-pulse',
+          icon: null
+        };
+      case 'session_lost':
+        return { 
+          label: 'Sessão Perdida', 
+          color: 'text-orange-500', 
+          dot: 'bg-orange-500 shadow-glow-orange',
+          icon: null
+        };
+      default:
+        return { 
+          label: 'Status Desconhecido', 
+          color: 'text-white/20', 
+          dot: 'bg-white/10',
+          icon: null
+        };
+    }
+  };
+
+  const statusConfig = getStatusConfig(rawStatus);
+
   return (
     <header className="h-16 bg-deep-void/70 backdrop-blur-2xl flex items-center justify-between px-4 md:px-6 sticky top-0 z-30 shadow-[0_1px_0_0_rgba(255,255,255,0.05)] glass-edge">
       {/* Left — Command Controls */}
@@ -56,34 +105,26 @@ export default function Topbar({ onMobileMenuToggle }: TopbarProps) {
           <Menu className="w-5 h-5 text-white/50" />
         </button>
 
-        <div className="relative hidden lg:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/20" />
-          <input
-            type="search"
-            placeholder="Comando rápido..."
-            className={cn(
-              'pl-10 pr-4 py-2 w-[280px] text-[11px] rounded-xl font-medium tracking-wide uppercase',
-              // Skeuo-pressed: deeper inset shadow for material materialization
-              'bg-[#0E0E11] shadow-[inset_3px_3px_6px_rgba(0,0,0,0.6),inset_-1px_-1px_3px_rgba(255,255,255,0.01)]',
-              'border-none outline-none ring-0 text-white/60',
-              'placeholder:text-white/10 placeholder:font-black placeholder:tracking-[0.2em]',
-              'focus:ring-1 focus:ring-kinetic-orange/30 transition-all'
-            )}
-            aria-label="Buscar"
-          />
-        </div>
-
         {/* Telemetry Display — Stitch Rule: functional indicators */}
-        <div className="hidden xl:flex items-center gap-8">
-          <div className="flex items-center gap-2.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)]" />
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-500/80 italic">Status: Link_Operational</span>
+        <Link href="/canais" className="flex items-center gap-8 group/status cursor-pointer">
+          <div className="flex items-center gap-3 bg-white/[0.02] px-3 py-1.5 rounded-full border border-white/[0.03] group-hover/status:bg-white/[0.05] transition-all">
+            <div className={cn("w-1.5 h-1.5 rounded-full transition-all duration-500", statusConfig.dot)} />
+            <div className="flex flex-col -space-y-0.5">
+              <span className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20">WhatsApp</span>
+              <span className={cn("text-[9px] font-black uppercase tracking-[0.1em] italic transition-all duration-500", statusConfig.color)}>
+                {statusConfig.label}
+              </span>
+            </div>
+            {statusConfig.icon && <div className="ml-1">{statusConfig.icon}</div>}
           </div>
-          <div className="flex items-center gap-2.5">
-             <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
-             <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20">Region: SA_East_1</span>
-          </div>
-        </div>
+
+          {activeChannel?.name && (
+            <div className="hidden sm:flex items-center gap-2 opacity-40 group-hover/status:opacity-100 transition-opacity">
+              <Zap size={10} className="text-kinetic-orange" />
+              <span className="text-[9px] font-bold text-white tracking-widest uppercase italic">{activeChannel.name}</span>
+            </div>
+          )}
+        </Link>
       </div>
 
       {/* Right — notifications + user */}

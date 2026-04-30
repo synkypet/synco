@@ -129,9 +129,9 @@ export async function handleWasenderWebhook(request: Request, requestId: string)
           newStatus = 'session_lost';
         }
 
-        if (newStatus !== currentConfig.status) {
+        if (newStatus !== currentConfig.wasender_status || newStatus !== currentConfig.status) {
           await supabase.from('channels').update({
-            config: { ...currentConfig, status: newStatus }
+            config: { ...currentConfig, status: newStatus, wasender_status: newStatus }
           }).eq('id', channel.id);
         }
 

@@ -125,7 +125,8 @@ export const campaignService = {
         user_id: userId,
         name: dto.name || `Envio ${new Date().toLocaleString()}`,
         status: dto.scheduled_at ? 'scheduled' : 'pending',
-        scheduled_at: dto.scheduled_at
+        scheduled_at: dto.scheduled_at,
+        metadata: dto.metadata || {}
       })
       .select()
       .single();

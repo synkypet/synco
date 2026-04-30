@@ -227,6 +227,12 @@ export async function POST(request: Request) {
           results.push({ jobId: job.id, status: 'failed', error: errorMessage });
         }
 
+        try {
+          await supabase.rpc('check_and_close_campaign', { p_campaign_id: job.campaign_id });
+        } catch (closeError) {
+          console.error(`[WORKER-SYNC] Failed to close campaign ${job.campaign_id}:`, closeError);
+        }
+
       } finally {
         await supabase.rpc('release_channel_lock', { p_channel_id: channelId, p_worker_id: requestId });
       }

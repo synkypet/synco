@@ -1,8 +1,10 @@
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { WasenderClient } from '@/lib/wasender/client';
 import { requireOperationalAccess, requireChannelLimit } from '@/lib/access/require-operational-access';
 import { NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 
 /**
  * POST /api/wasender/channels
@@ -171,5 +173,49 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error(`${logPrefix} Erro inesperado:`, error.message);
     return NextResponse.json({ error: 'Internal Server Error', message: error.message }, { status: 500 });
+  }
+}
+
+/**
+ * Lógica de busca cacheada para canais.
+ * TTL de 15 segundos com tag para invalidação futura.
+ */
+const getCachedChannels = unstable_cache(
+  async (userId: string) => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from('channels')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+  ['channels-list'],
+  {
+    revalidate: 15,
+    tags: ['channels']
+  }
+);
+
+/**
+ * GET /api/wasender/channels
+ * Retorna os canais do usuário autenticado com cache.
+ */
+export async function GET() {
+  const gate = await requireOperationalAccess();
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
+
+  try {
+    // O userId é passado como argumento para garantir isolamento do cache
+    const channels = await getCachedChannels(user.id);
+    return NextResponse.json(channels);
+  } catch (error: any) {
+    console.error('[CHANNELS-GET] Erro:', error.message);
+    return NextResponse.json({ error: 'Failed to fetch channels' }, { status: 500 });
   }
 }

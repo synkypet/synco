@@ -98,7 +98,7 @@ export default function DashboardPage() {
       description: 'Pipelines em execução',
       icon: <Zap />,
       colorScheme: 'kinetic' as const,
-      href: '/monitoramento',
+      href: '/automacoes',
     },
     {
       label: 'Grupos Conectados',

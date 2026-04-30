@@ -59,23 +59,32 @@ export const reportsService = {
     let destination_lists_count = 0;
 
     try {
-      // 2. Fetch Job stats from send_jobs (where status actually lives)
-      let jobQuery = supabase
-        .from('send_jobs')
-        .select('status, destination, created_at')
-        .eq('user_id', userId);
-      
-      jobQuery = this._applyDateFilter(jobQuery, options);
-      const { data: jobs, error: jobError } = await jobQuery;
-      
-      if (!jobError && jobs) {
-        total_sent = jobs.filter(j => j.status === 'completed' || j.status === 'sent').length;
-        total_failed = jobs.filter(j => j.status === 'failed').length;
-        total_pending = jobs.filter(j => j.status === 'pending' || j.status === 'processing').length;
+      // 2. Fetch Job stats from RPC (Bypasses 1000 row limit and processes on server)
+      const { data: summaryData, error: summaryError } = await supabase.rpc('get_dashboard_summary', {
+        p_user_id: userId,
+        p_days: options.days || 7
+      });
+
+      if (!summaryError && summaryData && summaryData[0]) {
+        total_sent = Number(summaryData[0].total_sent);
+        total_failed = Number(summaryData[0].total_failed);
+        total_pending = Number(summaryData[0].total_pending);
+      } else if (summaryError) {
+        console.error('[REPORTS-SERVICE] RPC get_dashboard_summary failed, falling back to client-side query:', summaryError);
+        // Fallback para garantir resiliência caso a migration ainda não tenha sido aplicada
+        let jobQuery = supabase
+          .from('send_jobs')
+          .select('status', { count: 'exact' })
+          .eq('user_id', userId);
         
-        // Count unique destinations (groups) active in this period
-        const activeIds = [...new Set(jobs.map(j => j.destination))];
-        active_groups_count = activeIds.length;
+        jobQuery = this._applyDateFilter(jobQuery, options).limit(10000);
+        const { data: jobs } = await jobQuery;
+        
+        if (jobs) {
+          total_sent = jobs.filter(j => j.status === 'completed' || j.status === 'sent').length;
+          total_failed = jobs.filter(j => j.status === 'failed').length;
+          total_pending = jobs.filter(j => j.status === 'pending' || j.status === 'processing').length;
+        }
       }
 
       // 3. New Hero Metrics
@@ -130,47 +139,54 @@ export const reportsService = {
       end = endOfDay(new Date());
     }
 
-    // 2. Fetch Data
-    const { data: jobs, error } = await supabase
-      .from('send_jobs')
-      .select('status, created_at')
-      .eq('user_id', userId)
-      .not('status', 'eq', 'pending')
-      .gte('created_at', start.toISOString())
-      .lte('created_at', end.toISOString());
+    // 2. Fetch Data via RPC (Highly Performant Aggregation)
+    const { data: stats, error } = await supabase.rpc('get_operational_stats', {
+      p_user_id: userId,
+      p_days: options.days || 7
+    });
 
-    if (error) throw error;
+    if (error) {
+       console.error('[REPORTS-SERVICE] RPC get_operational_stats failed:', error);
+       // Fallback logic for charts (using previous logic)
+       const { data: jobs } = await supabase
+         .from('send_jobs')
+         .select('status, created_at')
+         .eq('user_id', userId)
+         .not('status', 'eq', 'pending')
+         .gte('created_at', start.toISOString())
+         .lte('created_at', end.toISOString())
+         .limit(10000);
 
-    // 3. Generate Chronological Days
+       const dateInterval = eachDayOfInterval({ start, end });
+       const weekly = dateInterval.map(d => {
+         const dayJobs = jobs?.filter(j => isSameDay(parseISO(j.created_at!), d)) || [];
+         return {
+           name: format(d, 'dd/MM', { locale: ptBR }),
+           enviados: dayJobs.filter(j => j.status === 'completed' || j.status === 'sent').length,
+           falhas: dayJobs.filter(j => j.status === 'failed').length,
+           pendentes: dayJobs.filter(j => j.status === 'pending' || j.status === 'processing').length,
+         };
+       });
+
+       return { weekly, hourly: [] }; // Hourly ignored in fallback
+    }
+
+    // 3. Map RPC results to Chart Format
+    // O RPC retorna 'day' e os contadores. Precisamos garantir que todos os dias do intervalo existam (preencher lacunas com zero)
     const dateInterval = eachDayOfInterval({ start, end });
     const weekly = dateInterval.map(d => {
-      const dayJobs = jobs?.filter(j => isSameDay(parseISO(j.created_at!), d)) || [];
+      const dayStr = format(d, 'yyyy-MM-dd');
+      const dayData = stats.find((s: any) => s.day === dayStr);
       
       return {
         name: format(d, 'dd/MM', { locale: ptBR }),
-        enviados: dayJobs.filter(j => j.status === 'completed' || j.status === 'sent').length,
-        falhas: dayJobs.filter(j => j.status === 'failed').length,
-        pendentes: dayJobs.filter(j => j.status === 'pending' || j.status === 'processing').length,
+        enviados: dayData ? Number(dayData.enviados) : 0,
+        falhas: dayData ? Number(dayData.falhas) : 0,
+        pendentes: dayData ? Number(dayData.pendentes) : 0,
       };
     });
 
-    // 4. Hourly (Current day focus or context)
-    const hourlyMap: Record<string, number> = {};
-    for (let i = 0; i < 24; i++) {
-      hourlyMap[i.toString().padStart(2, '0') + 'h'] = 0;
-    }
-
-    jobs?.forEach(d => {
-      // Solo contamos para hoy si es gráfico de hoy, o total si es periodo largo
-      if (d.status === 'completed' || d.status === 'sent') {
-        const hour = new Date(d.created_at!).getHours().toString().padStart(2, '0') + 'h';
-        if (hourlyMap[hour] !== undefined) hourlyMap[hour] += 1;
-      }
-    });
-
-    const hourly = Object.entries(hourlyMap).map(([hour, enviados]) => ({ hour, enviados }));
-
-    return { weekly, hourly };
+    return { weekly, hourly: [] };
   },
 
   async getTopGroups(userId: string, options: { days?: number, startDate?: string, endDate?: string } = { days: 7 }): Promise<TopGroupData[]> {
@@ -182,8 +198,8 @@ export const reportsService = {
       .eq('user_id', userId)
       .eq('status', 'sent');
     
-    jobQuery = this._applyDateFilter(jobQuery, options);
-    const { data: jobs, error } = await jobQuery;
+    jobQuery = this._applyDateFilter(jobQuery, options).limit(10000);
+    const { data: jobs, error: error } = await jobQuery;
 
     if (error) throw error;
 

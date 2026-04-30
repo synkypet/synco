@@ -20,6 +20,7 @@ export interface Campaign {
   failed_count?: number;
   template_name?: string;
   segment_name?: string;
+  metadata?: any;
 }
 
 export interface CampaignItem {
@@ -85,6 +86,7 @@ export interface CreateCampaignDTO {
     type: 'list' | 'group';
     id: string;
   }[];
+  metadata?: any;
 }
 export interface CampaignsPaginatedResponse {
   campaigns: Campaign[];

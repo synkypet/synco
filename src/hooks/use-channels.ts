@@ -6,8 +6,13 @@ import { toast } from 'sonner';
 export function useChannels(userId: string | undefined) {
   return useQuery({
     queryKey: ['channels', userId],
-    queryFn: () => userId ? channelService.list(userId) : Promise.resolve([]),
+    queryFn: () => fetch('/api/wasender/channels').then(res => res.ok ? res.json() : Promise.reject('Failed to fetch')) as Promise<Channel[]>,
     enabled: !!userId,
+    refetchInterval: () => {
+      // 30s base + jitter de ±5s
+      const jitter = Math.floor(Math.random() * 10000) - 5000;
+      return 30000 + jitter;
+    }
   });
 }
 
