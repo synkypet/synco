@@ -319,13 +319,34 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     const rawPrice = parseFloat(rawPriceStr);
     if (rawPrice === 0) return 100000;
 
+    // --- NOVA LÓGICA: Validação Matemática (Fase 2) ---
+    // Se temos comissão e taxa, a matemática não mente.
+    const rawComm = parseFloat(String(node.commission || "0"));
+    const rawRate = parseFloat(String(node.commissionRate || "0"));
+
+    if (rawComm > 0 && rawRate > 0) {
+      const checkScale = (s: number) => {
+        const price = rawPrice / s;
+        const expectedComm = price * rawRate;
+        // Margem de erro de 1% para dízimas e arredondamentos da API
+        return Math.abs(expectedComm - rawComm) < (rawComm * 0.01 + 0.01);
+      };
+
+      if (checkScale(1)) return 1;
+      if (checkScale(100)) return 100;
+      if (checkScale(100000)) return 100000;
+    }
+
+    // --- HEURÍSTICA DE FALLBACK (Melhorada) ---
+    
     // 1. Se o valor bruto já contém ponto decimal (ex: 16.2), assumimos Escala 1 (Já em Reais)
     if (rawPriceStr.includes('.')) {
       if (rawPrice < 20000) return 1;
     }
 
     // 2. Se for um valor inteiro pequeno (ex: 16, 49), provavelmente é Escala 1
-    if (rawPrice < 1000) return 1;
+    // Aumentamos o limite de "pequeno" para 2000 para cobrir mais eletrônicos de entrada
+    if (rawPrice < 2000) return 1;
 
     // 3. Diferenciação entre Cents (100) e Micros (100.000)
     const asCents = rawPrice / 100;
@@ -501,7 +522,8 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     maxPrice?: number;
     minCommission?: number;
     page?: number;
-    connection: UserMarketplaceConnection 
+    connection: UserMarketplaceConnection;
+    onlyOfficialShops?: boolean;
   }): Promise<ProductMetadata[]> {
     const { 
       limit = 20, 
@@ -512,7 +534,8 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       maxPrice, 
       minCommission,
       page = 1,
-      connection 
+      connection,
+      onlyOfficialShops = false
     } = options;
 
     if (!connection.shopee_app_id || !connection.shopee_app_secret) {
@@ -526,13 +549,21 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       });
 
       // Busca com parâmetros nativos da Shopee (alinhado com referência)
-      const nodes = await client.searchProducts({ 
+      let nodes = await client.searchProducts({ 
         limit: Math.max(limit, 50), 
         sortType,
         listType,
         keyword,
         page
       });
+
+      // --- FILTRO: Lojas Oficiais (Fase 2) ---
+      if (onlyOfficialShops) {
+        nodes = nodes.filter(node => {
+          const shopType = Array.isArray(node.shopType) ? node.shopType : [node.shopType];
+          return shopType.map(String).includes('1');
+        });
+      }
 
       // Log resumido apenas do volume
       if (nodes.length > 0) {
@@ -561,9 +592,15 @@ export class ShopeeAdapter extends MarketplaceAdapter {
           
           const brResult = isBrazilFriendlyProduct({ name: cleanTitle });
           
+          const calculatedOriginal = node.priceDiscountRate && parseFloat(String(node.priceDiscountRate)) > 0
+            ? Math.round((factualPrice / (1 - parseFloat(String(node.priceDiscountRate)) / 100)) * 100) / 100
+            : (normalize(node.priceMax) > factualPrice ? normalize(node.priceMax) : 0);
+
+          const originalPrice = calculatedOriginal > factualPrice ? calculatedOriginal : 0;
+
           return {
             name: cleanTitle,
-            originalPrice: normalize(node.priceMax) || factualPrice,
+            originalPrice,
             currentPrice: factualPrice,
             currentPriceFactual: factualPrice,
             currentPriceSource: 'api.price' as const,

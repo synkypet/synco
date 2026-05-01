@@ -24,10 +24,11 @@ export async function POST(request: Request) {
       limit = 20,
       minPrice,
       maxPrice,
-      minCommission
+      minCommission,
+      onlyOfficialShops = false
     } = await request.json();
 
-    console.log(`[RADAR-FETCH] keyword="${keyword}" sortType=${sortType} listType=${listType} page=${page} limit=${limit} minPrice=${minPrice} maxPrice=${maxPrice}`);
+    console.log(`[RADAR-FETCH] keyword="${keyword}" sortType=${sortType} listType=${listType} page=${page} limit=${limit} minPrice=${minPrice} maxPrice=${maxPrice} onlyOfficialShops=${onlyOfficialShops}`);
 
     const supabaseAdmin = createAdminClient();
     const connections = await marketplaceService.getEnrichedConnections(user.id, supabaseAdmin);
@@ -48,7 +49,8 @@ export async function POST(request: Request) {
       maxPrice,
       minCommission,
       page,
-      connection
+      connection,
+      onlyOfficialShops
     });
 
     const metrics = {

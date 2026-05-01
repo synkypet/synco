@@ -16,11 +16,13 @@ export const SHOPEE_SORT_TYPE_LABELS: Record<ShopeeSortType, string> = {
 export const SHOPEE_LIST_TYPE = {
   DEFAULT: 0,
   PROMOTION: 1,
+  TOP_PERFORMANCE: 2,
 } as const;
 
 export type ShopeeListType = typeof SHOPEE_LIST_TYPE[keyof typeof SHOPEE_LIST_TYPE];
 
-export const SHOPEE_LIST_TYPE_LABELS: Record<ShopeeListType, string> = {
-  [SHOPEE_LIST_TYPE.DEFAULT]: "Padrão",
-  [SHOPEE_LIST_TYPE.PROMOTION]: "Em Promoção",
+export const SHOPEE_LIST_TYPE_LABELS: Record<number, string> = {
+  0: 'Recomendados',
+  1: 'Maior Comissão',
+  2: 'Top Performance',
 };

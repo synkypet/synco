@@ -42,3 +42,12 @@ export function toLabel(value: string): string {
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (l) => l.toUpperCase());
 }
+
+/**
+ * Extrai o nome útil de uma campanha da Shopee.
+ * Ex: "Long Tail - Teste - Pets" -> "Pets"
+ */
+export const extractOfferName = (raw: string): string => {
+  const lastDash = raw.lastIndexOf(' - ');
+  return lastDash !== -1 ? raw.slice(lastDash + 3).trim() : raw.trim();
+};
