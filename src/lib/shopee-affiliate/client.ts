@@ -168,4 +168,99 @@ export class ShopeeAffiliateClient {
       throw new Error(`Shopee ShortLink Error: ${error.message}`);
     }
   }
+
+  /**
+   * Busca campanhas de ofertas via GraphQL (shopeeOfferV2).
+   */
+  async fetchOffers({
+    keyword,
+    sortType = 1,
+    page = 1,
+    limit = 20
+  }: {
+    keyword?: string;
+    sortType?: number;
+    page?: number;
+    limit?: number;
+  }): Promise<{ nodes: ShopeeOfferNode[], pageInfo: any }> {
+    if (!this.appId || !this.secret) {
+      throw new Error('Shopee Open API credentials not configured');
+    }
+
+    const payloadObj = {
+      query: `
+        query shopeeOfferV2($keyword: String, $sortType: Int, $page: Int, $limit: Int) {
+          shopeeOfferV2(keyword: $keyword, sortType: $sortType, page: $page, limit: $limit) {
+            nodes {
+              offerName
+              offerType
+              commissionRate
+              periodStartTime
+              periodEndTime
+              imageUrl
+              offerLink
+              originalLink
+              categoryId
+              collectionId
+            }
+            pageInfo {
+              page
+              limit
+              hasNextPage
+            }
+          }
+        }
+      `,
+      variables: {
+        keyword: keyword || undefined,
+        sortType,
+        page,
+        limit
+      }
+    };
+
+    const payload = JSON.stringify(payloadObj, null, 0);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = generateShopeeSignature(this.appId, timestamp, payload, this.secret);
+    const authHeader = `SHA256 Credential=${this.appId},Timestamp=${timestamp},Signature=${signature}`;
+
+    try {
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader
+        },
+        body: payload
+      });
+
+      if (!response.ok) {
+        throw new Error(`[HTTP ${response.status}] ${response.statusText}`);
+      }
+
+      const json = await response.json() as any;
+      
+      if (json.errors && json.errors.length > 0) {
+        throw new Error(json.errors[0].message);
+      }
+
+      return json.data?.shopeeOfferV2 || { nodes: [], pageInfo: { hasNextPage: false } };
+    } catch (error: any) {
+      throw new Error(`Shopee GraphQL Error (shopeeOfferV2): ${error.message}`);
+    }
+  }
 }
+
+export interface ShopeeOfferNode {
+  offerName: string;
+  offerType: number;
+  commissionRate: string;
+  periodStartTime: number;
+  periodEndTime: number;
+  imageUrl: string;
+  offerLink: string;
+  originalLink: string;
+  categoryId?: string;
+  collectionId?: string;
+}
+
