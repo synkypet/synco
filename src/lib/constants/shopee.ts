@@ -3,6 +3,7 @@ export const SHOPEE_SORT_TYPE = {
   RELEVANCE: 1,
   BEST_SELLERS: 2,
   TOP_COMMISSION: 5,
+  HIGHEST_DISCOUNT: 100, // Custom internal sort
 } as const;
 
 export type ShopeeSortType = typeof SHOPEE_SORT_TYPE[keyof typeof SHOPEE_SORT_TYPE];
@@ -11,6 +12,7 @@ export const SHOPEE_SORT_TYPE_LABELS: Record<ShopeeSortType, string> = {
   [SHOPEE_SORT_TYPE.RELEVANCE]: "Relevância",
   [SHOPEE_SORT_TYPE.BEST_SELLERS]: "Mais Vendidos",
   [SHOPEE_SORT_TYPE.TOP_COMMISSION]: "Maior Comissão",
+  [SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT]: "Maior Desconto",
 };
 
 export const SHOPEE_LIST_TYPE = {

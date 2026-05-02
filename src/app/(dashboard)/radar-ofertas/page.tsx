@@ -104,6 +104,7 @@ export default function RadarOfertasPage() {
   const [shopeeList, setShopeeList] = useState(SHOPEE_LIST_TYPE.PROMOTION.toString()); 
   const [shopeeLimit, setShopeeLimit] = useState('20');
   const [onlyOfficialShops, setOnlyOfficialShops] = useState(false);
+  const [clientSort, setClientSort] = useState<'sales_desc' | 'discount_desc' | 'commission_desc' | 'none'>('none');
   
   const queryClient = useQueryClient();
 
@@ -122,6 +123,7 @@ export default function RadarOfertasPage() {
     if (!garimpSearch.trim() || isGarimping) return;
     
     setIsGarimping(true);
+    setClientSort('none');
 
     const nextPage = targetPage ?? 1;
     
@@ -272,6 +274,15 @@ export default function RadarOfertasPage() {
     return products.slice(0, visibleCount);
   }, [products, visibleCount, activePageData]);
 
+  // --- CLIENT SIDE SORTING ---
+  const sortedProducts = useMemo(() => {
+    const list = activePageData ? [...activePageData.products] : [...displayedProducts];
+    if (clientSort === 'sales_desc') return list.sort((a, b) => (b.sales_count || 0) - (a.sales_count || 0));
+    if (clientSort === 'discount_desc') return list.sort((a, b) => (b.discount_percent || 0) - (a.discount_percent || 0));
+    if (clientSort === 'commission_desc') return list.sort((a, b) => (b.commission_percent || 0) - (a.commission_percent || 0));
+    return list;
+  }, [activePageData, displayedProducts, clientSort]);
+
   const handleResetFilters = () => {
     setFilters({});
     setSearch('');
@@ -381,7 +392,8 @@ export default function RadarOfertasPage() {
                   {[
                     { id: SHOPEE_SORT_TYPE.RELEVANCE, label: 'Relevância' },
                     { id: SHOPEE_SORT_TYPE.BEST_SELLERS, label: 'Mais Vendidos' },
-                    { id: SHOPEE_SORT_TYPE.TOP_COMMISSION, label: 'Comissão' }
+                    { id: SHOPEE_SORT_TYPE.TOP_COMMISSION, label: 'Comissão' },
+                    { id: SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT, label: 'Maior Desconto' }
                   ].map((opt) => (
                     <Button
                       key={opt.id}
@@ -451,9 +463,15 @@ export default function RadarOfertasPage() {
                 {/* Top Quick Pagination */}
                 {activePageData && (
                   <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-1">
-                      <span className="text-kinetic-orange font-black text-sm">{garimpPage}</span>
-                      <span className="text-white/20 text-xs font-black">/ {activePageData.hasNextPage ? '...' : garimpPage}</span>
+                    <div className="flex items-center gap-1 min-w-[30px] justify-center">
+                      {isGarimping ? (
+                        <Loader2 size={16} className="animate-spin text-kinetic-orange" />
+                      ) : (
+                        <>
+                          <span className="text-kinetic-orange font-black text-sm">{garimpPage}</span>
+                          <span className="text-white/20 text-xs font-black">/ {activePageData.hasNextPage ? '...' : garimpPage}</span>
+                        </>
+                      )}
                     </div>
                     <div className="flex bg-deep-void p-1 rounded-xl shadow-skeuo-pressed">
                       <Button
@@ -568,6 +586,33 @@ export default function RadarOfertasPage() {
             </div>
           )}
 
+          {(activePageData || displayedProducts.length > 0) && (
+            <div className="flex items-center gap-3 mb-8 animate-in fade-in slide-in-from-left-4 duration-700">
+              <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Re-ordenar:</span>
+              <div className="flex bg-deep-void p-1 rounded-xl shadow-skeuo-pressed">
+                {[
+                  { id: 'none', label: 'Padrão' },
+                  { id: 'sales_desc', label: 'Mais Vendidos' },
+                  { id: 'discount_desc', label: 'Maior Desconto' },
+                  { id: 'commission_desc', label: 'Maior Comissão' },
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setClientSort(opt.id as any)}
+                    className={cn(
+                      "h-8 px-4 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all",
+                      clientSort === opt.id
+                        ? "bg-kinetic-orange text-white shadow-glow-orange-intense"
+                        : "text-white/30 hover:text-white hover:bg-white/5"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {activePageData ? (
             <div className="space-y-8 animate-in fade-in duration-700">
 
@@ -578,7 +623,7 @@ export default function RadarOfertasPage() {
                   ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
                   : "grid-cols-1"
               )}>
-                {activePageData.products.map(product => (
+                {sortedProducts.map(product => (
                   <ProductCard 
                     key={product.id}
                     product={product}
@@ -617,7 +662,12 @@ export default function RadarOfertasPage() {
                     <span className="text-[8px] font-black uppercase tracking-[0.4em] text-white/10">Navegação Sequencial</span>
                     <div className="h-14 px-8 bg-deep-void shadow-skeuo-pressed rounded-2xl flex items-center justify-center min-w-[140px]">
                        <span className="text-xl font-black font-headline text-kinetic-orange tracking-widest">
-                          {isGarimping ? <Loader2 size={20} className="animate-spin" /> : garimpPage}
+                          {isGarimping ? (
+                            <div className="flex items-center gap-2">
+                              <Loader2 size={16} className="animate-spin" />
+                              <span className="text-[10px] font-black uppercase tracking-[0.2em]">Processando</span>
+                            </div>
+                          ) : garimpPage}
                        </span>
                     </div>
                  </div>
@@ -640,7 +690,7 @@ export default function RadarOfertasPage() {
                 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
                 : "grid-cols-1"
             )}>
-              {displayedProducts?.map(product => (
+              {sortedProducts?.map(product => (
                 <div key={product.id} className="animate-in fade-in zoom-in-95 duration-500">
                   <ProductCard 
                     product={product}
