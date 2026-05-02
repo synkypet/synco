@@ -548,10 +548,13 @@ export class ShopeeAdapter extends MarketplaceAdapter {
         secret: connection.shopee_app_secret
       });
 
+      // Se sortType for 100 (Maior Desconto), usamos o modo nativo 'Best Sellers' (2) para garantir volume
+      const nativeSort = sortType === 100 ? 2 : sortType;
+
       // Busca com parâmetros nativos da Shopee (alinhado com referência)
       let nodes = await client.searchProducts({ 
         limit: Math.max(limit, 50), 
-        sortType,
+        sortType: nativeSort,
         listType,
         keyword,
         page
@@ -570,7 +573,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
         console.log(`[SHOPEE-DISCOVERY] Obtidos ${nodes.length} nós brutos da API.`);
       }
 
-      return nodes
+      const finalProducts = nodes
         .map(node => {
           const scale = this.detectBestScale(node);
           const normalize = (v: any) => {
@@ -641,8 +644,14 @@ export class ShopeeAdapter extends MarketplaceAdapter {
           const hasCommission = (p.commissionRate || 0) > 0;
 
           return hasTitle && hasImage && hasPrice && hasUrl && hasCommission;
-        })
-        .slice(0, limit);
+        });
+
+      // --- ORDENAÇÃO CUSTOMIZADA: Maior Desconto (sortType 100) ---
+      if (sortType === 100) {
+        finalProducts.sort((a, b) => (b.discountPercent || 0) - (a.discountPercent || 0));
+      }
+
+      return finalProducts.slice(0, limit);
     } catch (error: any) {
       console.error(`[SHOPEE-DISCOVERY] Error:`, error.message);
       return [];
