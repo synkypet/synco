@@ -146,13 +146,18 @@ export async function processInboundAutomation(payload: InboundPayload) {
     const routes = await automationService.getRoutesBySourceId(source.id, supabase);
     
     if (routes.length === 0) {
-      console.warn(`${logPrefix} [SKIP] Motivo: Fonte encontrada, mas não possui ROTAS DE DESTINO ativas.`);
+      console.warn(`${logPrefix} [SKIP] Motivo: Nenhuma ROTA DE DESTINO ativa configurada para esta fonte.`);
       await automationService.logEvent({
         source_id: source.id,
         user_id: userId,
         status: 'filtered',
         event_type: 'no_routes_configured',
-        details: { channelId, externalGroupId, sourceId: source.id }
+        details: { 
+          channelId, 
+          externalGroupId, 
+          sourceId: source.id,
+          reason: 'A automação está ativa mas não possui destinos (grupos ou listas) vinculados.'
+        }
       }, supabase);
       return { skipped: 'no_routes_configured', sourceId: source.id };
     }
@@ -327,6 +332,17 @@ export async function processInboundAutomation(payload: InboundPayload) {
 
       } catch (err: any) {
         console.error(`${logPrefix} [ITEM] [EXCEPTION] Erro crítico no processamento do item:`, err);
+        await automationService.logEvent({
+          source_id: source.id,
+          user_id: userId,
+          status: 'error',
+          event_type: 'processing_exception',
+          details: { 
+            url: normalized, 
+            error: err.message || 'Erro desconhecido',
+            stack: err.stack?.substring(0, 200)
+          }
+        }, supabase);
       }
     }
 

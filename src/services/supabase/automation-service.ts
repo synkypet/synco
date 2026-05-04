@@ -424,5 +424,20 @@ export const automationService = {
     const supabase = client || createClient();
     const hashKey = generateHash(`dest:${userId}:${normalizedUrl}:${targetId}`);
     return this.handleDedupeWithTTL(hashKey, 168, supabase);
+  },
+
+  /**
+   * Verifica se uma fonte está pronta para processamento (tem destinos configurados)
+   */
+  async isReady(sourceId: string, client?: SupabaseClient): Promise<boolean> {
+    const supabase = client || createClient();
+    const { data } = await supabase
+      .from('automation_routes')
+      .select('id')
+      .eq('source_id', sourceId)
+      .eq('is_active', true)
+      .limit(1);
+    
+    return (data || []).length > 0;
   }
 };
