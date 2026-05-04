@@ -16,11 +16,21 @@ interface OriginBlockProps {
   source: AutomationSource;
   sourceName?: string;
   onUpdate: (updates: Partial<AutomationSource>) => void;
+  canActivate?: boolean;
+  onToggleActive?: (active: boolean) => void;
 }
 
-export function OriginBlock({ source, sourceName, onUpdate }: OriginBlockProps) {
+export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, onToggleActive }: OriginBlockProps) {
   const isRadar = source.source_type === 'radar_offers';
   const config = (source.config as any) || {};
+
+  const handleToggle = () => {
+    if (onToggleActive) {
+      onToggleActive(!source.is_active);
+    } else {
+      onUpdate({ is_active: !source.is_active });
+    }
+  };
   
   // Usar a utility para garantir consistência
   const initialKeywords = normalizeKeywords(config);
@@ -79,12 +89,13 @@ export function OriginBlock({ source, sourceName, onUpdate }: OriginBlockProps) 
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => onUpdate({ is_active: !source.is_active })}
+          onClick={handleToggle}
           className={cn(
             "h-8 gap-2 uppercase font-bold text-[9px] tracking-widest px-3 rounded-xl border border-white/5 transition-all",
             source.is_active 
               ? "text-emerald-500 hover:text-emerald-400 bg-emerald-500/5 shadow-glow-emerald shadow-emerald-500/10" 
-              : "text-zinc-500 hover:text-zinc-400 bg-white/5"
+              : "text-zinc-500 hover:text-zinc-400 bg-white/5",
+            !canActivate && !source.is_active && "opacity-50 cursor-not-allowed"
           )}
         >
           <Power size={12} />
