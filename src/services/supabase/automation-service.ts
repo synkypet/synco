@@ -147,57 +147,67 @@ export const automationService = {
   },
 
   /**
-   * Lógica de Deduplicação Camada 1: Ingestão
+   * Helper centralizado para deduplicação com TTL e Cleanup oportunístico.
    */
-  async checkAndMarkDedupe(userId: string, normalizedUrl: string, sourceGroupId: string, client?: SupabaseClient): Promise<boolean> {
-    const supabase = client || createClient();
-    
-    try {
-      const hashKey = generateHash(`ingest:${userId}:${normalizedUrl}:${sourceGroupId}`);
+  async handleDedupeWithTTL(hashKey: string, ttlHours: number, client: SupabaseClient): Promise<boolean> {
+    // 1. Cleanup Oportunístico Global (5% de chance)
+    if (Math.random() < 0.05) {
+      // Fire-and-forget cleanup global de registros muito antigos (> 15 dias)
+      client.from('automation_dedupe')
+        .delete()
+        .lt('created_at', new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString())
+        .then(({ error, count }) => {
+          if (error) console.warn('[AUTO-SERVICE] [GC-FAIL]', error);
+          else if (count) console.log(`[AUTO-SERVICE] [GC-SUCCESS] Removidos ${count} registros expirados.`);
+        });
+    }
 
-      const { error } = await supabase
+    try {
+      // 2. Limpeza atômica do registro específico se ele já expirou
+      const expirationDate = new Date(Date.now() - ttlHours * 60 * 60 * 1000).toISOString();
+      await client
+        .from('automation_dedupe')
+        .delete()
+        .eq('hash_key', hashKey)
+        .lt('created_at', expirationDate);
+
+      // 3. Tentativa de inserção
+      const { error } = await client
         .from('automation_dedupe')
         .insert({ hash_key: hashKey });
 
       if (error) {
-        if (error.code === '23505') return true; 
-        console.error('[AUTO-SERVICE] [DEDUPE] Error inserting ingest hash:', error);
+        if (error.code === '23505') return true; // Ainda é duplicata (dentro do TTL)
+        console.error('[AUTO-SERVICE] [DEDUPE-ERROR]', error);
         return false;
       }
 
       return false;
     } catch (err) {
-      console.error('[AUTO-SERVICE] [DEDUPE-CRITICAL] ingest_check failed:', err);
-      return false; // Fallback para não bloquear o pipeline
+      console.error('[AUTO-SERVICE] [DEDUPE-CRITICAL]', err);
+      return false; // Fallback permissivo
     }
   },
 
   /**
-   * Lógica de Deduplicação Nível de Mensagem: Evita processar a mesma mensagem duas vezes (ex: eventos duplicados do provedor)
+   * Lógica de Deduplicação Camada 1: Ingestão (Monitoramento de Grupo)
+   * TTL: 7 dias (168h)
+   */
+  async checkAndMarkDedupe(userId: string, normalizedUrl: string, sourceGroupId: string, client?: SupabaseClient): Promise<boolean> {
+    const supabase = client || createClient();
+    const hashKey = generateHash(`ingest:${userId}:${normalizedUrl}:${sourceGroupId}`);
+    return this.handleDedupeWithTTL(hashKey, 168, supabase);
+  },
+
+  /**
+   * Lógica de Deduplicação Nível de Mensagem: Evita processar a mesma mensagem duas vezes
+   * TTL: 24 horas
    */
   async checkAndMarkMessageDedupe(channelId: string, messageId: string, client?: SupabaseClient): Promise<boolean> {
     if (!messageId || !channelId) return false;
     const supabase = client || createClient();
-    
-    try {
-      // Chave única composta pelo canal e ID da mensagem
-      const hashKey = generateHash(`msg:${channelId}:${messageId}`);
-
-      const { error } = await supabase
-        .from('automation_dedupe')
-        .insert({ hash_key: hashKey });
-
-      if (error) {
-        if (error.code === '23505') return true; 
-        console.error('[AUTO-SERVICE] [DEDUPE] Error inserting message hash:', error);
-        return false;
-      }
-
-      return false;
-    } catch (err) {
-      console.error('[AUTO-SERVICE] [DEDUPE-CRITICAL] message_check failed:', err);
-      return false; // Fallback: processar de novo é melhor que sumir com a mensagem
-    }
+    const hashKey = generateHash(`msg:${channelId}:${messageId}`);
+    return this.handleDedupeWithTTL(hashKey, 24, supabase);
   },
 
   /**
@@ -408,27 +418,11 @@ export const automationService = {
 
   /**
    * Lógica de Deduplicação Camada 2: Destino
+   * TTL: 7 dias (168h)
    */
   async checkAndMarkDestinationDedupe(userId: string, normalizedUrl: string, targetId: string, client?: SupabaseClient): Promise<boolean> {
     const supabase = client || createClient();
-    
-    try {
-      const hashKey = generateHash(`dest:${userId}:${normalizedUrl}:${targetId}`);
-
-      const { error } = await supabase
-        .from('automation_dedupe')
-        .insert({ hash_key: hashKey });
-
-      if (error) {
-        if (error.code === '23505') return true; 
-        console.error('[AUTO-SERVICE] [DEDUPE] Error inserting destination hash:', error);
-        return false;
-      }
-
-      return false;
-    } catch (err) {
-      console.error('[AUTO-SERVICE] [DEDUPE-CRITICAL] destination_check failed:', err);
-      return false;
-    }
+    const hashKey = generateHash(`dest:${userId}:${normalizedUrl}:${targetId}`);
+    return this.handleDedupeWithTTL(hashKey, 168, supabase);
   }
 };

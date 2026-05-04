@@ -216,19 +216,11 @@ export const radarDispatcherService = {
           // Usamos a stable_product_key se disponível, caso contrário fallback para ID
           const productKey = product.stable_product_key || product.id;
           const hashKey = this.generateHash(`radar_v3:${source.id}:${productKey}:${route.id}`);
-          const { error: dedupeError } = await supabase.from('automation_dedupe').insert({ hash_key: hashKey });
+          const isDuplicate = await automationService.handleDedupeWithTTL(hashKey, 168, supabase);
 
-          if (dedupeError) {
+          if (isDuplicate) {
             routeSkippedDedupe++;
             totalSkippedDedupe++;
-            logActivity(supabase, {
-              source_id: source.id,
-              user_id: source.user_id,
-              event_type: 'skipped_dedupe',
-              product_id: product.id,
-              title: product.name,
-              discard_reason: 'Already sent to this destination (last 7 days)'
-            });
             // IMPORTANTE: Se está dedupado para esta rota, apenas continuamos.
             // Não alteramos o status do vínculo RDP, pois ele pode ser útil para outras rotas.
             continue;
