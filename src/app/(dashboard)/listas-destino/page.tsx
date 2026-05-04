@@ -182,6 +182,9 @@ export default function ListasDestinoPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={18} />
           <Input 
+            id="search-lists"
+            name="search-lists"
+            autocomplete="off"
             placeholder="Buscar listas por nome..." 
             className="pl-10 bg-white/5 border-none shadow-skeuo-pressed"
             value={searchQuery}

@@ -154,9 +154,12 @@ export function DestinationDialog({
                       name="name"
                       render={({ field }) => (
                         <FormItem className="space-y-2">
-                          <FormLabel className="text-[10px] uppercase font-black text-white/30 tracking-[0.2em]">Identificação</FormLabel>
+                          <FormLabel htmlFor="destination-name" className="text-[10px] uppercase font-black text-white/30 tracking-[0.2em]">Identificação</FormLabel>
                           <FormControl>
                             <Input 
+                              id="destination-name"
+                              name="name"
+                              autocomplete="organization"
                               placeholder="Filtro VIP..." 
                               className="bg-white/5 border-white/5 h-12 text-sm font-medium focus:ring-kinetic-orange/20 shadow-skeuo-pressed"
                               {...field} 
@@ -198,9 +201,12 @@ export function DestinationDialog({
                       name="description"
                       render={({ field }) => (
                         <FormItem className="space-y-2">
-                          <FormLabel className="text-[10px] uppercase font-black text-white/30 tracking-[0.2em]">Nota Operacional</FormLabel>
+                          <FormLabel htmlFor="destination-description" className="text-[10px] uppercase font-black text-white/30 tracking-[0.2em]">Nota Operacional</FormLabel>
                           <FormControl>
                             <Input 
+                              id="destination-description"
+                              name="description"
+                              autocomplete="off"
                               placeholder="Ex: Grupos de Eletrônicos..." 
                               className="bg-white/5 border-white/5 h-12 text-sm font-medium focus:ring-kinetic-orange/20 shadow-skeuo-pressed"
                               {...field} 
@@ -235,6 +241,9 @@ export function DestinationDialog({
                       <div className="relative">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-white/20" size={12} />
                         <input 
+                          id="group-filter"
+                          name="group-filter"
+                          autocomplete="off"
                           placeholder="Buscar..." 
                           className="h-7 w-32 bg-white/5 border border-white/10 rounded-lg pl-7 text-[10px] font-bold text-white/80 placeholder:text-white/10 focus:outline-none focus:border-kinetic-orange/40" 
                           value={filter}

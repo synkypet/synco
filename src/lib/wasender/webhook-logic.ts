@@ -48,6 +48,14 @@ export async function handleWasenderWebhook(request: Request, requestId: string)
 
     const sessionId = String(sessionIdRaw);
     
+    // Log de entrada precoce para diagnóstico de conectividade
+    await supabase.from('automation_logs').insert({
+      user_id: '00000000-0000-0000-0000-000000000000', // Log neutro até identificar o canal
+      status: 'captured',
+      event_type: 'webhook_received',
+      details: { requestId, eventType, sessionId, bodySize: rawBody.length }
+    });
+    
     // ─── 1. Identificar o canal vinculado a essa sessão ────────────────────
     let channel: any = null;
 
@@ -82,6 +90,12 @@ export async function handleWasenderWebhook(request: Request, requestId: string)
 
     if (!channel) {
       console.error(`[WEBHOOK-ABORT] [${requestId}] Canal não encontrado para sessionId ${sessionId}.`);
+      await supabase.from('automation_logs').insert({
+        user_id: '00000000-0000-0000-0000-000000000000',
+        status: 'error',
+        event_type: 'webhook_channel_mismatch',
+        details: { requestId, sessionId, reason: 'Nenhum canal encontrado para este sessionId no banco de dados.' }
+      });
       return NextResponse.json({ error: 'Channel not found for this session' }, { status: 404 });
     }
 
