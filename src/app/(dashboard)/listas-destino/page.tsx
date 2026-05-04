@@ -184,7 +184,7 @@ export default function ListasDestinoPage() {
           <Input 
             id="search-lists"
             name="search-lists"
-            autocomplete="off"
+            autoComplete="off"
             placeholder="Buscar listas por nome..." 
             className="pl-10 bg-white/5 border-none shadow-skeuo-pressed"
             value={searchQuery}
