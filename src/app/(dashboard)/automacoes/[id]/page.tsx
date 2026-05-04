@@ -16,6 +16,7 @@ import {
 } from '@/hooks/use-automations';
 import { useGroups } from '@/hooks/use-groups';
 import { useDestinations } from '@/hooks/use-destinations';
+import { useChannels } from '@/hooks/use-channels';
 
 import { OriginBlock } from '@/components/automation/OriginBlock';
 import { InboundRuleManager } from '@/components/automation/InboundRuleManager';
@@ -27,6 +28,8 @@ import { AutomationStatusHeader } from '@/components/automation/AutomationStatus
 import { ActiveFilterHUD } from '@/components/automation/ActiveFilterHUD';
 import { AutomationAuditTrail } from '@/components/automation/AutomationAuditTrail';
 import { RadarActivityFeed } from '@/components/automation/RadarActivityFeed';
+import { AutomationTargetSelector } from '@/components/automation/AutomationTargetSelector';
+import { QuickListCreateDialog } from '@/components/automation/QuickListCreateDialog';
 
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Save, Zap, Trash2 } from 'lucide-react';
@@ -53,8 +56,9 @@ export default function AutomationDetailPage() {
   const { data: recentCampaigns, isLoading: loadingRecent } = useAutomationRecentCampaigns(id);
 
   const { user } = useAuth();
-  const { data: groups } = useGroups(user?.id as string);
-  const { data: lists } = useDestinations(user?.id as string);
+  const { data: allGroups } = useGroups(user?.id as string);
+  const { data: allLists } = useDestinations(user?.id as string);
+  const { data: channels } = useChannels(user?.id as string);
 
   // Mutations
   const updateSource = useUpdateAutomationSource();
@@ -68,15 +72,14 @@ export default function AutomationDetailPage() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddRouteOpen, setIsAddRouteOpen] = useState(false);
-  const [newRouteType, setNewRouteType] = useState<'group' | 'list'>('group');
+  const [isQuickListOpen, setIsQuickListOpen] = useState(false);
+  const [newRouteTargetType, setNewRouteTargetType] = useState<'group' | 'list'>('list');
   const [newRouteTargetId, setNewRouteTargetId] = useState('');
 
   // Sincronizar estado local com a primeira rota (Regras globais)
   useEffect(() => {
     if (routes && routes.length > 0) {
       setFilters(routes[0].filters || {});
-      // Compatibilidade: mapear 'body' do banco para 'text' do componente se necessário, 
-      // ou apenas passar o objeto. Vamos usar o objeto direto.
       setTemplate(routes[0].template_config || {});
     }
   }, [routes]);
@@ -105,7 +108,6 @@ export default function AutomationDetailPage() {
 
     setIsSaving(true);
     try {
-      // Persistência Real: Aplicar regras e template para TODAS as rotas
       const promises = routes.map(route => upsertRoute.mutateAsync({
         ...route,
         filters,
@@ -141,7 +143,7 @@ export default function AutomationDetailPage() {
 
     const promise = upsertRoute.mutateAsync({
       source_id: id,
-      target_type: newRouteType,
+      target_type: newRouteTargetType,
       target_id: newRouteTargetId,
       is_active: true,
       filters,
@@ -162,26 +164,32 @@ export default function AutomationDetailPage() {
   const targetNames: Record<string, string> = {};
   routes?.forEach(r => {
     if (r.target_type === 'group') {
-      targetNames[r.id] = groups?.find(g => g.id === r.target_id)?.name || 'Grupo de WhatsApp';
+      targetNames[r.id] = allGroups?.find(g => g.id === r.target_id)?.name || 'Grupo de WhatsApp';
     } else {
-      targetNames[r.id] = lists?.find(l => l.id === r.target_id)?.name || 'Lista de Destino';
+      targetNames[r.id] = allLists?.find(l => l.id === r.target_id)?.name || 'Lista de Destino';
     }
   });
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 pb-32 animate-in fade-in duration-1000">
-      {/* 0. Status & Strategic Header */}
       <AutomationStatusHeader 
         source={source} 
         onBack={() => router.push('/automacoes')} 
       />
 
-      {/* Row 1: MOTOR (Discovery) + DESTINOS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <OriginBlock
           source={source}
-          sourceName={groups?.find(g => g.channel_id === source.channel_id && g.remote_id === source.external_group_id)?.name}
+          sourceName={allGroups?.find(g => g.channel_id === source.channel_id && g.remote_id === source.external_group_id)?.name}
           onUpdate={(updates) => updateSource.mutate({ id, updates })}
+          canActivate={routes && routes.length > 0}
+          onToggleActive={(active) => {
+            if (active && (!routes || routes.length === 0)) {
+              toast.error('Configure um destino antes de ativar esta automação.');
+              return;
+            }
+            updateSource.mutate({ id, updates: { is_active: active } });
+          }}
         />
         <DestinationBlock
           routes={routes || []}
@@ -191,7 +199,6 @@ export default function AutomationDetailPage() {
         />
       </div>
 
-      {/* Row 2: HUD DE FILTROS (Transparência) */}
       <div className="animate-in slide-in-from-bottom-4 duration-500 delay-100">
         <ActiveFilterHUD 
           filters={filters} 
@@ -199,7 +206,6 @@ export default function AutomationDetailPage() {
         />
       </div>
 
-      {/* Row 3: RADAR ACTIVITY (Feed de Descoberta) */}
       {source.source_type === 'radar_offers' && (
         <div className="animate-in slide-in-from-bottom-4 duration-500 delay-150">
           <div className="mb-4">
@@ -209,7 +215,6 @@ export default function AutomationDetailPage() {
         </div>
       )}
 
-      {/* Row 4: AUDIT TRAIL (Histórico de Envios) */}
       <div className="animate-in slide-in-from-bottom-4 duration-500 delay-200">
         <AutomationAuditTrail 
           campaigns={recentCampaigns || []} 
@@ -217,7 +222,6 @@ export default function AutomationDetailPage() {
         />
       </div>
 
-      {/* Row 5: CONFIGURAÇÕES DE ENTREGA (Colapsável/Secundário) */}
       <div className="pt-10 border-t border-white/5 space-y-8 opacity-60 hover:opacity-100 transition-opacity">
         <div className="flex items-center justify-between">
           <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Configurações Avançadas de Esteira</h4>
@@ -243,46 +247,27 @@ export default function AutomationDetailPage() {
         </div>
       </div>
 
-      {/* Footer Audit Logs */}
       <div className="space-y-8 opacity-40">
         <LogFeed logs={logs || []} title="Atividade Técnica do Sistema" />
         <DeliveryBanner />
       </div>
 
-      {/* Modals */}
       <Dialog open={isAddRouteOpen} onOpenChange={setIsAddRouteOpen}>
         <DialogContent className="bg-anthracite-surface border-white/5 shadow-skeuo-elevated">
           <DialogHeader>
             <DialogTitle className="uppercase tracking-[0.2em] font-black text-xs text-white/60 mb-4">Adicionar Saída ao Pipeline</DialogTitle>
           </DialogHeader>
           <div className="space-y-6 py-4">
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Tipo de Destino</Label>
-              <Select value={newRouteType} onValueChange={(v: any) => { setNewRouteType(v); setNewRouteTargetId(''); }}>
-                <SelectTrigger className="bg-white/5 border-white/5 h-12">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="group">Grupo Individual</SelectItem>
-                  <SelectItem value="list">Lista Organizacional</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Selecionar</Label>
-              <Select value={newRouteTargetId} onValueChange={setNewRouteTargetId}>
-                <SelectTrigger className="bg-white/5 border-white/5 h-12">
-                  <SelectValue placeholder="Escolha um destino..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {newRouteType === 'group' ? (
-                    groups?.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)
-                  ) : (
-                    lists?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+            <AutomationTargetSelector 
+              groups={allGroups}
+              lists={allLists}
+              type={newRouteTargetType}
+              value={newRouteTargetId}
+              onTypeChange={setNewRouteTargetType}
+              onValueChange={setNewRouteTargetId}
+              onNewList={() => setIsQuickListOpen(true)}
+              hideGroupOption={true}
+            />
           </div>
           <DialogFooter className="pt-4">
             <Button
@@ -295,6 +280,17 @@ export default function AutomationDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <QuickListCreateDialog 
+        userId={user?.id as string}
+        groups={allGroups}
+        open={isQuickListOpen}
+        onOpenChange={setIsQuickListOpen}
+        onCreated={(listId) => {
+          setNewRouteTargetType('list');
+          setNewRouteTargetId(listId);
+        }}
+      />
     </div>
   );
 }

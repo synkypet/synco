@@ -16,6 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { StatCard } from '@/components/ui/StatCard';
 import { AutomationTargetSelector } from '@/components/automation/AutomationTargetSelector';
+import { QuickListCreateDialog } from '@/components/automation/QuickListCreateDialog';
 import { AutomationSource, AutomationRoute } from '@/types/automation';
 import { Button } from '@/components/ui/button';
 import { KineticButton } from '@/components/ui/KineticButton';
@@ -89,7 +90,7 @@ export default function AutomacoesDashboardPage() {
   const [entryType, setEntryType] = useState<'group_monitor' | 'radar_offers'>('group_monitor');
   const [channelId, setChannelId] = useState('');
   const [sourceGroupId, setSourceGroupId] = useState('');
-  const [targetType, setTargetType] = useState<'group' | 'list'>('group');
+  const [targetType, setTargetType] = useState<'group' | 'list'>('list');
   const [targetId, setTargetId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [minPrice, setMinPrice] = useState('');
@@ -101,6 +102,7 @@ export default function AutomacoesDashboardPage() {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewResults, setPreviewResults] = useState<any[] | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [isQuickListOpen, setIsQuickListOpen] = useState(false);
 
   // Validação simples
   const isNameValid = newName.trim().length >= 3;
@@ -435,6 +437,8 @@ export default function AutomacoesDashboardPage() {
                       value={targetId}
                       onTypeChange={setTargetType}
                       onValueChange={setTargetId}
+                      onNewList={() => setIsQuickListOpen(true)}
+                      hideGroupOption={true}
                     />
                  </div>
   
@@ -460,6 +464,17 @@ export default function AutomacoesDashboardPage() {
             </DialogContent>
           </Dialog>
         }
+      />
+
+      <QuickListCreateDialog 
+        userId={user?.id as string}
+        groups={allGroups}
+        open={isQuickListOpen}
+        onOpenChange={setIsQuickListOpen}
+        onCreated={(id: string) => {
+          setTargetType('list');
+          setTargetId(id);
+        }}
       />
 
       <OperationalAccessBanner />
@@ -507,9 +522,16 @@ export default function AutomacoesDashboardPage() {
                         </div>
                       </div>
                     </div>
-                    <Badge variant={source.is_active ? "default" : "secondary"} className={source.is_active ? "bg-emerald-500 shadow-glow-orange-intense text-white border-none font-bold text-[9px] rounded-full" : "font-bold text-[9px] rounded-full"}>
-                      {source.is_active ? 'ATIVO' : 'PAUSADO'}
-                    </Badge>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge variant={source.is_active ? "default" : "secondary"} className={source.is_active ? "bg-emerald-500 shadow-glow-orange-intense text-white border-none font-bold text-[9px] rounded-full" : "font-bold text-[9px] rounded-full"}>
+                        {source.is_active ? 'ATIVO' : 'PAUSADO'}
+                      </Badge>
+                      {(!firstRoute || !firstRoute.target_id) && (
+                        <Badge variant="outline" className="border-amber-500/50 text-amber-500 text-[8px] font-black uppercase">
+                          Sem Destino
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   {/* Flow Trace */}
