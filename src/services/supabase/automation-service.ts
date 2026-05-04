@@ -439,5 +439,23 @@ export const automationService = {
       .limit(1);
     
     return (data || []).length > 0;
+  },
+
+  /**
+   * Busca um canal por ID
+   */
+  async getChannelById(id: string, client?: SupabaseClient) {
+    const supabase = client || createClient();
+    const { data, error } = await supabase
+      .from('channels')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching channel:', error);
+      return null;
+    }
+    return data;
   }
 };

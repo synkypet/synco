@@ -123,10 +123,47 @@ export async function processInboundAutomation(payload: InboundPayload) {
     
     if (!source) {
       console.warn(`${logPrefix} [SKIP] Motivo: Nenhuma fonte ATIVA encontrada para este conjunto.`);
+      
+      // Log de Observabilidade: Ajuda o usuário a entender por que o disparo não ocorreu
+      await automationService.logEvent({
+        source_id: '00000000-0000-0000-0000-000000000000', // ID nulo literal para logs sem fonte
+        user_id: userId,
+        status: 'filtered',
+        event_type: 'source_not_found',
+        details: { 
+          channelId, 
+          externalGroupId, 
+          reason: 'Mensagem ignorada: Nenhuma automação ativa configurada para este grupo de origem.'
+        }
+      }, supabase);
+
       return { skipped: 'not_a_source', details: { userId, channelId, externalGroupId } };
     }
 
     console.log(`${logPrefix} [STEP] ✓ Fonte ID: ${source.id} ("${source.name}")`);
+
+    // Camada 1: Validação de Status do Canal (Resiliente a desync de campos)
+    const channel = await automationService.getChannelById(channelId, supabase);
+    const channelConfig = (channel?.config as any) || {};
+    const effectiveStatus = channelConfig.wasender_status || channelConfig.status;
+
+    if (!channel || effectiveStatus !== 'connected') {
+      console.warn(`${logPrefix} [SKIP] Motivo: Canal ${channelId} não está conectado (Status: ${effectiveStatus}).`);
+      
+      await automationService.logEvent({
+        source_id: source.id,
+        user_id: userId,
+        status: 'filtered',
+        event_type: 'channel_not_connected',
+        details: { 
+          channelId, 
+          status: effectiveStatus,
+          reason: 'O canal do WhatsApp não está conectado. Verifique o status na barra superior.'
+        }
+      }, supabase);
+
+      return { skipped: 'channel_not_connected', channelId };
+    }
 
     // Detecção robusta de links Shopee (incluindo Mobile e texto misto)
     console.log(`${logPrefix} [STEP] Extraindo links do texto...`);
