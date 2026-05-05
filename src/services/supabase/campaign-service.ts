@@ -126,7 +126,8 @@ export const campaignService = {
         name: dto.name || `Envio ${new Date().toLocaleString()}`,
         status: dto.scheduled_at ? 'scheduled' : 'pending',
         scheduled_at: dto.scheduled_at,
-        metadata: dto.metadata || {}
+        metadata: dto.metadata || {},
+        origin: dto.origin || 'manual'
       })
       .select()
       .single();
@@ -230,6 +231,7 @@ export const campaignService = {
             status: 'pending',
             try_count: 0,
             fallback_channel_id: fallbackChannel?.id || null,
+            origin: dto.origin || 'manual'
           });
         } else if (!isEligible) {
             console.warn(`[CAMPAIGN-SERVICE] Item ${item.id} pulado porque o status de elegibilidade é: ${item.eligibility_status}. Motivos: ${item.eligibility_reasons?.join(' | ') || 'Nenhum reportado'}`);
@@ -291,7 +293,8 @@ export const campaignService = {
     
     const manualDto: CreateCampaignDTO = {
       ...dto,
-      name: `🚀 [MANUAL] ${dto.name || new Date().toLocaleDateString()}`
+      name: `🚀 [MANUAL] ${dto.name || new Date().toLocaleDateString()}`,
+      origin: 'manual'
     };
 
     return this.create(userId, manualDto, client);

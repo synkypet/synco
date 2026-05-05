@@ -135,6 +135,23 @@ export const radarDispatcherService = {
         userConnectionsCache.set(source.user_id, connections);
       }
 
+      // ─── QUEUE DEPTH ENFORCEMENT (Fase 1) ──────────────────────────────────
+      const { count: radarPendingCount } = await supabase
+        .from('send_jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', source.user_id)
+        .eq('status', 'pending')
+        .eq('origin', 'radar');
+
+      const MAX_RADAR_PENDING = 10;
+      if (radarPendingCount !== null && radarPendingCount >= MAX_RADAR_PENDING) {
+        console.log(`${sourceLogPrefix} Fila cheia (${radarPendingCount}/${MAX_RADAR_PENDING} jobs pendentes). Aguardando envios antes de criar novos.`);
+        continue;
+      }
+      
+      let userQuota = MAX_RADAR_PENDING - (radarPendingCount || 0);
+      console.log(`${sourceLogPrefix} Fila: ${radarPendingCount || 0}/${MAX_RADAR_PENDING}. Criando até ${userQuota} novos jobs.`);
+
       // ─── BUSCA DE CANDIDATOS PARA ESTA FONTE (Nova Arquitetura) ─────────
       // Buscamos via tabela de vínculo radar_discovered_products com JOIN em products
       // Importante: Consumimos apenas status 'pending'
@@ -188,6 +205,10 @@ export const radarDispatcherService = {
       }
 
       for (const route of routes) {
+        if (userQuota <= 0) {
+          console.log(`${sourceLogPrefix} Cota de jobs atingida para este ciclo.`);
+          break;
+        }
         // A. Verificação de Profundidade de Fila (Pacing do Heartbeat)
         const { count: pendingJobs } = await supabase
           .from('send_jobs')
@@ -285,7 +306,8 @@ export const radarDispatcherService = {
               destinations: [{
                 type: route.target_type,
                 id: route.target_id
-              }]
+              }],
+              origin: 'radar' as any // Forçado para radar
             };
 
             const campaign = await campaignService.create(source.user_id, campaignData, supabase);
@@ -329,6 +351,7 @@ export const radarDispatcherService = {
             }, supabase);
 
             totalCreated++;
+            userQuota--; // Reduzir cota disponível
             dispatchedForRoute = true;
           } catch (err: any) {
             console.error(`${sourceLogPrefix} Falha ao despachar produto ${product.id}:`, err.message);

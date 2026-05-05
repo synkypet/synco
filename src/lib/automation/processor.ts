@@ -349,7 +349,8 @@ export async function processInboundAutomation(payload: InboundPayload) {
             destinations: [{
               type: route.target_type,
               id: route.target_id
-            }]
+            }],
+            origin: 'monitor' as 'monitor'
           };
 
           console.log(`${logPrefix} [ITEM] [STEP] Criando campanha via campaignService...`);

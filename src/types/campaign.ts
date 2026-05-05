@@ -87,6 +87,7 @@ export interface CreateCampaignDTO {
     id: string;
   }[];
   metadata?: any;
+  origin?: 'radar' | 'manual' | 'monitor';
 }
 export interface CampaignsPaginatedResponse {
   campaigns: Campaign[];
