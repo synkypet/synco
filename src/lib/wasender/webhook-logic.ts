@@ -99,6 +99,8 @@ export async function handleWasenderWebhook(request: Request, requestId: string)
       return NextResponse.json({ error: 'Channel not found for this session' }, { status: 404 });
     }
 
+    const userTag = `[USER:${channel.user_id.substring(0, 8)}]`;
+
     // ─── 2. Validar Assinatura (MODO PERMISSIVO - SOFT FAIL) ─────────────────
     const { data: secrets } = await supabase
       .from('channel_secrets')
@@ -110,7 +112,7 @@ export async function handleWasenderWebhook(request: Request, requestId: string)
 
     if (webhookSecret) {
       if (!signature) {
-        console.warn(`[WEBHOOK-NO-SIGNATURE] [${requestId}] Assinatura ausente para canal ${channel.id}. Prosseguindo em modo permissivo.`);
+        console.warn(`[WEBHOOK-NO-SIGNATURE] ${userTag} [${requestId}] Assinatura ausente para canal ${channel.id}. Prosseguindo em modo permissivo.`);
       } else {
         const expectedSignature = crypto
           .createHmac('sha256', webhookSecret)
@@ -118,9 +120,9 @@ export async function handleWasenderWebhook(request: Request, requestId: string)
           .digest('hex');
 
         if (signature !== expectedSignature) {
-          console.error(`[WEBHOOK-SIGNATURE-MISMATCH] [${requestId}] Mismatch para canal ${channel.id}.`);
+          console.error(`[WEBHOOK-SIGNATURE-MISMATCH] ${userTag} [${requestId}] Mismatch para canal ${channel.id}.`);
         } else {
-          console.log(`[WEBHOOK-AUTH] [${requestId}] ✓ Assinatura validada com sucesso.`);
+          console.log(`[WEBHOOK-AUTH] ${userTag} [${requestId}] ✓ Assinatura validada com sucesso.`);
         }
       }
     }
@@ -177,15 +179,15 @@ export async function handleWasenderWebhook(request: Request, requestId: string)
         }
 
         try {
-          console.log(`[WEBHOOK] [${requestId}] [DIRECT-LOGIC] Processando automação...`);
+          console.log(`[WEBHOOK] ${userTag} [${requestId}] [DIRECT-LOGIC] Processando automação...`);
           const result = await processInboundAutomation(automPayload);
           
           if (result && !result.skipped) {
-            console.log(`[WEBHOOK] [${requestId}] Processamento concluído. Acionando worker...`);
+            console.log(`[WEBHOOK] ${userTag} [${requestId}] Processamento concluído. Acionando worker...`);
             await triggerWorker({ requestId });
           }
         } catch (err: any) {
-          console.error(`[WEBHOOK-ERROR-FATAL] [${requestId}] Falha no processamento:`, err.message);
+          console.error(`[WEBHOOK-ERROR-FATAL] ${userTag} [${requestId}] Falha no processamento:`, err.message);
         }
         break;
       }

@@ -39,7 +39,7 @@ async function checkPersistentPacing(supabase: any, channelId: string, cooldownM
 }
 
 // ─── Structured Logger ──────────────────────────────────────────────────────
-function logJob(level: 'INFO' | 'ERROR' | 'WARN', jobId: string, data: Record<string, any>, requestId?: string) {
+function logJob(level: 'INFO' | 'ERROR' | 'WARN', jobId: string, data: Record<string, any>, requestId?: string, userId?: string) {
   const entry = {
     ts: new Date().toISOString(),
     level,
@@ -47,7 +47,8 @@ function logJob(level: 'INFO' | 'ERROR' | 'WARN', jobId: string, data: Record<st
     reqId: requestId,
     ...data,
   };
-  const prefix = `[WORKER] [${requestId || 'SYSTEM'}]`;
+  const userTag = userId ? `[USER:${userId.substring(0,8)}] ` : '';
+  const prefix = `[WORKER] ${userTag}[REQ:${requestId || 'SYSTEM'}]`;
   if (level === 'ERROR') console.error(prefix, JSON.stringify(entry));
   else if (level === 'WARN') console.warn(prefix, JSON.stringify(entry));
   else console.log(prefix, JSON.stringify(entry));
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
 
     const { data: recentPendingJobs, error: sampleError } = await supabase
       .from('send_jobs')
-      .select('channel_id')
+      .select('id, channel_id, user_id')
       .eq('status', 'pending')
       .order('updated_at', { ascending: true })
       .limit(200);
@@ -108,6 +109,18 @@ export async function POST(request: Request) {
     const activeChannelIds = [...new Set((recentPendingJobs || []).map(j => j.channel_id))].slice(0, CHANNELS_PER_BATCH);
 
     console.log(`[WORKER-STATS] [${requestId}] Depth: ${currentDepth}, Pending: ${totalPendingInitial}, Batch: ${activeChannelIds.length}`);
+
+    // Logs Específicos para Diagnóstico de Fila (Fase 4)
+    console.log(`[WORKER-CRON] Ciclo iniciado. Jobs pendentes: ${totalPendingInitial} total`);
+    if (recentPendingJobs && recentPendingJobs.length > 0) {
+      const userCounts = recentPendingJobs.reduce((acc: any, job: any) => {
+        const u = `[USER:${job.user_id.substring(0,8)}]`;
+        acc[u] = (acc[u] || 0) + 1;
+        return acc;
+      }, {});
+      const countsStr = Object.entries(userCounts).map(([u, c]) => `${u}=${c}`).join(', ');
+      console.log(`[WORKER-CRON] Por conta (na amostra de 200): ${countsStr}`);
+    }
 
     if (activeChannelIds.length === 0) {
       return NextResponse.json({ processed: 0, message: 'No pending jobs', depth: currentDepth });
@@ -161,7 +174,9 @@ export async function POST(request: Request) {
         if (!lockedJob) continue;
 
         processedAny = true;
-        logJob('INFO', job.id, { action: 'sending', channel: channel.name, destination: job.destination }, requestId);
+        const userTagJob = `[USER:${job.user_id.substring(0,8)}]`;
+        console.log(`[WORKER-CRON] Selecionado: [JOB:${job.id.substring(0,8)}] ${userTagJob} (primeiro da fila pendente no canal)`);
+        logJob('INFO', job.id, { action: 'sending', channel: channel.name, destination: job.destination }, requestId, job.user_id);
 
         try {
           const { data: secretData } = await supabase.from('channel_secrets').select('session_api_key').eq('channel_id', channelId).maybeSingle();
@@ -176,7 +191,7 @@ export async function POST(request: Request) {
           if (result.success) {
             await supabase.from('send_jobs').update({ status: 'completed', processed_at: new Date().toISOString(), try_count: job.try_count + 1 }).eq('id', job.id);
             await supabase.from('send_receipts').insert({ send_job_id: job.id, user_id: job.user_id, campaign_id: job.campaign_id, destination: job.destination, wasender_message_id: result.messageId });
-            logJob('INFO', job.id, { action: 'delivered' }, requestId);
+            logJob('INFO', job.id, { action: 'delivered' }, requestId, job.user_id);
             results.push({ jobId: job.id, status: 'completed' });
           } else {
             const errorType: string = result.errorType || provider.classifyError(result.error);
@@ -201,7 +216,7 @@ export async function POST(request: Request) {
                 updated_at: new Date().toISOString()
               }).eq('channel_id', channelId).eq('status', 'pending');
               
-              logJob('WARN', job.id, { action: 'paused_channel', reason: 'session_lost' }, requestId);
+              logJob('WARN', job.id, { action: 'paused_channel', reason: 'session_lost' }, requestId, job.user_id);
               results.push({ jobId: job.id, status: 'session_lost', error: result.error });
               
               // 3. Abandona o processamento deste canal
@@ -210,7 +225,7 @@ export async function POST(request: Request) {
 
             const finalStatus = (errorType === 'PERMANENT' || job.try_count + 1 >= MAX_RETRIES) ? 'failed' : 'pending';
             await supabase.from('send_jobs').update({ status: finalStatus, error_type: errorType, try_count: job.try_count + 1, last_error: result.error, processed_at: new Date().toISOString() }).eq('id', job.id);
-            logJob('WARN', job.id, { action: 'failed', error: result.error, nextStatus: finalStatus }, requestId);
+            logJob('WARN', job.id, { action: 'failed', error: result.error, nextStatus: finalStatus }, requestId, job.user_id);
             results.push({ jobId: job.id, status: finalStatus, error: result.error });
           }
         } catch (jobError: any) {

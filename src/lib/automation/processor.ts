@@ -94,7 +94,8 @@ function normalizeShopeeUrl(url: string): string {
 
 export async function processInboundAutomation(payload: InboundPayload) {
   const { userId, channelId, externalGroupId, body, isFromMe, messageId } = payload;
-  const logPrefix = `[PROCESSOR] [MSG:${messageId?.substring(0, 6)}] [GRP:${externalGroupId?.substring(0, 6)}]`;
+  const userTag = `[USER:${userId?.substring(0, 8)}]`;
+  const logPrefix = `[PROCESSOR] ${userTag} [MSG:${messageId?.substring(0, 6)}] [GRP:${externalGroupId?.substring(0, 6)}]`;
 
   try {
     console.log(`${logPrefix} >>> INICIANDO PROCESSAMENTO E2E...`);

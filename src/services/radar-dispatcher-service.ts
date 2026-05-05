@@ -104,9 +104,12 @@ export const radarDispatcherService = {
 
     // 3. Cruzamento de Dados (Pipeline Operacional)
     for (const source of sources) {
+      const userTag = `[USER:${source.user_id.substring(0,8)}]`;
+      const sourceLogPrefix = `${logPrefix} ${userTag} [SOURCE:${source.id.substring(0,8)}]`;
+
       const routes = source.automation_routes || [];
       if (routes.length === 0) {
-        console.log(`${logPrefix} [SKIP] Fonte "${source.name}" não possui rotas de destino.`);
+        console.log(`${sourceLogPrefix} [SKIP] Fonte "${source.name}" não possui rotas de destino.`);
         continue;
       }
 
@@ -120,7 +123,7 @@ export const radarDispatcherService = {
       }
 
       if (!access.isOperative) {
-        console.warn(`${logPrefix} [SKIP-BILLING] User ${source.user_id} não está operativo.`);
+        console.warn(`${sourceLogPrefix} [SKIP-BILLING] User ${source.user_id} não está operativo.`);
         totalSkippedBilling++;
         continue;
       }
@@ -151,7 +154,7 @@ export const radarDispatcherService = {
         .limit(30);
 
       if (candidateError) {
-        console.error(`${logPrefix} [ERROR-QUERY] Falha ao buscar vínculos para fonte ${source.id}:`, candidateError);
+        console.error(`${sourceLogPrefix} [ERROR-QUERY] Falha ao buscar vínculos:`, candidateError);
       }
 
       const candidates = (rdpRelations || [])
@@ -162,10 +165,10 @@ export const radarDispatcherService = {
         }))
         .filter(p => p !== null);
 
-      console.log(`${logPrefix} [QUERY-RELATION] Fonte: ${source.id} | Candidatos Pendentes: ${candidates.length}`);
+      console.log(`${sourceLogPrefix} [QUERY-RELATION] Candidatos Pendentes: ${candidates.length}`);
 
       if (candidates.length === 0) {
-        console.log(`${logPrefix} [NO-MATCH] Nenhum produto 'pending' vinculado à fonte "${source.name}".`);
+        console.log(`${sourceLogPrefix} [NO-MATCH] Nenhum produto 'pending' vinculado.`);
         
         // Sinalizar necessidade de reposição (Restock) via colunas dedicadas
         if (!source.needs_restock) {
@@ -176,9 +179,9 @@ export const radarDispatcherService = {
               restock_requested_at: new Date().toISOString()
             })
             .eq('id', source.id);
-          console.log(`${logPrefix} [RESTOCK-REQUESTED] Reposição sinalizada para "${source.name}".`);
+          console.log(`${sourceLogPrefix} [RESTOCK-REQUESTED] Reposição sinalizada.`);
         } else {
-          console.log(`${logPrefix} [AWAITING-RESTOCK] Fonte "${source.name}" já está aguardando reposição.`);
+          console.log(`${sourceLogPrefix} [AWAITING-RESTOCK] Já está aguardando reposição.`);
         }
         
         continue;
@@ -194,7 +197,7 @@ export const radarDispatcherService = {
           .eq('status', 'pending');
 
         if (pendingJobs && pendingJobs >= 2) {
-          console.log(`${logPrefix} [RADAR QUEUE] Rota ${route.id} já possui ${pendingJobs} itens pendentes. Pulando.`);
+          console.log(`${sourceLogPrefix} [RADAR QUEUE] Rota ${route.id} já possui ${pendingJobs} itens pendentes. Pulando.`);
           totalSkippedQueue++;
           logActivity(supabase, {
             source_id: source.id,
@@ -235,13 +238,13 @@ export const radarDispatcherService = {
 
           // E. Geração de Campanha
           try {
-            console.log(`${logPrefix} [RADAR-SELECT] Rota ${route.id} escolheu produto ${product.id} após analisar ${routeSkippedDedupe + routeSkippedFilter + 1} candidatos.`);
+            console.log(`${sourceLogPrefix} [RADAR-SELECT] Rota ${route.id} escolheu produto ${product.id} após analisar ${routeSkippedDedupe + routeSkippedFilter + 1} candidatos.`);
             
             const [snapshot] = await processLinks([product.original_url], connections || [], 'auto');
             const factual = snapshot.factual;
 
             if (!factual.eligibility.isEligible) {
-              console.warn(`${logPrefix} [AUDIT-REJECT] Item ${product.id} rejeitado na auditoria real: ${factual.eligibility.reasons.join(', ')}`);
+              console.warn(`${sourceLogPrefix} [AUDIT-REJECT] Item ${product.id} rejeitado na auditoria real: ${factual.eligibility.reasons.join(', ')}`);
               
               // Se o link é definitivamente inválido, marcamos o vínculo como 'exhausted'
               await supabase
@@ -310,7 +313,7 @@ export const radarDispatcherService = {
               title: product.name
             });
 
-            console.log(`${logPrefix} [MARKED-DISPATCHED] Vínculo ${product.rdp_id} consumido com sucesso.`);
+            console.log(`${sourceLogPrefix} [MARKED-DISPATCHED] Vínculo ${product.rdp_id} consumido com sucesso.`);
 
             await automationService.logEvent({
               source_id: source.id,
@@ -328,7 +331,7 @@ export const radarDispatcherService = {
             totalCreated++;
             dispatchedForRoute = true;
           } catch (err: any) {
-            console.error(`${logPrefix} Falha ao despachar produto ${product.id}:`, err.message);
+            console.error(`${sourceLogPrefix} Falha ao despachar produto ${product.id}:`, err.message);
             
             // Marcar como skipped para evitar loop infinito de erro neste ciclo
             await supabase
@@ -343,9 +346,9 @@ export const radarDispatcherService = {
         }
 
         if (!dispatchedForRoute) {
-          console.log(`${logPrefix} [NO-ELIGIBLE] Rota ${route.id} percorreu ${candidates.length} candidatos mas todos foram filtrados ou já enviados.`);
+          console.log(`${sourceLogPrefix} [NO-ELIGIBLE] Rota ${route.id} percorreu ${candidates.length} candidatos mas todos foram filtrados ou já enviados.`);
           if (routeSkippedDedupe === candidates.length) {
-            console.log(`${logPrefix} [NEEDS-RESTOCK] Fonte "${source.name}" esgotou candidatos 'pending' para esta rota.`);
+            console.log(`${sourceLogPrefix} [NEEDS-RESTOCK] Esgotou candidatos 'pending' para esta rota.`);
           }
         }
       }
