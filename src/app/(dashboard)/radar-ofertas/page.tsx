@@ -902,7 +902,8 @@ export default function RadarOfertasPage() {
                        offerType: 1,
                        periodStartTime: 0,
                        periodEndTime: 0,
-                       originalLink: page.original_url
+                       originalLink: page.original_url,
+                       expiresAt: page.expires_at
                      }} 
                    />
                  ))}
