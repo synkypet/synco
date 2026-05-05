@@ -891,6 +891,7 @@ export default function RadarOfertasPage() {
                    <CouponCard 
                      key={page.id}
                      hideCommission={true}
+                     showImage={false}
                      offer={{
                        offerName: page.name,
                        offerLink: page.short_link,

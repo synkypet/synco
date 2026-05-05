@@ -13,9 +13,15 @@ interface CouponCardProps {
   offer: ShopeeOffer;
   onClick?: () => void;
   hideCommission?: boolean;
+  showImage?: boolean;
 }
 
-export const CouponCard: React.FC<CouponCardProps> = ({ offer, onClick, hideCommission }) => {
+export const CouponCard: React.FC<CouponCardProps> = ({ 
+  offer, 
+  onClick, 
+  hideCommission,
+  showImage = true 
+}) => {
   const router = useRouter();
   const cleanName = extractOfferName(offer.offerName);
 
@@ -26,7 +32,7 @@ export const CouponCard: React.FC<CouponCardProps> = ({ offer, onClick, hideComm
     const payload = {
       title: cleanName,
       link: offer.offerLink,
-      image: offer.imageUrl,
+      image: showImage ? offer.imageUrl : undefined,
       commission: hideCommission ? 'RESGATE' : offer.commissionPercent.toFixed(1)
     };
 
@@ -43,7 +49,10 @@ export const CouponCard: React.FC<CouponCardProps> = ({ offer, onClick, hideComm
     <div className="group relative cursor-pointer" onClick={onClick}>
       {/* Container Principal com Estética de Ticket */}
       <div 
-        className="relative bg-anthracite-surface rounded-2xl overflow-hidden shadow-skeuo-flat border border-white/[0.03] transition-all duration-300 group-hover:shadow-glow-orange/5 group-hover:translate-y-[-2px]"
+        className={cn(
+          "relative bg-anthracite-surface rounded-2xl overflow-hidden shadow-skeuo-flat border border-white/[0.03] transition-all duration-300 group-hover:shadow-glow-orange/5 group-hover:translate-y-[-2px]",
+          !showImage && "pt-6"
+        )}
         style={{
           maskImage: 'radial-gradient(circle at 0px 50%, transparent 12px, black 12px), radial-gradient(circle at 100% 50%, transparent 12px, black 12px)',
           WebkitMaskImage: 'radial-gradient(circle at 0px 50%, transparent 12px, black 12px), radial-gradient(circle at 100% 50%, transparent 12px, black 12px)',
@@ -51,31 +60,41 @@ export const CouponCard: React.FC<CouponCardProps> = ({ offer, onClick, hideComm
           WebkitMaskComposite: 'source-in'
         }}
       >
-        {/* Banner da Campanha */}
-        <div className="relative h-32 w-full overflow-hidden bg-deep-void/50">
-          <img 
-            src={offer.imageUrl || 'https://vgzcisazfsamfkrhuvhy.supabase.co/storage/v1/object/public/assets/shopee-coupon-placeholder.png'} 
-            alt={cleanName}
-            className="w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-105 transition-all duration-500"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-anthracite-surface via-transparent to-transparent" />
-          
-          {/* Badge de Tipo */}
-          <div className="absolute top-3 left-4">
-            <Badge className="bg-kinetic-orange/20 text-kinetic-orange border-none text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full backdrop-blur-md">
-              {hideCommission ? 'Resgate' : (offer.offerType === 1 ? 'Coleção' : 'Categoria')}
-            </Badge>
+        {/* Banner da Campanha (Opcional) */}
+        {showImage && (
+          <div className="relative h-32 w-full overflow-hidden bg-deep-void/50">
+            <img 
+              src={offer.imageUrl || 'https://vgzcisazfsamfkrhuvhy.supabase.co/storage/v1/object/public/assets/shopee-coupon-placeholder.png'} 
+              alt={cleanName}
+              className="w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-105 transition-all duration-500"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-anthracite-surface via-transparent to-transparent" />
+            
+            {/* Badge de Tipo */}
+            <div className="absolute top-3 left-4">
+              <Badge className="bg-kinetic-orange/20 text-kinetic-orange border-none text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full backdrop-blur-md">
+                {hideCommission ? 'Resgate' : (offer.offerType === 1 ? 'Coleção' : 'Categoria')}
+              </Badge>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Corpo do Cupom */}
-        <div className="p-5 pt-2 relative">
+        <div className={cn("p-5 relative", showImage ? "pt-2" : "pt-4")}>
           {/* Linha Pontilhada de Recorte */}
           <div className="absolute -top-1 left-0 w-full flex justify-center px-4 overflow-hidden opacity-20">
             <div className="w-full border-t-2 border-dashed border-white/50" />
           </div>
 
-          <div className="flex flex-col gap-4 mt-2">
+          {!showImage && (
+            <div className="mb-4">
+              <Badge className="bg-kinetic-orange/20 text-kinetic-orange border-none text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
+                {hideCommission ? 'Resgate Prioritário' : 'Oferta Direta'}
+              </Badge>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-4">
             {/* Header: Nome e Valor */}
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
