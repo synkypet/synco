@@ -11,6 +11,7 @@ import { AutomationSource } from '@/types/automation';
 import { Input } from '@/components/ui/input';
 
 import { normalizeKeywords, calculateKeywordBudgets, getBudgetByPreset } from '@/lib/automation/keyword-utils';
+import { KeywordManager } from '@/components/automation/KeywordManager';
 
 interface OriginBlockProps {
   source: AutomationSource;
@@ -125,48 +126,13 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
           
           {isEditingKeyword ? (
             <div className="space-y-3">
-              {localKeywords.map((kw, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
-                  <div className="flex-1 bg-white/5 rounded-xl border border-white/5 px-1 flex items-center">
-                    <Input 
-                      value={kw.term}
-                      placeholder="Ex: fone bluetooth"
-                      onChange={(e) => updateKeyword(idx, { term: e.target.value })}
-                      className="h-9 bg-transparent border-none text-[11px] font-bold focus-visible:ring-0"
-                    />
-                    <div className="flex items-center gap-1 pr-2 border-l border-white/5 ml-1">
-                      <span className="text-[8px] font-black text-white/20 uppercase ml-2">Peso</span>
-                      <Input 
-                        type="number"
-                        min="1"
-                        max="10"
-                        value={kw.weight}
-                        onChange={(e) => updateKeyword(idx, { weight: parseInt(e.target.value) || 1 })}
-                        className="h-7 w-10 bg-white/5 border-none text-[10px] font-black text-center rounded-lg p-0"
-                      />
-                    </div>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => removeKeyword(idx)}
-                    className="h-9 w-9 text-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-xl"
-                  >
-                    <ShieldAlert size={14} />
-                  </Button>
-                </div>
-              ))}
-              
-              <div className="flex items-center justify-between pt-2">
-                {localKeywords.length < 5 && (
-                  <Button 
-                    variant="ghost" 
-                    className="h-8 text-[9px] font-bold text-white/40 hover:text-white hover:bg-white/5 rounded-xl border border-white/5"
-                    onClick={addKeyword}
-                  >
-                    + Adicionar Keyword
-                  </Button>
-                )}
+              <KeywordManager 
+                keywords={localKeywords}
+                onChange={setLocalKeywords}
+                maxKeywords={5}
+                showWeights={true}
+              />
+              <div className="flex items-center justify-end pt-2">
                 <Button 
                   className="h-9 bg-kinetic-orange hover:bg-kinetic-orange/80 text-white font-black text-[10px] uppercase tracking-widest px-6 rounded-xl shadow-glow-orange"
                   onClick={handleSaveKeywords}
