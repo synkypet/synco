@@ -97,18 +97,51 @@ export async function POST(request: Request) {
     const currentDepth = incomingDepth;
     const MAX_DEPTH = 3;
 
+    // 2. Identificar Canais com Jobs Pendentes (Round-Robin Fairness)
+    // Buscamos uma amostra maior para garantir que usuários novos/menores não sejam sufocados por grandes volumes
+    const SAMPLE_SIZE = 1000;
     const { data: recentPendingJobs, error: sampleError } = await supabase
       .from('send_jobs')
       .select('id, channel_id, user_id')
       .eq('status', 'pending')
       .order('updated_at', { ascending: true })
-      .limit(200);
+      .limit(SAMPLE_SIZE);
 
     if (sampleError) throw new Error(`Fetch jobs error: ${sampleError.message}`);
 
-    const activeChannelIds = [...new Set((recentPendingJobs || []).map(j => j.channel_id))].slice(0, CHANNELS_PER_BATCH);
+    // Agrupamento por usuário para Interleaving (Round-Robin)
+    const channelsByUser = new Map<string, string[]>();
+    (recentPendingJobs || []).forEach(job => {
+      const userChans = channelsByUser.get(job.user_id) || [];
+      if (!userChans.includes(job.channel_id)) {
+        userChans.push(job.channel_id);
+        channelsByUser.set(job.user_id, userChans);
+      }
+    });
 
-    console.log(`[WORKER-STATS] [${requestId}] Depth: ${currentDepth}, Pending: ${totalPendingInitial}, Batch: ${activeChannelIds.length}`);
+    // Algoritmo de Interleaving: Pegamos um canal de cada usuário por rodada
+    const activeChannelIds: string[] = [];
+    const userOrder = Array.from(channelsByUser.keys()); // Mantém ordem FIFO dos usuários baseada no job mais antigo
+    
+    let hasMore = true;
+    let round = 0;
+    while (activeChannelIds.length < CHANNELS_PER_BATCH && hasMore) {
+      hasMore = false;
+      for (const userId of userOrder) {
+        const userChans = channelsByUser.get(userId)!;
+        if (userChans.length > round) {
+          const channelId = userChans[round];
+          if (!activeChannelIds.includes(channelId)) {
+            activeChannelIds.push(channelId);
+            if (activeChannelIds.length >= CHANNELS_PER_BATCH) break;
+          }
+          hasMore = true;
+        }
+      }
+      round++;
+    }
+
+    console.log(`[WORKER-STATS] [${requestId}] Depth: ${currentDepth}, Pending: ${totalPendingInitial}, Sample: ${recentPendingJobs?.length}, Users: ${userOrder.length}, Batch: ${activeChannelIds.length}`);
 
     // Logs Específicos para Diagnóstico de Fila (Fase 4)
     console.log(`[WORKER-CRON] Ciclo iniciado. Jobs pendentes: ${totalPendingInitial} total`);
@@ -119,7 +152,8 @@ export async function POST(request: Request) {
         return acc;
       }, {});
       const countsStr = Object.entries(userCounts).map(([u, c]) => `${u}=${c}`).join(', ');
-      console.log(`[WORKER-CRON] Por conta (na amostra de 200): ${countsStr}`);
+      console.log(`[WORKER-CRON] Distribuição na amostra de ${SAMPLE_SIZE}: ${countsStr}`);
+      console.log(`[WORKER-CRON] Canais selecionados para este batch: ${activeChannelIds.join(', ')}`);
     }
 
     if (activeChannelIds.length === 0) {
