@@ -368,15 +368,22 @@ export default function AutomacoesDashboardPage() {
                            </div>
                         </div>
 
-                        <Button 
-                          variant="secondary" 
-                          className="w-full h-10 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest gap-2"
-                          onClick={handlePreviewRadar}
-                          disabled={isPreviewing || !isSearchTermValid}
-                        >
-                          {isPreviewing ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
-                          Gerar Preview das Ofertas
-                        </Button>
+                        <div className="space-y-2">
+                          <Button 
+                            variant="secondary" 
+                            className="w-full h-10 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest gap-2"
+                            onClick={handlePreviewRadar}
+                            disabled={isPreviewing || !isSearchTermValid}
+                          >
+                            {isPreviewing ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
+                            Gerar Preview das Ofertas
+                          </Button>
+                          {creationKeywords.length > 1 && (
+                            <p className="text-center text-[9px] text-white/30 font-medium italic">
+                              Prévia gerada com a primeira palavra-chave. Todas as palavras serão usadas pela automação.
+                            </p>
+                          )}
+                        </div>
 
                         {previewResults && (
                           <div className="space-y-2 p-4 bg-black/20 rounded-2xl border border-white/5 animate-in fade-in duration-500">
