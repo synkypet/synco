@@ -42,7 +42,7 @@ export const automationService = {
   /**
    * Cria uma nova fonte de monitoramento
    */
-  async createSource(source: Partial<AutomationSource> & { user_id: string; source_type: 'group_monitor' | 'radar_offers' }, client?: SupabaseClient): Promise<AutomationSource> {
+  async createSource(source: Partial<AutomationSource> & { user_id: string; source_type: 'group_monitor' | 'radar_offers' | 'coupon_shopee' }, client?: SupabaseClient): Promise<AutomationSource> {
     const supabase = client || createClient();
     const { data, error } = await supabase
       .from('automation_sources')
@@ -61,7 +61,7 @@ export const automationService = {
     userId: string, 
     setup: {
       name: string;
-      source_type: 'group_monitor' | 'radar_offers';
+      source_type: 'group_monitor' | 'radar_offers' | 'coupon_shopee';
       channel_id?: string;
       external_group_id?: string;
       target_type: 'group' | 'list';

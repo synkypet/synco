@@ -46,7 +46,7 @@ export interface AutomationSource {
   external_group_id?: string;
   name: string;
   is_active: boolean;
-  source_type: 'group_monitor' | 'radar_offers';
+  source_type: 'group_monitor' | 'radar_offers' | 'coupon_shopee';
   config?: {
     searchTerm?: string; // Fallback legatário
     keywords?: AutomationKeyword[];

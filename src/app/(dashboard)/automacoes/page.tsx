@@ -40,7 +40,8 @@ import {
   FileText,
   AlertCircle,
   RefreshCw,
-  Trash2
+  Trash2,
+  BadgePercent
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -88,7 +89,7 @@ export default function AutomacoesDashboardPage() {
   // New Creation State
   const [isNewMonitorOpen, setIsNewMonitorOpen] = useState(false);
   const [newName, setNewName] = useState('');
-  const [entryType, setEntryType] = useState<'group_monitor' | 'radar_offers'>('group_monitor');
+  const [entryType, setEntryType] = useState<'group_monitor' | 'radar_offers' | 'coupon_shopee'>('group_monitor');
   const [channelId, setChannelId] = useState('');
   const [sourceGroupId, setSourceGroupId] = useState('');
   const [targetType, setTargetType] = useState<'group' | 'list'>('list');
@@ -295,6 +296,17 @@ export default function AutomacoesDashboardPage() {
                           <Inbox size={20} className="mb-2" />
                           <span className="text-[9px] font-black uppercase tracking-widest">Radar Pro</span>
                         </button>
+                        <button
+                          onClick={() => setEntryType('coupon_shopee')}
+                          className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border transition-all ${
+                            entryType === 'coupon_shopee' 
+                              ? 'bg-kinetic-orange/10 border-kinetic-orange/40 text-kinetic-orange shadow-glow-orange' 
+                              : 'bg-white/5 border-white/10 text-white/20 hover:bg-white/10'
+                          }`}
+                        >
+                          <BadgePercent size={20} className="mb-2" />
+                          <span className="text-[9px] font-black uppercase tracking-widest">Cupons Shopee</span>
+                        </button>
                       </div>
                     </div>
   
@@ -405,6 +417,44 @@ export default function AutomacoesDashboardPage() {
                              </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {entryType === 'coupon_shopee' && (
+                      <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
+                        <div className="grid grid-cols-2 gap-4">
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Filtro de Tipo</Label>
+                             <Select 
+                               value={(entryType === 'coupon_shopee' && shopeeList === '0') ? 'all' : (shopeeList === '1' ? 'collection' : 'category')} 
+                               onValueChange={(val) => setShopeeList(val === 'all' ? '0' : (val === 'collection' ? '1' : '2'))}
+                             >
+                               <SelectTrigger>
+                                 <SelectValue />
+                               </SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="all">Todas as campanhas</SelectItem>
+                                 <SelectItem value="collection">Apenas Coleções</SelectItem>
+                                 <SelectItem value="category">Apenas Categorias</SelectItem>
+                               </SelectContent>
+                             </Select>
+                           </div>
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Comissão Mín (%)</Label>
+                             <Input 
+                               type="number" 
+                               placeholder="Ex: 5" 
+                               value={minCommission} 
+                               onChange={(e) => setMinCommission(e.target.value)} 
+                             />
+                           </div>
+                        </div>
+
+                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                           <p className="text-[10px] text-white/40 leading-relaxed italic">
+                             A Shopee tem campanhas ativas periodicamente. Sua automação vai verificar a cada ciclo e enviar quando houver cupons disponíveis que respeitem seus filtros.
+                           </p>
+                        </div>
                       </div>
                     )}
 
@@ -528,7 +578,7 @@ export default function AutomacoesDashboardPage() {
                         <h3 className="font-black text-white/90 uppercase tracking-tight italic text-lg">{source.name}</h3>
                         <div className="flex items-center gap-2 mt-0.5">
                            <Badge variant="outline" className="text-[8px] font-black uppercase border-white/10 text-white/40 h-4">
-                             {source.source_type === 'group_monitor' ? 'Monitoramento' : 'Radar'}
+                             {source.source_type === 'group_monitor' ? 'Monitoramento' : (source.source_type === 'radar_offers' ? 'Radar' : 'Cupons Shopee')}
                            </Badge>
                         </div>
                       </div>
@@ -553,7 +603,7 @@ export default function AutomacoesDashboardPage() {
                         </div>
                         <div className="flex-1 overflow-hidden">
                            <p className="text-[9px] font-black uppercase text-white/20 tracking-widest">Entrada (Source)</p>
-                           <p className="text-xs font-bold text-white/60 truncate italic">{source.external_group_id || 'Radar de Ofertas'}</p>
+                           <p className="text-xs font-bold text-white/60 truncate italic">{source.external_group_id || (source.source_type === 'radar_offers' ? 'Radar de Ofertas' : 'Cupons Shopee')}</p>
                         </div>
                         <ChevronRight size={14} className="text-white/10" />
                         <div className="w-8 h-8 rounded-full bg-kinetic-orange/10 flex items-center justify-center shrink-0 border border-kinetic-orange/20">
