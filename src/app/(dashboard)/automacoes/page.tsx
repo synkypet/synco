@@ -62,6 +62,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { KeywordTagsInput } from '@/components/shared/KeywordTagsInput';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
@@ -92,7 +93,7 @@ export default function AutomacoesDashboardPage() {
   const [sourceGroupId, setSourceGroupId] = useState('');
   const [targetType, setTargetType] = useState<'group' | 'list'>('list');
   const [targetId, setTargetId] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [creationKeywords, setCreationKeywords] = useState<string[]>([]);
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minCommission, setMinCommission] = useState('');
@@ -108,7 +109,7 @@ export default function AutomacoesDashboardPage() {
   const isNameValid = newName.trim().length >= 3;
   const isEntryValid = entryType === 'radar_offers' || (channelId && sourceGroupId);
   const isTargetValid = !!targetId;
-  const isSearchTermValid = entryType === 'radar_offers' ? searchTerm.trim().length >= 2 : true;
+  const isSearchTermValid = entryType === 'radar_offers' ? creationKeywords.length > 0 : true;
   const isFormValid = isNameValid && isEntryValid && isTargetValid && isSearchTermValid;
 
   const handleCreatePipeline = () => {
@@ -125,7 +126,8 @@ export default function AutomacoesDashboardPage() {
       target_type: targetType,
       target_id: targetId,
       config: entryType === 'radar_offers' ? { 
-        searchTerm: searchTerm.trim(),
+        searchTerm: creationKeywords.length > 0 ? creationKeywords[0] : '',
+        keywords: creationKeywords.map(k => ({ term: k, weight: 1 })),
         sortType: parseInt(shopeeSort),
         listType: parseInt(shopeeList),
         batchLimit: parseInt(shopeeLimit)
@@ -150,7 +152,7 @@ export default function AutomacoesDashboardPage() {
   };
 
   const handlePreviewRadar = async () => {
-    if (!searchTerm.trim()) return;
+    if (creationKeywords.length === 0) return;
     setIsPreviewing(true);
     setPreviewResults(null);
     try {
@@ -158,7 +160,7 @@ export default function AutomacoesDashboardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          keyword: searchTerm.trim(),
+          keyword: creationKeywords[0],
           sortType: parseInt(shopeeSort),
           listType: parseInt(shopeeList),
           limit: 10,
@@ -298,18 +300,19 @@ export default function AutomacoesDashboardPage() {
   
                     {entryType === 'radar_offers' && (
                       <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
-                        <div className="space-y-2">
-                          <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest flex justify-between">
-                             Termo de Busca (Keyword)
-                             {!isSearchTermValid && searchTerm.length > 0 && <span className="text-red-400 font-bold tracking-tight">Mín. 2 caracteres</span>}
-                          </Label>
-                          <Input 
-                            placeholder="Ex: fone bluetooth, air fryer..." 
-                            className={!isSearchTermValid && searchTerm.length > 0 ? 'ring-1 ring-red-500/50' : ''}
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                          />
-                        </div>
+                          <div className="space-y-2">
+                            <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest flex justify-between">
+                               Termos de Busca (Até 5 nichos)
+                               {!isSearchTermValid && <span className="text-red-400 font-bold tracking-tight">Insira ao menos 1 nicho</span>}
+                            </Label>
+                            <KeywordTagsInput
+                              value={creationKeywords}
+                              onChange={setCreationKeywords}
+                              maxKeywords={5}
+                              placeholder="Digite um nicho e pressione Enter..."
+                              className={!isSearchTermValid ? 'ring-1 ring-red-500/50' : ''}
+                            />
+                          </div>
 
                         <div className="grid grid-cols-2 gap-4">
                            <div className="space-y-2">
@@ -322,6 +325,7 @@ export default function AutomacoesDashboardPage() {
                                  <SelectItem value={SHOPEE_SORT_TYPE.RELEVANCE.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.RELEVANCE]}</SelectItem>
                                  <SelectItem value={SHOPEE_SORT_TYPE.BEST_SELLERS.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.BEST_SELLERS]}</SelectItem>
                                  <SelectItem value={SHOPEE_SORT_TYPE.TOP_COMMISSION.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.TOP_COMMISSION]}</SelectItem>
+                                 <SelectItem value={SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT]}</SelectItem>
                                </SelectContent>
                              </Select>
                            </div>
