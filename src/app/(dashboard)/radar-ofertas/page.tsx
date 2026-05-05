@@ -713,7 +713,7 @@ export default function RadarOfertasPage() {
                    <PackageSearch size={32} className="mx-auto mb-4 text-white/5" />
                    <h5 className="text-[11px] font-black uppercase tracking-[0.3em] text-white/30 mb-2">Página Vazia</h5>
                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/10">
-                     Nenhum produto encontrado para "{garimpKeywords.join(', ')}". Tente uma palavra diferente ou remova alguns filtros rígidos.
+                     Nenhum produto encontrado para &quot;{garimpKeywords.join(', ')}&quot;. Tente uma palavra diferente ou remova alguns filtros rígidos.
                    </p>
                 </div>
               )}

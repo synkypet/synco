@@ -56,11 +56,14 @@ export class WasenderClient {
     };
 
     // URL base do app local/remota
-    const rawUrl = params.webhookUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://synco-mocha.vercel.app';
-    const baseUrl = rawUrl.endsWith('/') ? rawUrl.slice(0, -1) : rawUrl;
-    const finalWebhookUrl = baseUrl.includes('/api/webhooks/wasender') 
-      ? baseUrl 
-      : `${baseUrl}/api/webhooks/wasender`;
+    const rawUrl = params.webhookUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://synco-six.vercel.app';
+    let baseUrl = rawUrl.endsWith('/') ? rawUrl.slice(0, -1) : rawUrl;
+    
+    // Limpar caminhos de API se já existirem no baseUrl para evitar duplicidade
+    baseUrl = baseUrl.replace(/\/api\/webhooks\/wasender\/?$/, '');
+    baseUrl = baseUrl.replace(/\/api\/wasender\/webhook\/?$/, '');
+    
+    const finalWebhookUrl = `${baseUrl}/api/webhooks/wasender`;
 
     // Regras obrigatórias do webhook
     body.webhook_url = finalWebhookUrl;
@@ -107,11 +110,14 @@ export class WasenderClient {
   }
 
   static async updateSessionWebhook(sessionId: string, apiKey?: string) {
-    const rawUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://synco-mocha.vercel.app';
-    const baseUrl = rawUrl.endsWith('/') ? rawUrl.slice(0, -1) : rawUrl;
-    const finalWebhookUrl = baseUrl.includes('/api/webhooks/wasender') 
-      ? baseUrl 
-      : `${baseUrl}/api/webhooks/wasender`;
+    const rawUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://synco-six.vercel.app';
+    let baseUrl = rawUrl.endsWith('/') ? rawUrl.slice(0, -1) : rawUrl;
+
+    // Limpar caminhos de API se já existirem no baseUrl para evitar duplicidade
+    baseUrl = baseUrl.replace(/\/api\/webhooks\/wasender\/?$/, '');
+    baseUrl = baseUrl.replace(/\/api\/wasender\/webhook\/?$/, '');
+
+    const finalWebhookUrl = `${baseUrl}/api/webhooks/wasender`;
 
     const body = {
       webhook_url: finalWebhookUrl,

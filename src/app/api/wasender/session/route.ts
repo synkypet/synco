@@ -49,7 +49,6 @@ export async function POST(request: Request) {
             const wasenderSession = await WasenderClient.createSession({
                 name: `SYNCO - ${channel.name}`,
                 phoneNumber: e164Phone,
-                webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://synco-mocha.vercel.app'}/api/wasender/webhook`
             });
             
             const sessionData = wasenderSession.data || wasenderSession;

@@ -50,7 +50,7 @@ export function KeywordManager({
     if (keywords.length === 0) {
       onChange([{ term: '', weight: 1 }]);
     }
-  }, []);
+  }, [keywords.length, onChange]);
 
   return (
     <div className="space-y-3">
