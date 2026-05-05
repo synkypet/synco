@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 
 interface CouponCardProps {
-  offer: ShopeeOffer;
+  offer: ShopeeOffer & { expiresAt?: string | null };
   onClick?: () => void;
   hideCommission?: boolean;
   showImage?: boolean;
@@ -47,18 +47,12 @@ export const CouponCard: React.FC<CouponCardProps> = ({
 
   return (
     <div className="group relative cursor-pointer" onClick={onClick}>
-      {/* Container Principal com Estética de Ticket */}
+      {/* Container Principal — Estética Tactile sem recortes laterais */}
       <div 
         className={cn(
-          "relative bg-anthracite-surface rounded-2xl overflow-hidden shadow-skeuo-flat border border-white/[0.03] transition-all duration-300 group-hover:shadow-glow-orange/5 group-hover:translate-y-[-2px]",
+          "relative bg-anthracite-surface rounded-[24px] overflow-hidden shadow-skeuo-flat border border-white/[0.03] transition-all duration-300 group-hover:shadow-glow-orange/5 group-hover:translate-y-[-2px]",
           !showImage && "pt-6"
         )}
-        style={{
-          maskImage: 'radial-gradient(circle at 0px 50%, transparent 12px, black 12px), radial-gradient(circle at 100% 50%, transparent 12px, black 12px)',
-          WebkitMaskImage: 'radial-gradient(circle at 0px 50%, transparent 12px, black 12px), radial-gradient(circle at 100% 50%, transparent 12px, black 12px)',
-          maskComposite: 'intersect',
-          WebkitMaskComposite: 'source-in'
-        }}
       >
         {/* Banner da Campanha (Opcional) */}
         {showImage && (
@@ -80,31 +74,34 @@ export const CouponCard: React.FC<CouponCardProps> = ({
         )}
 
         {/* Corpo do Cupom */}
-        <div className={cn("p-5 relative", showImage ? "pt-2" : "pt-4")}>
-          {/* Linha Pontilhada de Recorte */}
-          <div className="absolute -top-1 left-0 w-full flex justify-center px-4 overflow-hidden opacity-20">
+        <div className={cn("p-6 relative", showImage ? "pt-2" : "pt-4")}>
+          {/* Linha Pontilhada de Recorte (Estética apenas) */}
+          <div className="absolute -top-1 left-0 w-full flex justify-center px-6 overflow-hidden opacity-10">
             <div className="w-full border-t-2 border-dashed border-white/50" />
           </div>
 
           {!showImage && (
             <div className="mb-4">
-              <Badge className="bg-kinetic-orange/20 text-kinetic-orange border-none text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-                {hideCommission ? 'Resgate Prioritário' : 'Oferta Direta'}
+              <Badge className="bg-kinetic-orange/20 text-kinetic-orange border-none text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+                {hideCommission ? 'Verificado' : 'Oferta Direta'}
               </Badge>
             </div>
           )}
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-5">
             {/* Header: Nome e Valor */}
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <h4 className="text-[11px] font-black text-white/90 uppercase tracking-wider leading-tight line-clamp-2 min-h-[32px]">
+                <h4 className="text-[12px] font-black text-white/90 uppercase tracking-wider leading-tight line-clamp-2 min-h-[32px] font-headline italic">
                   {cleanName}
                 </h4>
                 <div className="flex items-center gap-2 mt-2 text-white/30">
                   <Calendar size={10} className="text-kinetic-orange" />
                   <span className="text-[9px] font-bold uppercase tracking-widest">
-                    {hideCommission ? 'Disponível Agora' : `Validade: ${offer.periodEndFormatted || 'Indeterminada'}`}
+                    {offer.expiresAt 
+                      ? `Expira em: ${new Date(offer.expiresAt).toLocaleDateString('pt-BR')}`
+                      : (hideCommission ? 'Disponível Agora' : `Validade: ${offer.periodEndFormatted || 'Indeterminada'}`)
+                    }
                   </span>
                 </div>
               </div>
@@ -119,8 +116,8 @@ export const CouponCard: React.FC<CouponCardProps> = ({
                     <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/20 mt-1">COMISSÃO</span>
                   </>
                 ) : (
-                  <div className="px-3 py-1.5 bg-kinetic-orange/10 border border-kinetic-orange/20 rounded-lg">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-kinetic-orange">Cupom Real</span>
+                  <div className="px-3 py-1.5 bg-kinetic-orange/5 border border-white/5 rounded-xl shadow-skeuo-pressed">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-kinetic-orange">🏷️ Link de Resgate</span>
                   </div>
                 )}
               </div>
@@ -130,10 +127,10 @@ export const CouponCard: React.FC<CouponCardProps> = ({
             <div className="flex items-center gap-2 mt-2">
               <KineticButton 
                 onClick={handleQuickDispatch}
-                className="flex-1 h-11 rounded-xl bg-kinetic-orange/10 text-kinetic-orange hover:bg-kinetic-orange/20 border-none group/btn"
+                className="flex-1 h-12 rounded-2xl bg-kinetic-orange/10 text-kinetic-orange hover:bg-kinetic-orange/20 border-none group/btn shadow-skeuo-flat"
               >
                 <Zap size={14} className="mr-2 group-hover/btn:scale-110 transition-transform" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Disparar</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Disparar Agora</span>
               </KineticButton>
               
               <a 
@@ -141,7 +138,7 @@ export const CouponCard: React.FC<CouponCardProps> = ({
                 target="_blank" 
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="h-11 w-11 flex items-center justify-center rounded-xl bg-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all shadow-skeuo-flat border border-white/[0.02]"
+                className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all shadow-skeuo-flat border border-white/[0.02]"
                 title="Ver página da oferta"
               >
                 <ExternalLink size={16} />
@@ -153,10 +150,6 @@ export const CouponCard: React.FC<CouponCardProps> = ({
         {/* Efeito de Gloss Inferior */}
         <div className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
-
-      {/* Sombras Laterais de Ticket (Entradas circulares) */}
-      <div className="absolute top-1/2 -left-1.5 w-3 h-6 bg-deep-void rounded-full -translate-y-1/2 z-10 shadow-inner" />
-      <div className="absolute top-1/2 -right-1.5 w-3 h-6 bg-deep-void rounded-full -translate-y-1/2 z-10 shadow-inner" />
     </div>
   );
 };

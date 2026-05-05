@@ -9,6 +9,7 @@ export interface ShopeeCouponPage {
   image_url: string | null;
   is_active: boolean;
   last_refreshed_at: string | null;
+  expires_at: string | null;
   created_at: string;
 }
 
