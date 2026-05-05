@@ -140,8 +140,9 @@ export const campaignService = {
     // 4. Inserir Itens
     const itemsToInsert = dto.items.map(item => ({
       campaign_id: campaign.id,
-      // Se for um ID temporário do processamento (proc_*), enviamos null para evitar erro de UUID no banco
-      product_id: (item.product_id && typeof item.product_id === 'string' && item.product_id.startsWith('proc_')) 
+      // Se for um ID temporário (proc_* ou coupon_*) ou não for um UUID válido, enviamos null para evitar erro no banco
+      product_id: (item.product_id && typeof item.product_id === 'string' && 
+        (/^(proc_|coupon_)/.test(item.product_id) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.product_id)))
         ? null 
         : item.product_id,
       product_name: item.product_name,
