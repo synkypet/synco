@@ -39,12 +39,13 @@ async function checkPersistentPacing(supabase: any, channelId: string, cooldownM
 }
 
 // ─── Structured Logger ──────────────────────────────────────────────────────
-function logJob(level: 'INFO' | 'ERROR' | 'WARN', jobId: string, data: Record<string, any>, requestId?: string, userId?: string) {
+function logJob(level: 'INFO' | 'ERROR' | 'WARN', jobId: string, data: Record<string, any>, requestId?: string, userId?: string, origin?: string) {
   const entry = {
     ts: new Date().toISOString(),
     level,
     jobId,
     reqId: requestId,
+    origin,
     ...data,
   };
   const userTag = userId ? `[USER:${userId.substring(0,8)}] ` : '';
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
     const SAMPLE_SIZE = 1000;
     const { data: recentPendingJobs, error: sampleError } = await supabase
       .from('send_jobs')
-      .select('id, channel_id, user_id')
+      .select('id, channel_id, user_id, origin')
       .eq('status', 'pending')
       .order('updated_at', { ascending: true })
       .limit(SAMPLE_SIZE);
@@ -209,8 +210,8 @@ export async function POST(request: Request) {
 
         processedAny = true;
         const userTagJob = `[USER:${job.user_id.substring(0,8)}]`;
-        console.log(`[WORKER-CRON] Selecionado: [JOB:${job.id.substring(0,8)}] ${userTagJob} (primeiro da fila pendente no canal)`);
-        logJob('INFO', job.id, { action: 'sending', channel: channel.name, destination: job.destination }, requestId, job.user_id);
+        console.log(`[WORKER-CRON] Selecionado: [JOB:${job.id.substring(0,8)}] ${userTagJob} [ORIGIN:${job.origin}] (primeiro da fila pendente no canal)`);
+        logJob('INFO', job.id, { action: 'sending', channel: channel.name, destination: job.destination }, requestId, job.user_id, job.origin);
 
         try {
           const { data: secretData } = await supabase.from('channel_secrets').select('session_api_key').eq('channel_id', channelId).maybeSingle();
@@ -225,8 +226,8 @@ export async function POST(request: Request) {
           if (result.success) {
             await supabase.from('send_jobs').update({ status: 'completed', processed_at: new Date().toISOString(), try_count: job.try_count + 1 }).eq('id', job.id);
             await supabase.from('send_receipts').insert({ send_job_id: job.id, user_id: job.user_id, campaign_id: job.campaign_id, destination: job.destination, wasender_message_id: result.messageId });
-            logJob('INFO', job.id, { action: 'delivered' }, requestId, job.user_id);
-            results.push({ jobId: job.id, status: 'completed' });
+            logJob('INFO', job.id, { action: 'delivered' }, requestId, job.user_id, job.origin);
+            results.push({ jobId: job.id, status: 'completed', origin: job.origin });
           } else {
             const errorType: string = result.errorType || provider.classifyError(result.error);
             
@@ -250,8 +251,8 @@ export async function POST(request: Request) {
                 updated_at: new Date().toISOString()
               }).eq('channel_id', channelId).eq('status', 'pending');
               
-              logJob('WARN', job.id, { action: 'paused_channel', reason: 'session_lost' }, requestId, job.user_id);
-              results.push({ jobId: job.id, status: 'session_lost', error: result.error });
+              logJob('WARN', job.id, { action: 'paused_channel', reason: 'session_lost' }, requestId, job.user_id, job.origin);
+              results.push({ jobId: job.id, status: 'session_lost', error: result.error, origin: job.origin });
               
               // 3. Abandona o processamento deste canal
               break; // Sai do try/catch, vai para o finally (libera lock) e passa para o próximo canal do batch
@@ -259,8 +260,8 @@ export async function POST(request: Request) {
 
             const finalStatus = (errorType === 'PERMANENT' || job.try_count + 1 >= MAX_RETRIES) ? 'failed' : 'pending';
             await supabase.from('send_jobs').update({ status: finalStatus, error_type: errorType, try_count: job.try_count + 1, last_error: result.error, processed_at: new Date().toISOString() }).eq('id', job.id);
-            logJob('WARN', job.id, { action: 'failed', error: result.error, nextStatus: finalStatus }, requestId, job.user_id);
-            results.push({ jobId: job.id, status: finalStatus, error: result.error });
+            logJob('WARN', job.id, { action: 'failed', error: result.error, nextStatus: finalStatus }, requestId, job.user_id, job.origin);
+            results.push({ jobId: job.id, status: finalStatus, error: result.error, origin: job.origin });
           }
         } catch (jobError: any) {
           const errorMessage = jobError.message || 'Unknown pre-send error';
@@ -273,7 +274,8 @@ export async function POST(request: Request) {
             processed_at: new Date().toISOString()
           }).eq('id', job.id);
           
-          results.push({ jobId: job.id, status: 'failed', error: errorMessage });
+          logJob('ERROR', job.id, { action: 'fatal_error', error: errorMessage }, requestId, job.user_id, job.origin);
+          results.push({ jobId: job.id, status: 'failed', error: errorMessage, origin: job.origin });
         }
 
         try {
@@ -290,7 +292,14 @@ export async function POST(request: Request) {
     // 4. Agendamento do Próximo Ciclo (Auto-Retrigger Controlado)
     const { count: finalPendingCount } = await supabase.from('send_jobs').select('*', { count: 'exact', head: true }).eq('status', 'pending');
 
-    console.log(`[WORKER-BATCH-RESULT] [${requestId}] Processed: ${results.length}, Pending: ${finalPendingCount}, Deadline: ${deadlineReached}`);
+    // ─── Log de Resumo de Batch (Observabilidade por Origem) ──────────────────
+    const originCounts = results.reduce((acc: Record<string, number>, r: any) => {
+      const o = r.origin || 'unknown';
+      acc[o] = (acc[o] || 0) + 1;
+      return acc;
+    }, {});
+    const originsStr = Object.entries(originCounts).map(([o, c]) => `${o}:${c}`).join(' ');
+    console.log(`[WORKER-BATCH-RESULT] [${requestId}] total:${results.length} ${originsStr} | Pending: ${finalPendingCount}, Deadline: ${deadlineReached}`);
 
     if (finalPendingCount && finalPendingCount > 0) {
       let shouldRetrigger = false;

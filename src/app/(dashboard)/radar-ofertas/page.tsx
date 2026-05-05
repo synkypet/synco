@@ -64,7 +64,9 @@ import { Label } from '@/components/ui/label';
 import { KeywordTagsInput } from '@/components/shared/KeywordTagsInput';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useShopeeOffers, ShopeeOffer } from '@/hooks/use-shopee-offers';
+import { useShopeeCouponPages } from '@/hooks/use-shopee-coupon-pages';
 import { OffersGrid } from '@/components/radar-campanhas/OffersGrid';
+import { CouponCard } from '@/components/radar-campanhas/CouponCard';
 import { CampaignProductsDrawer } from '@/components/radar-campanhas/CampaignProductsDrawer';
 
 interface DiscoveryPage {
@@ -84,7 +86,7 @@ interface DiscoveryPage {
 
 export default function RadarOfertasPage() {
   // --- STATE ---
-  const [activeTab, setActiveTab] = useState<'products' | 'coupons'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'campaigns' | 'coupons'>('products');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [marketplace, setMarketplace] = useState('all');
   const [search, setSearch] = useState('');
@@ -333,11 +335,19 @@ export default function RadarOfertasPage() {
   // --- CUPONS DATA ---
   const { 
     data: couponData, 
-    isLoading: loadingCoupons, 
-    isError: couponError, 
-    error: couponErrorObj,
-    refetch: refetchCoupons 
+    isLoading: loadingCampaigns, 
+    isError: campaignError, 
+    error: campaignErrorObj,
+    refetch: refetchCampaigns 
   } = useShopeeOffers(couponActiveKeyword);
+
+  // --- CURATED CUPONS DATA ---
+  const {
+    data: curatedCoupons,
+    isLoading: loadingCurated,
+    isError: curatedError,
+    refetch: refetchCurated
+  } = useShopeeCouponPages();
 
   const filteredOffers = useMemo(() => {
     if (!couponData?.offers) return [];
@@ -438,7 +448,14 @@ export default function RadarOfertasPage() {
               className="rounded-xl px-8 h-11 data-[state=active]:bg-kinetic-orange data-[state=active]:text-white data-[state=active]:shadow-glow-orange font-black text-[10px] uppercase tracking-widest transition-all"
             >
               <BadgePercent size={14} className="mr-2" />
-              Cupons Shopee
+              Cupons
+            </TabsTrigger>
+            <TabsTrigger 
+              value="campaigns" 
+              className="rounded-xl px-8 h-11 data-[state=active]:bg-kinetic-orange data-[state=active]:text-white data-[state=active]:shadow-glow-orange font-black text-[10px] uppercase tracking-widest transition-all"
+            >
+              <Store size={14} className="mr-2" />
+              Campanhas
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -847,9 +864,59 @@ export default function RadarOfertasPage() {
             </div>
           )}
         </>
-      ) : (
+      ) : activeTab === 'coupons' ? (
+        /* Nova Aba de Cupons Reais (Curadoria) */
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8">
-           {/* Filtros de Cupons */}
+           <div className="bg-anthracite-surface p-8 rounded-[40px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
+             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
+             <div className="flex items-center gap-4 mb-8">
+               <div className="w-12 h-12 bg-kinetic-orange/10 rounded-2xl flex items-center justify-center shadow-skeuo-elevated">
+                 <BadgePercent size={24} className="text-kinetic-orange" />
+               </div>
+               <div>
+                 <h3 className="text-xl font-black uppercase tracking-widest text-white/90 italic font-headline">Central de Resgate</h3>
+                 <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Cupons oficiais e páginas de benefícios da Shopee</p>
+               </div>
+             </div>
+
+             {loadingCurated ? (
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                 {[1, 2, 3, 4].map(i => (
+                   <div key={i} className="h-64 bg-white/5 rounded-3xl animate-pulse shadow-skeuo-pressed" />
+                 ))}
+               </div>
+             ) : curatedCoupons && curatedCoupons.length > 0 ? (
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                 {curatedCoupons.map((page) => (
+                   <CouponCard 
+                     key={page.id}
+                     hideCommission={true}
+                     offer={{
+                       offerName: page.name,
+                       offerLink: page.short_link,
+                       imageUrl: page.image_url || '',
+                       commissionPercent: 0,
+                       commissionRate: '0',
+                       periodEndFormatted: 'Disponível',
+                       offerType: 1,
+                       periodStartTime: 0,
+                       periodEndTime: 0,
+                       originalLink: page.original_url
+                     }} 
+                   />
+                 ))}
+               </div>
+             ) : (
+               <div className="p-20 text-center bg-deep-void/40 rounded-[32px] border border-white/5 shadow-skeuo-pressed">
+                 <p className="text-[11px] font-black uppercase tracking-widest text-white/20">Nenhum cupom disponível no momento.</p>
+               </div>
+             )}
+           </div>
+        </div>
+      ) : (
+        /* Aba de Campanhas (useShopeeOffers) */
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8">
+           {/* Filtros de Campanhas */}
            <div className="bg-anthracite-surface p-6 rounded-[32px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
              <div className="flex flex-col md:flex-row items-center gap-6">
                <form onSubmit={handleCouponSearch} className="flex-1 w-full relative group">
@@ -887,12 +954,12 @@ export default function RadarOfertasPage() {
                  </div>
 
                  <Button 
-                   onClick={() => refetchCoupons()}
+                   onClick={() => refetchCampaigns()}
                    variant="ghost" 
                    className="h-14 w-14 rounded-2xl bg-white/5 border border-white/[0.02] shadow-skeuo-flat hover:bg-white/10 text-kinetic-orange transition-all shrink-0"
-                   disabled={loadingCoupons}
+                   disabled={loadingCampaigns}
                  >
-                   <RefreshCw size={20} className={cn(loadingCoupons && "animate-spin")} />
+                   <RefreshCw size={20} className={cn(loadingCampaigns && "animate-spin")} />
                  </Button>
                </div>
              </div>
@@ -900,10 +967,10 @@ export default function RadarOfertasPage() {
 
            <OffersGrid 
              offers={filteredOffers}
-             isLoading={loadingCoupons}
-             isError={couponError}
-             error={couponErrorObj}
-             onRetry={() => refetchCoupons()}
+             isLoading={loadingCampaigns}
+             isError={campaignError}
+             error={campaignErrorObj}
+             onRetry={() => refetchCampaigns()}
              onOfferClick={(offer) => setSelectedCouponOffer(offer)}
            />
 

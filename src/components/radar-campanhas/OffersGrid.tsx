@@ -1,5 +1,5 @@
 import React from 'react';
-import { OfferCard } from './OfferCard';
+import { CouponCard } from './CouponCard';
 import { ShopeeOffer } from '@/hooks/use-shopee-offers';
 import { AlertCircle, Tag, SearchX } from 'lucide-react';
 import { KineticButton } from '@/components/ui/KineticButton';
@@ -68,7 +68,7 @@ export function OffersGrid({ offers, isLoading, isError, error, onRetry, onOffer
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in duration-700">
       {validOffers.map((offer, index) => (
         <div key={`${offer.offerName}-${index}`} className="animate-in fade-in zoom-in-95 duration-500" style={{ animationDelay: `${index * 50}ms` }}>
-          <OfferCard offer={offer} onClick={() => onOfferClick(offer)} />
+          <CouponCard offer={offer} onClick={() => onOfferClick(offer)} />
         </div>
       ))}
     </div>
