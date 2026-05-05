@@ -63,6 +63,9 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { KeywordTagsInput } from '@/components/shared/KeywordTagsInput';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useShopeeOffers, ShopeeOffer } from '@/hooks/use-shopee-offers';
+import { OffersGrid } from '@/components/radar-campanhas/OffersGrid';
+import { CampaignProductsDrawer } from '@/components/radar-campanhas/CampaignProductsDrawer';
 
 interface DiscoveryPage {
   pageNumber: number;
@@ -81,6 +84,7 @@ interface DiscoveryPage {
 
 export default function RadarOfertasPage() {
   // --- STATE ---
+  const [activeTab, setActiveTab] = useState<'products' | 'coupons'>('products');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [marketplace, setMarketplace] = useState('all');
   const [search, setSearch] = useState('');
@@ -110,6 +114,12 @@ export default function RadarOfertasPage() {
   const [shopeeLimit, setShopeeLimit] = useState('20');
   const [onlyOfficialShops, setOnlyOfficialShops] = useState(false);
   const [clientSort, setClientSort] = useState<'sales_desc' | 'discount_desc' | 'commission_desc' | 'none'>('none');
+
+  // Hub de Cupons State
+  const [couponSearchInput, setCouponSearchInput] = useState('');
+  const [couponActiveKeyword, setCouponActiveKeyword] = useState<string | undefined>(undefined);
+  const [couponFilterType, setCouponFilterType] = useState<'all' | 1 | 2>('all');
+  const [selectedCouponOffer, setSelectedCouponOffer] = useState<ShopeeOffer | null>(null);
   
   const queryClient = useQueryClient();
   const shopeeCache = React.useRef<Record<string, any>>({});
@@ -320,6 +330,26 @@ export default function RadarOfertasPage() {
     exclude_dead: statusFilter === 'active',
   });
 
+  // --- CUPONS DATA ---
+  const { 
+    data: couponData, 
+    isLoading: loadingCoupons, 
+    isError: couponError, 
+    error: couponErrorObj,
+    refetch: refetchCoupons 
+  } = useShopeeOffers(couponActiveKeyword);
+
+  const filteredOffers = useMemo(() => {
+    if (!couponData?.offers) return [];
+    if (couponFilterType === 'all') return couponData.offers;
+    return couponData.offers.filter(o => o.offerType === couponFilterType);
+  }, [couponData, couponFilterType]);
+
+  const handleCouponSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponActiveKeyword(couponSearchInput || undefined);
+  };
+
   const products = useMemo(() => {
     if (activePageData) return activePageData.products;
     if (!rawProducts) return [];
@@ -366,13 +396,6 @@ export default function RadarOfertasPage() {
               </span>
             </div>
 
-            <Link href="/radar-campanhas">
-              <Button variant="ghost" className="h-11 px-6 bg-white/5 rounded-xl shadow-skeuo-flat border border-white/[0.02] hover:bg-white/10 transition-all text-[10px] font-black uppercase tracking-widest text-kinetic-orange">
-                <BadgePercent size={16} className="mr-2" />
-                Ver Campanhas (Novo)
-              </Button>
-            </Link>
-
             {selectedProducts.length > 0 && (
               <div className="flex items-center gap-2 animate-in slide-in-from-right-4 duration-500">
                 <Link href="/envio-rapido">
@@ -400,7 +423,30 @@ export default function RadarOfertasPage() {
         }
       />
 
-      {/* 2. Tactical Discovery — Refined Skeuo Surface */}
+      <div className="mb-8">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+          <TabsList className="bg-anthracite-surface/50 p-1.5 rounded-2xl border border-white/[0.02] shadow-skeuo-pressed h-14">
+            <TabsTrigger 
+              value="products" 
+              className="rounded-xl px-8 h-11 data-[state=active]:bg-kinetic-orange data-[state=active]:text-white data-[state=active]:shadow-glow-orange font-black text-[10px] uppercase tracking-widest transition-all"
+            >
+              <Search size={14} className="mr-2" />
+              Produtos
+            </TabsTrigger>
+            <TabsTrigger 
+              value="coupons" 
+              className="rounded-xl px-8 h-11 data-[state=active]:bg-kinetic-orange data-[state=active]:text-white data-[state=active]:shadow-glow-orange font-black text-[10px] uppercase tracking-widest transition-all"
+            >
+              <BadgePercent size={14} className="mr-2" />
+              Cupons Shopee
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {activeTab === 'products' ? (
+        <>
+          {/* 2. Tactical Discovery — Refined Skeuo Surface */}
       <div className="space-y-6 mb-10">
         <div className="bg-anthracite-surface p-5 rounded-[32px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
@@ -776,6 +822,8 @@ export default function RadarOfertasPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
 
           {/* Product Inspector Modal */}
           <ProductInspector 
@@ -798,6 +846,71 @@ export default function RadarOfertasPage() {
               </Button>
             </div>
           )}
+        </>
+      ) : (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8">
+           {/* Filtros de Cupons */}
+           <div className="bg-anthracite-surface p-6 rounded-[32px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
+             <div className="flex flex-col md:flex-row items-center gap-6">
+               <form onSubmit={handleCouponSearch} className="flex-1 w-full relative group">
+                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                   <Search size={18} className="text-white/20 group-focus-within:text-kinetic-orange transition-colors" />
+                 </div>
+                 <Input
+                   placeholder="Pesquisar em campanhas ativas..."
+                   className="h-14 pl-12 pr-6 bg-deep-void shadow-skeuo-pressed border-none rounded-2xl text-[13px] font-bold text-white placeholder:text-white/10 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30"
+                   value={couponSearchInput}
+                   onChange={(e) => setCouponSearchInput(e.target.value)}
+                 />
+                 <div className="absolute inset-y-0 right-2 flex items-center">
+                   <KineticButton type="submit" className="h-10 px-6 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                     Buscar
+                   </KineticButton>
+                 </div>
+               </form>
+
+               <div className="flex items-center gap-4 w-full md:w-auto shrink-0">
+                 <div className="flex-1 md:w-48">
+                   <Select value={String(couponFilterType)} onValueChange={(v) => setCouponFilterType(v === 'all' ? 'all' : Number(v) as any)}>
+                     <SelectTrigger className="h-14 bg-deep-void border-none shadow-skeuo-pressed rounded-2xl text-[11px] font-black uppercase tracking-widest text-white/40 focus:ring-1 focus:ring-kinetic-orange/30">
+                       <div className="flex items-center gap-2">
+                         <Filter size={14} className="text-kinetic-orange" />
+                         <SelectValue placeholder="Filtrar Tipo" />
+                       </div>
+                     </SelectTrigger>
+                     <SelectContent className="bg-deep-void border-white/5 rounded-2xl shadow-skeuo-elevated">
+                       <SelectItem value="all" className="text-[10px] font-black uppercase tracking-widest py-3">Todos os Tipos</SelectItem>
+                       <SelectItem value="1" className="text-[10px] font-black uppercase tracking-widest py-3">Coleções</SelectItem>
+                       <SelectItem value="2" className="text-[10px] font-black uppercase tracking-widest py-3">Categorias</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 </div>
+
+                 <Button 
+                   onClick={() => refetchCoupons()}
+                   variant="ghost" 
+                   className="h-14 w-14 rounded-2xl bg-white/5 border border-white/[0.02] shadow-skeuo-flat hover:bg-white/10 text-kinetic-orange transition-all shrink-0"
+                   disabled={loadingCoupons}
+                 >
+                   <RefreshCw size={20} className={cn(loadingCoupons && "animate-spin")} />
+                 </Button>
+               </div>
+             </div>
+           </div>
+
+           <OffersGrid 
+             offers={filteredOffers}
+             isLoading={loadingCoupons}
+             isError={couponError}
+             error={couponErrorObj}
+             onRetry={() => refetchCoupons()}
+             onOfferClick={(offer) => setSelectedCouponOffer(offer)}
+           />
+
+           <CampaignProductsDrawer 
+             offer={selectedCouponOffer} 
+             onClose={() => setSelectedCouponOffer(null)} 
+           />
         </div>
       )}
     </LayoutContainer>

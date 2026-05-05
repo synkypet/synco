@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/popover";
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -61,16 +61,13 @@ export default function EnvioRapidoPage() {
   const { data: groups, isLoading: loadingDestinations } = useGroups(user?.id);
   const { mutate: dispatchQuickSend, isPending: isSending } = useDispatchQuickSend();
   const router = useRouter();
-
-  // Radar Integration
-  const { selectedProducts, isHydrated, clearProducts } = useSelectedProducts();
+  const searchParams = useSearchParams();
 
   const [linksInput, setLinksInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedProducts, setProcessedProducts] = useState<ProductSnapshot[]>([]);
   const [autoStartFlag, setAutoStartFlag] = useState(false);
   const [tone, setTone] = useState('auto');
-  // generatedTexts removido: agora usamos o campo messageText dentro do snapshot
   const [selectedDestinations, setSelectedDestinations] = useState<string[]>([]);
   const [isSuccess, setIsSuccess] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -88,9 +85,67 @@ export default function EnvioRapidoPage() {
   const [lastApiResponse, setLastApiResponse] = useState<any>(null);
   const [testGroupId, setTestGroupId] = useState('');
 
-  // Auto-fill from Radar Context
+  // Radar Integration
+  const { selectedProducts, isHydrated, clearProducts } = useSelectedProducts();
+
+  // 1. Check for Coupon Payload from URL (latência zero)
   useEffect(() => {
-    if (isHydrated && selectedProducts.length > 0 && !linksInput) {
+    const couponData = searchParams.get('coupon');
+    if (couponData && !isProcessing && processedProducts.length === 0) {
+      try {
+        const decoded = JSON.parse(decodeURIComponent(couponData));
+        
+        // Criar um snapshot manual para o cupom
+        const couponSnapshot: ProductSnapshot = {
+          id: `coupon_${Date.now()}`,
+          factual: {
+            originalUrl: decoded.link,
+            cleanUrl: decoded.link,
+            marketplace: 'Shopee',
+            title: decoded.title,
+            image: decoded.image,
+            commissionRatePercent: decoded.commission ? `${decoded.commission}%` : null,
+            finalLinkToSend: decoded.link,
+            fetchedAt: new Date().toISOString(),
+            incoming_url: decoded.link,
+            canonical_url: decoded.link,
+            reaffiliation_status: 'reaffiliated',
+            pixDisplayEligible: false,
+            eligibility: {
+              isEligible: true,
+              status: 'eligible',
+              reasons: [],
+              offer_type: 'coupon_offer'
+            }
+          },
+          copy: {
+            messageText: `🎟️ ${decoded.title}\n\n📦 Resgate aqui:\n${decoded.link}\n\n⚠️ Promoção por tempo limitado.`,
+            toneUsed: 'deterministic',
+            generatedAt: new Date().toISOString()
+          },
+          metadata: {
+            source: 'api',
+            isFrozen: true
+          }
+        };
+
+        setProcessedProducts([couponSnapshot]);
+        setSelectedProductIds([couponSnapshot.id]);
+        setLinksInput(decoded.link);
+        
+        toast.success('Cupom carregado com sucesso!');
+        
+        // Limpar a URL para evitar recarga acidental
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch (e) {
+        console.error('Falha ao decodificar cupom:', e);
+      }
+    }
+  }, [searchParams, isProcessing]);
+
+  // 2. Auto-fill from Radar Context (Products)
+  useEffect(() => {
+    if (isHydrated && selectedProducts.length > 0 && !linksInput && processedProducts.length === 0) {
       const urls = selectedProducts.map(p => p.original_url).filter(Boolean).join('\n');
       if (urls) {
         setLinksInput(urls);
@@ -101,7 +156,7 @@ export default function EnvioRapidoPage() {
         });
       }
     }
-  }, [isHydrated, selectedProducts, linksInput]);
+  }, [isHydrated, selectedProducts, linksInput, processedProducts.length]);
 
   useEffect(() => {
     if (channels && channels.length > 0 && !testChannelId) {

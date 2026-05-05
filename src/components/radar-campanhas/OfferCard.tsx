@@ -1,8 +1,12 @@
+'use client';
+
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Copy, Calendar, Tag, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { Copy, Calendar, Tag, ExternalLink, Image as ImageIcon, Zap } from 'lucide-react';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { KineticButton } from '@/components/ui/KineticButton';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ShopeeOffer } from '@/hooks/use-shopee-offers';
 import { cn, extractOfferName } from '@/lib/utils';
@@ -14,6 +18,7 @@ interface OfferCardProps {
 }
 
 export function OfferCard({ offer, onClick }: OfferCardProps) {
+  const router = useRouter();
   const cleanName = extractOfferName(offer.offerName);
 
   const handleCopyLink = (e: React.MouseEvent) => {
@@ -24,6 +29,26 @@ export function OfferCard({ offer, onClick }: OfferCardProps) {
     } else {
       toast.error('Link não disponível para esta oferta.');
     }
+  };
+
+  const handleQuickSend = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!offer.offerLink) {
+      toast.error('Link não disponível para disparo.');
+      return;
+    }
+
+    const payload = {
+      link: offer.offerLink,
+      image: offer.imageUrl,
+      title: cleanName,
+      commission: offer.commissionPercent,
+      origin: 'coupon_shopee'
+    };
+
+    // Usar encodeURIComponent + stringify para segurança na URL
+    const encodedData = encodeURIComponent(JSON.stringify(payload));
+    router.push(`/envio-rapido?coupon=${encodedData}`);
   };
 
   return (
@@ -78,12 +103,20 @@ export function OfferCard({ offer, onClick }: OfferCardProps) {
       {/* Ações Area */}
       <div className="pt-3 border-t border-white/5 flex gap-2">
         <KineticButton 
-          onClick={handleCopyLink}
-          className="flex-1 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest"
+          onClick={handleQuickSend}
+          className="flex-1 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest bg-kinetic-orange shadow-glow-orange border-none text-white hover:bg-kinetic-orange/80"
         >
-          <Copy size={14} className="mr-2" />
-          Copiar Link
+          <Zap size={14} className="mr-2" />
+          Disparar
         </KineticButton>
+
+        <Button 
+          variant="ghost"
+          onClick={handleCopyLink}
+          className="h-10 px-4 rounded-xl bg-white/5 border border-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-all"
+        >
+          <Copy size={14} />
+        </Button>
         
         {offer.originalLink && (
           <a href={offer.originalLink} target="_blank" rel="noopener noreferrer" className="shrink-0" onClick={(e) => e.stopPropagation()}>
