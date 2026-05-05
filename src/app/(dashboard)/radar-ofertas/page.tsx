@@ -61,6 +61,8 @@ import { OperationalAccessBanner } from '@/components/billing/OperationalAccessB
 import { SHOPEE_SORT_TYPE, SHOPEE_LIST_TYPE, SHOPEE_SORT_TYPE_LABELS, SHOPEE_LIST_TYPE_LABELS } from '@/lib/constants/shopee';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { KeywordTagsInput } from '@/components/shared/KeywordTagsInput';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface DiscoveryPage {
   pageNumber: number;
@@ -87,8 +89,9 @@ export default function RadarOfertasPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   // Garimpo Shopee State
-  const [garimpSearch, setGarimpSearch] = useState('');
+  const [garimpKeywords, setGarimpKeywords] = useState<string[]>([]);
   const [isGarimping, setIsGarimping] = useState(false);
+  const [garimpProgressText, setGarimpProgressText] = useState('');
   const [activePageData, setActivePageData] = useState<DiscoveryPage | null>(null);
   const [selectedInspectorProduct, setSelectedInspectorProduct] = useState<Product | null>(null);
   const [pinnedProducts, setPinnedProducts] = useState<Product[]>([]);
@@ -100,13 +103,16 @@ export default function RadarOfertasPage() {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minCommission, setMinCommission] = useState('');
-  const [shopeeSort, setShopeeSort] = useState<number>(SHOPEE_SORT_TYPE.BEST_SELLERS); 
-  const [shopeeList, setShopeeList] = useState(SHOPEE_LIST_TYPE.PROMOTION.toString()); 
+  const [onlyCoupons, setOnlyCoupons] = useState(false);
+  const [minDiscount, setMinDiscount] = useState('0');
+  const [shopeeSort, setShopeeSort] = useState<number>(SHOPEE_SORT_TYPE.RELEVANCE); 
+  const [shopeeList, setShopeeList] = useState(SHOPEE_LIST_TYPE.DEFAULT.toString()); 
   const [shopeeLimit, setShopeeLimit] = useState('20');
   const [onlyOfficialShops, setOnlyOfficialShops] = useState(false);
   const [clientSort, setClientSort] = useState<'sales_desc' | 'discount_desc' | 'commission_desc' | 'none'>('none');
   
   const queryClient = useQueryClient();
+  const shopeeCache = React.useRef<Record<string, any>>({});
 
   useEffect(() => {
     if (shopeeList === SHOPEE_LIST_TYPE.TOP_PERFORMANCE.toString()) {
@@ -120,76 +126,128 @@ export default function RadarOfertasPage() {
 
   // --- HANDLERS ---
   const handleGarimpShopee = useCallback(async (targetPage?: number) => {
-    if (!garimpSearch.trim() || isGarimping) return;
+    if (garimpKeywords.length === 0 || isGarimping) return;
     
     setIsGarimping(true);
     setClientSort('none');
 
     const nextPage = targetPage ?? 1;
     
-    // UX: Resetar busca local ao iniciar nova descoberta global
     if (nextPage === 1 && !targetPage) {
       setSearch('');
       setVisibleCount(15);
     }
 
+    let allProducts: Product[] = [];
+    let totalRawCount = 0;
+    let totalFilteredCount = 0;
+    let anyHasNextPage = false;
+    let finalStatus: 'ok' | 'few' | 'zero' | 'fallback' = 'zero';
+
     try {
-      const res = await fetch('/api/radar/fetch-shopee', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          keyword: garimpSearch.trim(),
-          page: nextPage,
-          sortType: shopeeSort,
-          listType: parseInt(shopeeList),
-          limit: parseInt(shopeeLimit),
-          minPrice: minPrice ? parseFloat(minPrice) : undefined,
-          maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
-          minCommission: minCommission ? parseFloat(minCommission) : undefined,
-          onlyOfficialShops
-        })
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.status === 'SUCCESS') {
-        const newPage: DiscoveryPage = {
-          pageNumber: nextPage,
-          products: data.products || [],
-          rawCount: data.rawCount || 0,
-          filteredCount: data.filteredCount || 0,
-          hasNextPage: !!data.hasNextPage,
-          status: data.pageStatus || 'ok',
-          filters: {
-            keyword: garimpSearch.trim(),
-            minPrice: minPrice ? parseFloat(minPrice) : undefined,
-            maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
-            sortType: shopeeSort
-          }
-        };
-
-        setActivePageData(newPage);
-        setHasGarimpedOnce(true);
-        setGarimpPage(nextPage);
-
-        if (newPage.filteredCount > 0) {
-          toast.success(`Página ${nextPage}: ${newPage.filteredCount} ofertas detectadas.`);
-        } else if (newPage.status === 'fallback') {
-          toast.info(`Página ${nextPage}: Nenhum item bateu nos filtros rígidos.`);
+      for (let i = 0; i < garimpKeywords.length; i++) {
+        const keyword = garimpKeywords[i];
+        if (garimpKeywords.length > 1) {
+          setGarimpProgressText(`Buscando '${keyword}'... (${i + 1} de ${garimpKeywords.length})`);
         } else {
-          toast.info(`Página ${nextPage}: Nenhuma nova oferta encontrada.`);
+          setGarimpProgressText('Buscando oportunidades...');
         }
         
-        queryClient.invalidateQueries({ queryKey: ['products'] });
-      } else {
-        toast.error(data.error || 'Erro ao consultar a API de descoberta.');
+        const cacheKey = `${keyword}_${nextPage}_${shopeeSort}_${shopeeList}_${shopeeLimit}_${minPrice}_${maxPrice}_${minCommission}_${onlyOfficialShops}_${onlyCoupons}_${minDiscount}`;
+        
+        let data;
+        if (shopeeCache.current[cacheKey]) {
+           data = shopeeCache.current[cacheKey];
+        } else {
+           const res = await fetch('/api/radar/fetch-shopee', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ 
+               keyword: keyword.trim(),
+               page: nextPage,
+               sortType: shopeeSort,
+               listType: parseInt(shopeeList),
+               limit: parseInt(shopeeLimit),
+               minPrice: minPrice ? parseFloat(minPrice) : undefined,
+               maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+               minCommission: minCommission ? parseFloat(minCommission) : undefined,
+               onlyOfficialShops
+             })
+           });
+           data = await res.json();
+           if (res.ok && data.status === 'SUCCESS') {
+             // Cache result for 2 minutes (120000 ms)
+             shopeeCache.current[cacheKey] = data;
+             setTimeout(() => { delete shopeeCache.current[cacheKey]; }, 120000);
+           }
+        }
+
+        if (data && data.status === 'SUCCESS') {
+          let products = data.products || [];
+          
+          if (onlyCoupons) {
+            products = products.filter((p: any) => p.discount_percent > 0 || p.metadata?.rawPrice < p.metadata?.rawOriginalPrice);
+          }
+          if (minDiscount && minDiscount !== '0') {
+            const minD = parseFloat(minDiscount);
+            products = products.filter((p: any) => (p.discount_percent || 0) >= minD);
+          }
+
+          // Deduplicate by ID
+          const existingIds = new Set(allProducts.map(p => p.id));
+          for (const p of products) {
+            if (!existingIds.has(p.id)) {
+              allProducts.push(p);
+              existingIds.add(p.id);
+            }
+          }
+
+          totalRawCount += data.rawCount || 0;
+          totalFilteredCount += products.length;
+          if (data.hasNextPage) anyHasNextPage = true;
+          
+          if (data.pageStatus === 'ok') finalStatus = 'ok';
+          else if (data.pageStatus === 'few' && finalStatus !== 'ok') finalStatus = 'few';
+          else if (data.pageStatus === 'fallback' && finalStatus === 'zero') finalStatus = 'fallback';
+        }
       }
+
+      const newPage: DiscoveryPage = {
+        pageNumber: nextPage,
+        products: allProducts,
+        rawCount: totalRawCount,
+        filteredCount: totalFilteredCount,
+        hasNextPage: anyHasNextPage,
+        status: finalStatus,
+        filters: {
+          keyword: garimpKeywords.join(', '),
+          minPrice: minPrice ? parseFloat(minPrice) : undefined,
+          maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+          sortType: shopeeSort
+        }
+      };
+
+      setActivePageData(newPage);
+      setHasGarimpedOnce(true);
+      setGarimpPage(nextPage);
+
+      if (newPage.filteredCount > 0) {
+        toast.success(`Página ${nextPage}: ${newPage.filteredCount} ofertas detectadas.`);
+      } else if (newPage.status === 'fallback') {
+        toast.info(`Página ${nextPage}: Nenhum item bateu nos filtros rígidos.`);
+      } else {
+        toast.info(`Página ${nextPage}: Nenhuma nova oferta encontrada.`);
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+
     } catch (err) {
       toast.error('Falha crítica de comunicação com o servidor.');
     } finally {
       setIsGarimping(false);
+      setGarimpProgressText('');
     }
-  }, [garimpSearch, isGarimping, queryClient, minPrice, maxPrice, minCommission, shopeeSort, shopeeList, shopeeLimit, onlyOfficialShops]);
+  }, [garimpKeywords, isGarimping, queryClient, minPrice, maxPrice, minCommission, shopeeSort, shopeeList, shopeeLimit, onlyOfficialShops, onlyCoupons, minDiscount]);
 
   const togglePin = useCallback((product: Product) => {
     setPinnedProducts(prev => {
@@ -347,35 +405,34 @@ export default function RadarOfertasPage() {
         <div className="bg-anthracite-surface p-5 rounded-[32px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
           
-          <div className="flex flex-col lg:flex-row gap-4 items-center">
-            {/* Search Input — Skeuo Cavity */}
-            <div className="relative flex-1 group w-full">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/10 group-focus-within:text-kinetic-orange transition-colors" size={20} />
-              <Input
-                placeholder="BUSCAR NOVAS OFERTAS NA SHOPEE (Discovery ex: Mouse Gamer...)"
-                className="pl-12 h-14 bg-deep-void border-none shadow-skeuo-pressed rounded-2xl text-[13px] font-bold tracking-tight text-white/90 placeholder:text-white/10 focus-visible:ring-1 focus-visible:ring-kinetic-orange/20"
-                value={garimpSearch}
-                onChange={(e) => setGarimpSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleGarimpShopee(1)}
+          <div className="flex flex-col lg:flex-row gap-4 items-start">
+            {/* Search Input — Tag Based */}
+            <div className="flex-1 w-full flex flex-col gap-2">
+              <KeywordTagsInput
+                value={garimpKeywords}
+                onChange={setGarimpKeywords}
+                maxKeywords={3}
+                disabled={isGarimping}
+                placeholder="Digite uma palavra e pressione Enter para adicionar"
+                className="w-full bg-deep-void h-14"
               />
-              {shopeeList === SHOPEE_LIST_TYPE.TOP_PERFORMANCE.toString() && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="flex h-1.5 w-1.5 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-kinetic-orange opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-kinetic-orange"></span>
-                  </span>
-                  <span className="text-[9px] font-black uppercase tracking-widest text-kinetic-orange/60">
-                    Modo Top Performance Ativo
-                  </span>
-                </div>
-              )}
+              <div className="flex items-center justify-between ml-2">
+                <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest">
+                  Adicione até 3 palavras-chave para garimpar múltiplos nichos ao mesmo tempo
+                </p>
+                {isGarimping && garimpProgressText && (
+                  <p className="text-[9px] font-black text-kinetic-orange uppercase tracking-widest animate-pulse">
+                    {garimpProgressText}
+                  </p>
+                )}
+              </div>
             </div>
             
-            <div className="flex items-center gap-3 w-full lg:w-auto">
+            <div className="flex flex-col gap-2 w-full lg:w-[180px]">
               <KineticButton 
                 onClick={() => handleGarimpShopee(1)} 
-                disabled={isGarimping || !garimpSearch.trim()}
-                className="h-14 px-10 rounded-2xl font-black text-[10px] uppercase tracking-widest min-w-[160px]"
+                disabled={isGarimping || garimpKeywords.length === 0}
+                className="h-14 w-full rounded-2xl font-black text-[10px] uppercase tracking-widest"
               >
                 {isGarimping ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} />}
                 {isGarimping ? 'Processando' : 'DESCOBRIR'}
@@ -383,80 +440,93 @@ export default function RadarOfertasPage() {
             </div>
           </div>
 
-          <div className="mt-5 pt-5 border-t border-white/5">
-             {/* Row 1: Sort & Price */}
-             <div className="flex flex-wrap items-center gap-4">
-                <span className="text-[11px] font-black uppercase tracking-widest text-white/20 mr-2">Classificar por</span>
-                
-                <div className="flex bg-deep-void p-1 rounded-xl shadow-skeuo-pressed">
-                  {[
-                    { id: SHOPEE_SORT_TYPE.RELEVANCE, label: 'Relevância' },
-                    { id: SHOPEE_SORT_TYPE.BEST_SELLERS, label: 'Mais Vendidos' },
-                    { id: SHOPEE_SORT_TYPE.TOP_COMMISSION, label: 'Comissão' },
-                    { id: SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT, label: 'Maior Desconto' }
-                  ].map((opt) => (
-                    <Button
-                      key={opt.id}
-                      variant="ghost"
-                      onClick={() => setShopeeSort(opt.id)}
-                      className={cn(
-                        "h-10 px-6 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
-                        shopeeSort === opt.id 
-                          ? "bg-kinetic-orange text-white shadow-glow-orange-intense" 
-                          : "text-white/40 hover:text-white hover:bg-white/5"
-                      )}
-                    >
-                      {opt.label}
-                    </Button>
-                  ))}
+          <div className="mt-5 pt-5 border-t border-white/5 space-y-4">
+             <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Parâmetros de Curadoria</span>
+                {(minPrice || maxPrice || minCommission || minDiscount !== '0' || onlyCoupons || onlyOfficialShops) && (
+                  <Button variant="ghost" onClick={() => { setMinPrice(''); setMaxPrice(''); setMinCommission(''); setMinDiscount('0'); setOnlyCoupons(false); setOnlyOfficialShops(false); }} className="h-6 text-[9px] font-bold uppercase text-kinetic-orange">
+                    Limpar Filtros
+                  </Button>
+                )}
+             </div>
+
+             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {/* Ordenação */}
+                <div className="space-y-2 col-span-2 md:col-span-1">
+                  <Label className="text-[9px] uppercase font-bold text-white/40">Ordenação</Label>
+                  <Select value={shopeeSort.toString()} onValueChange={(v) => setShopeeSort(parseInt(v))}>
+                    <SelectTrigger className="h-10 bg-deep-void border-none shadow-skeuo-pressed text-[10px] font-bold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SHOPEE_SORT_TYPE.RELEVANCE.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.RELEVANCE]}</SelectItem>
+                      <SelectItem value={SHOPEE_SORT_TYPE.BEST_SELLERS.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.BEST_SELLERS]}</SelectItem>
+                      <SelectItem value={SHOPEE_SORT_TYPE.TOP_COMMISSION.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.TOP_COMMISSION]}</SelectItem>
+                      <SelectItem value={SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT.toString()}>{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT]}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <div className="flex items-center gap-2 bg-deep-void p-1 rounded-xl shadow-skeuo-pressed ml-auto">
-                  <Input 
-                    type="number" placeholder="Min $" value={minPrice} onChange={(e) => setMinPrice(e.target.value)}
-                    className="h-10 w-24 bg-transparent border-none text-[10px] font-black text-center focus-visible:ring-0 text-white placeholder:text-white/10"
-                  />
-                  <div className="w-px h-4 bg-white/10" />
-                  <Input 
-                    type="number" placeholder="Max $" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)}
-                    className="h-10 w-24 bg-transparent border-none text-[10px] font-black text-center focus-visible:ring-0 text-white placeholder:text-white/10"
-                  />
+                {/* Lista */}
+                <div className="space-y-2 col-span-2 md:col-span-1">
+                  <Label className="text-[9px] uppercase font-bold text-white/40">Lista Base</Label>
+                  <Select value={shopeeList.toString()} onValueChange={setShopeeList}>
+                    <SelectTrigger className="h-10 bg-deep-void border-none shadow-skeuo-pressed text-[10px] font-bold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SHOPEE_LIST_TYPE.DEFAULT.toString()}>{SHOPEE_LIST_TYPE_LABELS[SHOPEE_LIST_TYPE.DEFAULT]}</SelectItem>
+                      <SelectItem value={SHOPEE_LIST_TYPE.PROMOTION.toString()}>{SHOPEE_LIST_TYPE_LABELS[SHOPEE_LIST_TYPE.PROMOTION]}</SelectItem>
+                      <SelectItem value={SHOPEE_LIST_TYPE.TOP_PERFORMANCE.toString()}>{SHOPEE_LIST_TYPE_LABELS[SHOPEE_LIST_TYPE.TOP_PERFORMANCE]}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Preços */}
+                <div className="space-y-2 col-span-2 md:col-span-2">
+                  <Label className="text-[9px] uppercase font-bold text-white/40">Faixa de Preço (R$)</Label>
+                  <div className="flex items-center gap-2 bg-deep-void p-1 rounded-xl shadow-skeuo-pressed">
+                    <Input type="number" placeholder="Min" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} className="h-8 bg-transparent border-none text-[10px] font-bold text-center w-full" />
+                    <div className="w-px h-4 bg-white/10" />
+                    <Input type="number" placeholder="Max" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} className="h-8 bg-transparent border-none text-[10px] font-bold text-center w-full" />
+                  </div>
+                </div>
+
+                {/* Comissão Mínima */}
+                <div className="space-y-2 col-span-1 md:col-span-1">
+                  <Label className="text-[9px] uppercase font-bold text-white/40">Comis. (R$)</Label>
+                  <Input type="number" placeholder="Min" value={minCommission} onChange={(e) => setMinCommission(e.target.value)} className="h-10 bg-deep-void border-none shadow-skeuo-pressed text-[10px] font-bold" />
+                </div>
+
+                {/* Desconto Mínimo */}
+                <div className="space-y-2 col-span-1 md:col-span-1">
+                  <Label className="text-[9px] uppercase font-bold text-white/40">Desconto</Label>
+                  <Select value={minDiscount} onValueChange={setMinDiscount}>
+                    <SelectTrigger className="h-10 bg-deep-void border-none shadow-skeuo-pressed text-[10px] font-bold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Qualquer</SelectItem>
+                      <SelectItem value="10">10%+</SelectItem>
+                      <SelectItem value="20">20%+</SelectItem>
+                      <SelectItem value="30">30%+</SelectItem>
+                      <SelectItem value="50">50%+</SelectItem>
+                      <SelectItem value="70">70%+</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
              </div>
 
-             {/* Row 2: Advanced Toggles & Pagination */}
-             <div className="mt-6 flex flex-wrap items-center justify-between gap-6">
-                <div className="flex flex-wrap items-center gap-8 pl-1">
-                  <div className="flex items-center gap-3 group">
-                    <Switch 
-                      id="official-shops" 
-                      checked={onlyOfficialShops} 
-                      onCheckedChange={setOnlyOfficialShops}
-                      className="data-[state=checked]:bg-kinetic-orange"
-                    />
-                    <Label 
-                      htmlFor="official-shops" 
-                      className="text-[10px] font-black uppercase tracking-widest text-white/40 group-hover:text-white/70 transition-colors cursor-pointer"
-                    >
-                      Lojas Oficiais
-                    </Label>
+             {/* Toggles e Paginação Topo */}
+             <div className="flex flex-wrap items-center justify-between gap-6 pt-2">
+                <div className="flex flex-wrap items-center gap-6">
+                  <div className="flex items-center gap-2 group">
+                    <Switch id="official-shops" checked={onlyOfficialShops} onCheckedChange={setOnlyOfficialShops} className="data-[state=checked]:bg-kinetic-orange scale-75" />
+                    <Label htmlFor="official-shops" className="text-[9px] font-black uppercase tracking-widest text-white/40 group-hover:text-white/70 cursor-pointer">Lojas Oficiais</Label>
                   </div>
-
-                  <div className="flex items-center gap-3 group">
-                    <Switch 
-                      id="top-performance" 
-                      checked={shopeeList === SHOPEE_LIST_TYPE.TOP_PERFORMANCE.toString()} 
-                      onCheckedChange={(checked) => {
-                        setShopeeList(checked ? SHOPEE_LIST_TYPE.TOP_PERFORMANCE.toString() : SHOPEE_LIST_TYPE.PROMOTION.toString())
-                      }}
-                      className="data-[state=checked]:bg-kinetic-orange"
-                    />
-                    <Label 
-                      htmlFor="top-performance" 
-                      className="text-[10px] font-black uppercase tracking-widest text-white/40 group-hover:text-white/70 transition-colors cursor-pointer"
-                    >
-                      Modo Top Performance
-                    </Label>
+                  <div className="flex items-center gap-2 group">
+                    <Switch id="only-coupons" checked={onlyCoupons} onCheckedChange={setOnlyCoupons} className="data-[state=checked]:bg-kinetic-orange scale-75" />
+                    <Label htmlFor="only-coupons" className="text-[9px] font-black uppercase tracking-widest text-white/40 group-hover:text-white/70 cursor-pointer">Apenas com Cupom</Label>
                   </div>
                 </div>
 
@@ -642,7 +712,9 @@ export default function RadarOfertasPage() {
                 <div className="py-20 text-center bg-white/[0.01] rounded-[32px] border border-dashed border-white/5">
                    <PackageSearch size={32} className="mx-auto mb-4 text-white/5" />
                    <h5 className="text-[11px] font-black uppercase tracking-[0.3em] text-white/30 mb-2">Página Vazia</h5>
-                   <p className="text-[9px] font-bold uppercase tracking-widest text-white/10">Nenhum resultado aprovado pelo filtro rígido nesta página.</p>
+                   <p className="text-[9px] font-bold uppercase tracking-widest text-white/10">
+                     Nenhum produto encontrado para "{garimpKeywords.join(', ')}". Tente uma palavra diferente ou remova alguns filtros rígidos.
+                   </p>
                 </div>
               )}
 
