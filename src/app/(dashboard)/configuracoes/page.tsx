@@ -29,6 +29,8 @@ import {
 } from '@/hooks/use-marketplaces';
 import { AffiliateSettingsCard } from '@/components/settings/AffiliateSettingsCard';
 import { PlanDetailsCard } from '@/components/billing/PlanDetailsCard';
+import { useProfile } from '@/hooks/use-profile';
+import { useEffect } from 'react';
 
 export default function ConfiguracoesPage() {
     const { user } = useAuth();
@@ -40,6 +42,16 @@ export default function ConfiguracoesPage() {
     const initialTab = searchParams.get('tab') || 'profile';
     const [activeTab, setActiveTab] = useState(initialTab);
     const [isRestarting, setIsRestarting] = useState(false);
+    
+    // Perfil State
+    const { profile, updateProfile, isUpdating } = useProfile(user?.id);
+    const [fullName, setFullName] = useState('');
+    
+    useEffect(() => {
+      if (profile?.full_name) {
+        setFullName(profile.full_name);
+      }
+    }, [profile]);
     
     // Real Data Hooks
     const { data: catalog, isLoading: isLoadingCatalog } = useMarketplaceCatalog();
@@ -86,7 +98,6 @@ export default function ConfiguracoesPage() {
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
                     <TabsList className="bg-muted/30 p-1 rounded-xl flex-wrap h-auto gap-1 border border-white/5 shadow-skeuo-pressed">
                         <TabsTrigger value="profile" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg"><UserIcon className="w-3.5 h-3.5" /> Perfil</TabsTrigger>
-                        <TabsTrigger value="org" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg"><Building2 className="w-3.5 h-3.5" /> Organização</TabsTrigger>
                         <TabsTrigger value="billing" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg"><Shield className="w-3.5 h-3.5" /> Assinatura</TabsTrigger>
                         <TabsTrigger value="affiliates" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg">🛍️ Afiliados</TabsTrigger>
                     </TabsList>
@@ -99,7 +110,9 @@ export default function ConfiguracoesPage() {
                                 
                                 <div className="flex items-center gap-6 mb-8 bg-black/20 p-4 rounded-2xl border border-white/5 shadow-skeuo-pressed">
                                     <Avatar className="w-20 h-20 border-2 border-kinetic-orange/20 shadow-glow-orange/10">
-                                        <AvatarFallback className="bg-kinetic-orange text-black text-2xl font-black italic">JS</AvatarFallback>
+                                        <AvatarFallback className="bg-kinetic-orange text-black text-2xl font-black italic">
+                                          {fullName ? fullName.substring(0, 2).toUpperCase() : '??'}
+                                        </AvatarFallback>
                                     </Avatar>
                                     <div className="space-y-1">
                                         <Button variant="outline" size="sm" className="h-8 bg-transparent border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-kinetic-orange/10 hover:text-kinetic-orange transition-all">Alterar Identidade Visual</Button>
@@ -110,27 +123,32 @@ export default function ConfiguracoesPage() {
                                 <div className="grid md:grid-cols-2 gap-x-12 gap-y-6">
                                     <div className="space-y-2">
                                         <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Nome de Operador</Label>
-                                        <Input defaultValue="João Silva" className="bg-deep-void border-none shadow-skeuo-pressed h-11" />
+                                        <Input 
+                                          value={fullName} 
+                                          onChange={(e) => setFullName(e.target.value)}
+                                          placeholder="Seu nome operacional"
+                                          className="bg-deep-void border-none shadow-skeuo-pressed h-11" 
+                                        />
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Email Principal</Label>
                                         <Input defaultValue={user?.email || ''} disabled className="bg-deep-void/50 border-none shadow-skeuo-pressed opacity-50 h-11" />
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 opacity-50">
                                         <div className="flex justify-between items-center">
                                           <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">WhatsApp de Auditoria</Label>
-                                          <Badge variant="outline" className="h-4 text-[8px] font-black uppercase border-none bg-emerald-500/10 text-emerald-500">ID Ativo</Badge>
+                                          <Badge variant="outline" className="h-4 text-[8px] font-black uppercase border-none bg-white/5 text-white/40 italic">Breve</Badge>
                                         </div>
-                                        <Input placeholder="+55 11 99999-9999" className="bg-deep-void border-none shadow-skeuo-pressed h-11" />
+                                        <Input disabled placeholder="+55 11 99999-9999" className="bg-deep-void border-none shadow-skeuo-pressed h-11 cursor-not-allowed" />
                                         <p className="text-[9px] text-white/20 uppercase font-bold tracking-tight italic">Detectado em logs de saída de mensagens</p>
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 opacity-50">
                                       <div className="flex justify-between items-center">
                                         <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Fuso Horário Operacional</Label>
-                                        <AlertCircle className="w-3 h-3 text-kinetic-orange" />
+                                        <Badge variant="outline" className="h-4 text-[8px] font-black uppercase border-none bg-white/5 text-white/40 italic">Em Breve</Badge>
                                       </div>
-                                        <Select defaultValue="america_sp">
-                                            <SelectTrigger className="bg-deep-void border-none shadow-skeuo-pressed h-11"><SelectValue /></SelectTrigger>
+                                        <Select defaultValue="america_sp" disabled>
+                                            <SelectTrigger className="bg-deep-void border-none shadow-skeuo-pressed h-11 cursor-not-allowed"><SelectValue /></SelectTrigger>
                                             <SelectContent className="bg-anthracite-surface border-white/5">
                                                 <SelectItem value="america_sp">América/São Paulo (UTC-3)</SelectItem>
                                                 <SelectItem value="america_manaus">América/Manaus (UTC-4)</SelectItem>
@@ -140,8 +158,13 @@ export default function ConfiguracoesPage() {
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap gap-4 mt-8">
-                                    <Button className="h-12 px-8 font-black uppercase tracking-widest text-xs rounded-xl bg-kinetic-orange text-black hover:bg-kinetic-orange/90 shadow-glow-orange-intense transition-all" onClick={() => toast.success('Perfil sincronizado!')}>
-                                        <Save className="w-4 h-4 mr-2" /> Salvar Identidade
+                                    <Button 
+                                      className="h-12 px-8 font-black uppercase tracking-widest text-xs rounded-xl bg-kinetic-orange text-black hover:bg-kinetic-orange/90 shadow-glow-orange-intense transition-all disabled:opacity-50" 
+                                      onClick={() => updateProfile({ full_name: fullName })}
+                                      disabled={isUpdating || !fullName}
+                                    >
+                                        {isUpdating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                                        {isUpdating ? 'Sincronizando...' : 'Salvar Identidade'}
                                     </Button>
 
                                     <Link href="/configuracoes/templates">
@@ -193,45 +216,7 @@ export default function ConfiguracoesPage() {
                         )}
                     </TabsContent>
     
-                    <TabsContent value="org" className="animate-in fade-in-50 duration-300">
-                        <div className="grid md:grid-cols-2 gap-8 items-start max-w-5xl">
-                            <Card className="p-8 border-none ring-1 ring-white/5 bg-anthracite-surface/80 shadow-skeuo-elevated">
-                                <h3 className="font-black uppercase tracking-widest text-xs text-white/60 mb-6 italic font-headline">Estrutura Operacional</h3>
-                                <div className="space-y-6">
-                                    <div className="space-y-2">
-                                        <Label className="text-[10px] font-black uppercase tracking-widest text-white/30">Nome da Organização</Label>
-                                        <Input defaultValue="Synco Affiliate Ops" className="bg-deep-void border-none shadow-skeuo-pressed h-11" />
-                                        <p className="text-[8px] text-white/10 uppercase font-black">Usado em identificadores de API e cabeçalhos de auditoria</p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between items-center">
-                                          <Label className="text-[10px] font-black uppercase tracking-widest text-white/30">Slug Organizacional</Label>
-                                          <Shield className="w-3.5 h-3.5 text-kinetic-orange/40" />
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-[11px] text-white/20 font-mono tracking-tighter shrink-0">synco.app/</span>
-                                            <Input defaultValue="synco-ops" className="font-mono h-11 text-xs bg-deep-void border-none shadow-skeuo-pressed text-kinetic-orange" />
-                                        </div>
-                                        <p className="text-[8px] text-kinetic-orange/30 uppercase font-black tracking-widest">Contexto: Identificador de recurso global e landing nodes</p>
-                                    </div>
-    
-                                    <div className="h-px bg-gradient-to-r from-transparent via-white/5 to-transparent w-full" />
-    
-                                    <Button onClick={() => toast.success('Org atualizada!')} className="w-full h-12 font-black uppercase tracking-widest text-[11px] rounded-xl bg-white text-black hover:bg-white/90 shadow-skeuo-elevated">
-                                        <Save className="w-4 h-4 mr-2" /> Sincronizar Organização
-                                    </Button>
-                                </div>
-                            </Card>
-    
-                            <div className="p-8 rounded-3xl bg-deep-void/50 border border-dashed border-white/10 flex flex-col items-center justify-center text-center opacity-40 grayscale min-h-[300px]">
-                              <Building2 className="w-12 h-12 mb-4 text-white/20" />
-                              <h4 className="text-xs font-black uppercase tracking-widest text-white/40 mb-2 font-headline italic">Visibilidade Global</h4>
-                              <p className="text-[10px] max-w-[200px] leading-relaxed uppercase font-bold tracking-tighter">
-                                As configurações desta aba aplicam-se a todos os operadores e canais vinculados a esta organização.
-                              </p>
-                            </div>
-                        </div>
-                    </TabsContent>
+
     
                     <TabsContent value="billing" className="animate-in fade-in-50 duration-300">
                         <PlanDetailsCard />
