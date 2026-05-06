@@ -69,7 +69,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { path: '/grupos', label: 'Grupos', icon: Users },
       { path: '/canais', label: 'Canais', icon: List },
       { path: '/listas-destino', label: 'Listas de Destino', icon: List },
-      { path: '/templates', label: 'Templates', icon: FileText },
+      { path: '/configuracoes/templates', label: 'Templates', icon: FileText },
     ],
   },
   {
