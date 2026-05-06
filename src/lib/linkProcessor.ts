@@ -416,17 +416,30 @@ export async function processLinks(
             ? 'product'
             : 'campaign';
 
+        const originalPriceVal = metadata.originalPrice || null;
+        const currentPriceVal = price;
+        
+        let filterName = undefined;
+        if (category === 'product') {
+          const hasDiscount = originalPriceVal && currentPriceVal && originalPriceVal > currentPriceVal;
+          filterName = hasDiscount ? 'Produto com Desconto' : 'Produto Simples';
+        }
+
         const variables = {
           titulo: metadata.name || 'Produto',
           link: preResult?.generated_affiliate_url || link,
-          preco: formatBRL(price)?.replace('R$ ', '') || undefined,
-          preco_original: formatBRL(metadata.originalPrice || null)?.replace('R$ ', '') || undefined,
+          preco: formatBRL(currentPriceVal)?.replace('R$ ', '') || undefined,
+          preco_original: formatBRL(originalPriceVal)?.replace('R$ ', '') || undefined,
           desconto: (metadata.commissionRate !== null && metadata.commissionRate !== undefined) ? (metadata.commissionRate * 100).toFixed(0) : undefined,
-          comissao: formatBRL(metadata.commissionValueFactual || null)?.replace('R$ ', '') || undefined,
-          loja: marketplace
+          loja: marketplace,
+          // Variáveis extras para cupons (se houver metadados específicos no futuro, por enquanto usamos do metadata se houver)
+          valor: metadata.couponValue || undefined,
+          minimo: metadata.minSpend || undefined,
+          frete_minimo: metadata.freeShippingMinSpend || 19, // Exemplo Shopee
+          codigo: metadata.couponCode || undefined
         };
 
-        const resolved = await templateService.resolveTemplate(supabase, category, variables, userId);
+        const resolved = await templateService.resolveTemplate(supabase, category, variables, userId, filterName);
         if (resolved) {
           templatedMessage = resolved;
         }

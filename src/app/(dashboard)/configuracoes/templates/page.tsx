@@ -31,12 +31,16 @@ import { cn } from '@/lib/utils';
 
 const PREVIEW_DATA = {
   titulo: "Fone Bluetooth Premium X10",
+  titulo_maiusculo: "FONE BLUETOOTH PREMIUM X10",
   link: "https://s.shopee.com.br/exemplo",
   preco: "89,90",
   preco_original: "149,90",
   desconto: "40",
-  comissao: "8,50",
-  loja: "Shopee Mall"
+  loja: "Shopee Mall",
+  valor: "20,00",
+  minimo: "150,00",
+  frete_minimo: "19,00",
+  codigo: "SHOPEE20"
 };
 
 export default function TemplatesPage() {
@@ -283,7 +287,7 @@ export default function TemplatesPage() {
                     onChange={e => setEditingTemplate(prev => ({ ...prev, content: e.target.value }))}
                   />
                   <div className="flex flex-wrap gap-2 pt-2">
-                    {['titulo', 'link', 'preco', 'preco_original', 'desconto', 'comissao', 'loja'].map(tag => (
+                    {['titulo', 'titulo_maiusculo', 'link', 'preco', 'preco_original', 'desconto', 'loja', 'valor', 'minimo', 'frete_minimo', 'codigo'].map(tag => (
                       <button 
                         key={tag}
                         onClick={() => setEditingTemplate(prev => ({ ...prev, content: (prev?.content || '') + `{{${tag}}}` }))}

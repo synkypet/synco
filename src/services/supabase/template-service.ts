@@ -13,12 +13,17 @@ export interface MessageTemplate {
 
 export interface TemplateVariables {
   titulo: string;
+  titulo_maiusculo?: string;
   link: string;
   preco?: string;
   preco_original?: string;
   desconto?: string | number;
-  comissao?: string | number;
   loja?: string;
+  // Variáveis para Cupons
+  valor?: string | number;
+  minimo?: string | number;
+  frete_minimo?: string | number;
+  codigo?: string;
 }
 
 export const templateService = {
@@ -54,13 +59,22 @@ export const templateService = {
     supabase: SupabaseClient,
     category: 'product' | 'coupon' | 'campaign',
     variables: TemplateVariables,
-    userId?: string
+    userId?: string,
+    filterName?: string
   ): Promise<string | null> {
     try {
-      const templates = await this.getActiveTemplates(supabase, category, userId);
+      let templates = await this.getActiveTemplates(supabase, category, userId);
       if (templates.length === 0) return null;
 
-      // Escolher um aleatoriamente
+      // Se houver um filtro por nome (ex: para distinguir produto com/sem desconto)
+      if (filterName) {
+        const filtered = templates.filter(t => t.name.toLowerCase().includes(filterName.toLowerCase()));
+        if (filtered.length > 0) {
+          templates = filtered;
+        }
+      }
+
+      // Escolher um aleatoriamente entre os disponíveis (ou os filtrados)
       const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
       
       return this.render(randomTemplate.content, variables);
@@ -78,12 +92,16 @@ export const templateService = {
     
     const replacements: Record<string, string> = {
       'titulo': variables.titulo,
+      'titulo_maiusculo': variables.titulo.toUpperCase(),
       'link': variables.link,
       'preco': variables.preco || '',
       'preco_original': variables.preco_original || '',
       'desconto': variables.desconto?.toString() || '',
-      'comissao': variables.comissao?.toString() || '',
-      'loja': variables.loja || ''
+      'loja': variables.loja || '',
+      'valor': variables.valor?.toString() || '',
+      'minimo': variables.minimo?.toString() || '',
+      'frete_minimo': variables.frete_minimo?.toString() || '',
+      'codigo': variables.codigo || ''
     };
 
     Object.entries(replacements).forEach(([key, value]) => {
