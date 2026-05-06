@@ -61,6 +61,9 @@ export interface AutomationSource {
   last_restock_at?: string;
   discovery_page?: number;
   discovery_locked_until?: string | null;
+  consecutive_empty_cycles?: number;
+  discovery_exhausted_at?: string | null;
+
   created_at?: string;
   updated_at?: string;
   automation_routes?: AutomationRoute[];

@@ -78,8 +78,10 @@ export const radarDiscoveryService = {
       .select(`
         id, name, config, user_id, 
         needs_restock, last_restock_at, discovery_page, discovery_locked_until,
+        consecutive_empty_cycles, discovery_exhausted_at,
         automation_routes(filters)
       `)
+
       .eq('source_type', 'radar_offers')
       .eq('is_active', true)
       .or(`discovery_locked_until.is.null,discovery_locked_until.lt.${nowIso}`);
@@ -147,8 +149,17 @@ export const radarDiscoveryService = {
       });
 
       const lastRun = s.last_restock_at ? new Date(s.last_restock_at).getTime() : 0;
-      // Se needs_restock estiver ativo, ignoramos o cooldown normal (threshold de 1min para segurança)
-      const effectiveCooldownMin = s.needs_restock ? 1 : cooldownMinutes;
+      // Se needs_restock estiver ativo, reduz o cooldown — mas com piso de 5min quando
+      // há ciclos consecutivos vazios (previne loop de 1min sem resultado).
+      const emptyCount = s.consecutive_empty_cycles ?? 0;
+
+      let effectiveCooldownMin: number;
+      if (s.needs_restock) {
+        // REGRA 4: com 2+ ciclos vazios consecutivos, impor cooldown mínimo de 5 minutos
+        effectiveCooldownMin = emptyCount >= 2 ? 5 : 1;
+      } else {
+        effectiveCooldownMin = cooldownMinutes;
+      }
       const cooldownMs = effectiveCooldownMin * 60 * 1000;
       
       if (NOW - lastRun < cooldownMs && !options.force) {
@@ -442,16 +453,72 @@ export const radarDiscoveryService = {
         // LOG CONSOLIDADO
         console.log(`${logPrefix} [RADAR-FUNNEL] total_budget:${funnelTotalBudget} total_new:${funnelTotalNew} cache_hits:${funnelCacheHits}/${keywords.length}`);
 
-        // 7. Persistir Estado
+        // 7. Persistir Estado com Lógica de Exaustão de Keyword
+        //
+        // REGRA 1: Ciclo vazio = Shopee retornou produtos mas todos foram filtrados/deduplicados
+        //          OU Shopee não retornou nenhum produto (página esgotada)
+        // REGRA 2: Após EXHAUSTION_THRESHOLD ciclos consecutivos vazios → reset de paginação
+        // REGRA 3: Ciclo com inserção → zera o contador de ciclos vazios
+        const EXHAUSTION_THRESHOLD = 3;
+        const currentEmptyCount = s.consecutive_empty_cycles ?? 0;
+
+        let nextDiscoveryPage: number;
+        let nextNeedsRestock: boolean;
+        let nextConsecutiveEmptyCycles: number;
+        const prevExhaustedAt = s.discovery_exhausted_at ?? null;
+        let nextDiscoveryExhaustedAt: string | null = prevExhaustedAt;
+
+        if (funnelTotalNew > 0) {
+          // REGRA 3: Ciclo produtivo — avança página, zera contador de ciclos vazios
+          nextDiscoveryPage = funnelTotalFetched > 0 ? (s.discovery_page || 1) + 1 : (s.discovery_page || 1);
+          nextNeedsRestock = false;
+          nextConsecutiveEmptyCycles = 0;
+          console.log(`${logPrefix} [RADAR-EXHAUSTION] Ciclo produtivo. ${funnelTotalNew} inseridos. Contador zerado.`);
+        } else {
+          // Ciclo vazio: incrementar contador
+          nextConsecutiveEmptyCycles = currentEmptyCount + 1;
+
+          if (nextConsecutiveEmptyCycles >= EXHAUSTION_THRESHOLD) {
+            // REGRA 2: Exaustão detectada — reiniciar paginação
+            nextDiscoveryPage = 1;
+            nextNeedsRestock = false; // desliga needs_restock para usar cooldown padrão
+            nextConsecutiveEmptyCycles = 0;
+            nextDiscoveryExhaustedAt = new Date().toISOString();
+            console.warn(
+              `${logPrefix} [RADAR-EXHAUSTION] [user:${s.user_id}] Keyword esgotada apos ` +
+              `${EXHAUSTION_THRESHOLD} ciclos vazios (pagina ${s.discovery_page}). ` +
+              `Reiniciando da pagina 1. needs_restock -> false.`
+            );
+          } else {
+            // REGRA 1: Ciclo vazio mas abaixo do threshold — pode avançar página se Shopee retornou algo
+            nextDiscoveryPage = funnelTotalFetched > 0
+              ? (s.discovery_page || 1) + 1
+              : (s.discovery_page || 1); // se Shopee não retornou nada, não avança página
+            nextNeedsRestock = s.needs_restock ?? false;
+            console.log(
+              `${logPrefix} [RADAR-EXHAUSTION] Ciclo vazio (${nextConsecutiveEmptyCycles}/${EXHAUSTION_THRESHOLD}). ` +
+              `Fetched:${funnelTotalFetched} New:${funnelTotalNew} Pagina:${nextDiscoveryPage}`
+            );
+          }
+        }
+
+        const persistPayload: Record<string, unknown> = {
+          config: { ...config, keywords },
+          last_restock_at: new Date().toISOString(),
+          discovery_locked_until: null,
+          discovery_page: nextDiscoveryPage,
+          needs_restock: nextNeedsRestock,
+          consecutive_empty_cycles: nextConsecutiveEmptyCycles,
+        };
+
+        // Só atualiza discovery_exhausted_at se o valor mudou
+        if (nextDiscoveryExhaustedAt !== prevExhaustedAt) {
+          persistPayload.discovery_exhausted_at = nextDiscoveryExhaustedAt;
+        }
+
         await supabase
           .from('automation_sources')
-          .update({ 
-            config: { ...config, keywords },
-            last_restock_at: new Date().toISOString(),
-            discovery_locked_until: null,
-            discovery_page: funnelTotalFetched > 0 ? (s.discovery_page || 1) + 1 : (s.discovery_page || 1),
-            needs_restock: funnelTotalNew > 0 ? false : s.needs_restock
-          })
+          .update(persistPayload)
           .eq('id', s.id);
 
         globalInserted += funnelTotalNew;
