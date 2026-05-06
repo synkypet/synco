@@ -35,7 +35,7 @@ export function GroupList({ groups, isLoading }: GroupListProps) {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-white/5 rounded-[40px] shadow-skeuo-pressed">
         <Users className="w-12 h-12 text-white/10 mb-4" />
-        <p className="text-white/40 font-medium">Nenhum grupo encontrado na malha.</p>
+        <p className="text-white/40 font-medium">Nenhum grupo encontrado.</p>
       </div>
     );
   }

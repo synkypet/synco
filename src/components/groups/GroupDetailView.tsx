@@ -120,7 +120,12 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
                     meshData.session_role === 'admin' ? 'bg-emerald-500/20 text-emerald-500' :
                     'bg-white/10 text-white/50'
                   }`}>
-                    Sessão: {meshData.session_role}
+                    Sessão: {
+                      meshData.session_role === 'creator' ? 'Dono' :
+                      meshData.session_role === 'admin' ? 'Administrador' :
+                      meshData.session_role === 'superadmin' ? 'Administrador' :
+                      'Membro'
+                    }
                   </span>
                 </>
               )}
@@ -135,7 +140,7 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
             className="bg-white/5 border-none h-12 px-6 shadow-skeuo-flat hover:bg-white/10"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin text-kinetic-orange' : 'text-white/40'}`} />
-            {isSyncing ? 'Sincronizando...' : 'Atualizar Malha'}
+            {isSyncing ? 'Atualizando...' : 'Atualizar grupos'}
           </KineticButton>
           
           {metadata.invite_link && (
@@ -191,7 +196,7 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
                 <h3 className="font-bold text-white/80">Participantes Identificados</h3>
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-white/20 bg-white/5 px-2 py-1 rounded-md">
-                Última sincronização: {group.updated_at ? new Date(group.updated_at).toLocaleTimeString() : 'N/A'}
+                Atualizado em: {group.updated_at ? new Date(group.updated_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
               </span>
             </div>
             
@@ -225,8 +230,8 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
                   }
 
                   const name = p.push_name || p.name || p.notify || p.pushName;
-                  const displayTitle = name || formattedNumber || jid;
-                  const displaySubtitle = name ? formattedNumber : jid;
+                  const displayTitle = name || formattedNumber || 'Participante';
+                  const displaySubtitle = name ? formattedNumber : '';
 
                   return (
                   <div key={p.remote_id} className="p-4 flex items-center justify-between group hover:bg-white/[0.01] transition-colors">
@@ -289,7 +294,7 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
                   <p className="text-[10px] font-bold text-white/20 uppercase tracking-wider">Dono / Criador</p>
                   <p className="text-xs text-white/70 font-mono flex items-center gap-1.5 truncate">
                     <UserCheck className="w-3 h-3 text-kinetic-orange/60 shrink-0" /> 
-                    {metadata.owner || 'Não identificado'}
+                    {metadata.owner ? (metadata.owner.includes('@') ? 'Administrador' : metadata.owner) : 'Não identificado'}
                   </p>
                 </div>
                 
@@ -302,10 +307,10 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-white/20 uppercase tracking-wider">Última Sync</p>
+                    <p className="text-[10px] font-bold text-white/20 uppercase tracking-wider">Atualizado em</p>
                     <p className="text-xs text-white/70 font-medium flex items-center gap-1.5">
                       <RefreshCw className="w-3 h-3 text-emerald-500/60" />
-                      {group.updated_at ? new Date(group.updated_at).toLocaleDateString() : 'N/A'}
+                      {group.updated_at ? new Date(group.updated_at).toLocaleDateString('pt-BR') : 'N/A'}
                     </p>
                   </div>
                 </div>

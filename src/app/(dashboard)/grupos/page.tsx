@@ -54,7 +54,7 @@ export default function GruposPage() {
       <OperationalAccessBanner />
       <PageHeader
         title="Grupos"
-        description="Espelho operacional da malha de grupos sincronizada via WasenderAPI."
+        description="Todos os grupos do WhatsApp conectados à sua conta"
         icon={<Users size={24} />}
         actions={
           <div className="flex items-center gap-3">
@@ -70,7 +70,7 @@ export default function GruposPage() {
               className="gap-2 px-6 h-12"
             >
               <RefreshCw size={18} className={isSyncingAll ? "animate-spin" : ""} />
-              Sincronizar Canais
+              Sincronizar Grupos
             </KineticButton>
           </div>
         }
@@ -80,7 +80,7 @@ export default function GruposPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={18} />
           <Input
-            placeholder="Buscar por nome, ID ou descrição..."
+            placeholder="Buscar por nome ou descrição..."
             className="pl-10 bg-white/5 border-none shadow-skeuo-pressed"
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
@@ -102,8 +102,8 @@ export default function GruposPage() {
         </div>
       ) : isErrorGroups ? (
         <div className="p-12 text-center bg-red-500/5 rounded-[40px] shadow-skeuo-pressed">
-          <p className="text-red-500 font-black uppercase tracking-widest text-sm italic">Erro de Sincronização</p>
-          <p className="text-white/20 text-xs mt-1">Não foi possível carregar os dados operacionais dos grupos.</p>
+          <p className="text-red-500 font-black uppercase tracking-widest text-sm italic">Não foi possível carregar os grupos</p>
+          <p className="text-white/20 text-xs mt-1">Não foi possível atualizar os grupos agora. Verifique se seu WhatsApp está conectado e tente novamente.</p>
           <KineticButton onClick={() => refetchGroups()} className="text-kinetic-orange mt-4 uppercase font-bold text-[10px] tracking-widest bg-transparent shadow-none">Tentar novamente</KineticButton>
         </div>
       ) : (
