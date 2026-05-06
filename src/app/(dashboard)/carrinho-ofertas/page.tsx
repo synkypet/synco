@@ -127,22 +127,6 @@ export default function CarrinhoOfertasPage() {
                   <span className="text-muted-foreground font-medium">Produtos Selecionados:</span>
                   <span className="font-bold">{count}</span>
                 </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground font-medium">Valor Total Estimado:</span>
-                  <span className="font-bold">R$ {selectedProducts.reduce((acc, p) => acc + (p.current_price || 0), 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground font-medium">Comissão Total:</span>
-                  <span className="font-bold text-green-600">R$ {selectedProducts.reduce((acc, p) => acc + (p.commission_value || 0), 0).toFixed(2)}</span>
-                </div>
-                <div className="pt-4 border-t border-dashed">
-                  <div className="flex items-center gap-2 p-3 bg-yellow-500/10 rounded-lg text-yellow-700 border border-yellow-500/20">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                    <p className="text-[10px] font-bold leading-tight uppercase">
-                      O carrinho é salvo localmente no seu navegador.
-                    </p>
-                  </div>
-                </div>
               </div>
 
               <Button 
@@ -152,21 +136,7 @@ export default function CarrinhoOfertasPage() {
                 Prosseguir para Envio
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
-
-              <p className="text-[10px] text-center text-muted-foreground mt-4 font-medium italic">
-                Próximo passo: Configurar canais e texto
-              </p>
             </Card>
-
-            <div className="p-4 rounded-xl border border-dashed border-border bg-muted/10">
-               <div className="flex items-center gap-2 mb-2">
-                 <Tag className="w-3.5 h-3.5 text-primary" />
-                 <span className="text-[10px] font-black uppercase tracking-tight">Personalização</span>
-               </div>
-               <p className="text-[10px] text-muted-foreground leading-relaxed">
-                 Você poderá personalizar o texto de cada produto no próximo passo usando IA ou templates salvos.
-               </p>
-            </div>
           </div>
         </div>
       )}

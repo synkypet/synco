@@ -160,30 +160,6 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
                         <DropdownMenuItem onClick={() => onEdit(channel)} className="gap-2 cursor-pointer text-[10px] font-bold uppercase tracking-widest text-white/60 focus:text-kinetic-orange">
                           <Edit size={14} /> CONFIGURAÇÕES GERAIS
                         </DropdownMenuItem>
-
-                        <DropdownMenuItem onClick={() => handleRefresh(channel)} disabled={isBusy} className="gap-2 cursor-pointer text-[10px] font-bold uppercase tracking-widest text-white/60 focus:text-cyan-400">
-                          <RefreshCw size={14} className={refreshStatus.isPending ? "animate-spin" : ""} /> FORÇAR CHECK DE STATUS
-                        </DropdownMenuItem>
-                        
-                        {isWhatsApp && isConnected && (
-                          <>
-                            <DropdownMenuItem 
-                              onClick={() => handleSyncGroups(channel.id, true)} 
-                              disabled={isBusy}
-                              className="gap-2 cursor-pointer text-[10px] font-bold uppercase tracking-widest text-white/60 focus:text-kinetic-orange"
-                            >
-                              <Zap size={14} /> REINICIAR MALHA (RESTART)
-                            </DropdownMenuItem>
-
-                            <DropdownMenuItem 
-                              onClick={() => handleDisconnect(channel)} 
-                              disabled={isBusy}
-                              className="gap-2 cursor-pointer text-[10px] font-bold uppercase tracking-widest text-red-500/80 focus:text-red-400"
-                            >
-                              <PhoneOff size={14} /> DESCONECTAR WHATSAPP
-                            </DropdownMenuItem>
-                          </>
-                        )}
                         
                         <DropdownMenuSeparator className="bg-white/5" />
                         

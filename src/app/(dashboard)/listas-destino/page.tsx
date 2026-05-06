@@ -50,15 +50,9 @@ export default function ListasDestinoPage() {
       });
     });
 
-    // Para o alcance total, vamos somar o alcance de cada lista individualmente
-    const totalReach = destinations.reduce((sum, list) => {
-      return sum + (list.groups?.reduce((s, g) => s + (g.members_count || 0), 0) || 0);
-    }, 0);
-
     return {
       count: destinations.length,
-      uniqueGroups: uniqueGroups.size,
-      totalReach
+      uniqueGroups: uniqueGroups.size
     };
   }, [destinations]);
 
@@ -155,12 +149,7 @@ export default function ListasDestinoPage() {
           icon={<Users size={12} />}
           colorScheme="success"
         />
-        <StatCard 
-          label="Alcance Total"
-          value={stats.totalReach >= 1000 ? `${(stats.totalReach / 1000).toFixed(1)}k` : stats.totalReach}
-          icon={<Target size={12} />}
-          colorScheme="kinetic"
-        />
+
       </div>
 
       {/* Info Banner */}

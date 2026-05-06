@@ -109,10 +109,9 @@ export default function RadarOfertasPage() {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minCommission, setMinCommission] = useState('');
-  const [onlyCoupons, setOnlyCoupons] = useState(false);
   const [minDiscount, setMinDiscount] = useState('0');
   const [shopeeSort, setShopeeSort] = useState<number>(SHOPEE_SORT_TYPE.RELEVANCE); 
-  const [shopeeList, setShopeeList] = useState(SHOPEE_LIST_TYPE.DEFAULT.toString()); 
+  const shopeeList = SHOPEE_LIST_TYPE.DEFAULT.toString(); 
   const [shopeeLimit, setShopeeLimit] = useState('20');
   const [onlyOfficialShops, setOnlyOfficialShops] = useState(false);
   const [clientSort, setClientSort] = useState<'sales_desc' | 'discount_desc' | 'commission_desc' | 'none'>('none');
@@ -126,15 +125,7 @@ export default function RadarOfertasPage() {
   const queryClient = useQueryClient();
   const shopeeCache = React.useRef<Record<string, any>>({});
 
-  useEffect(() => {
-    if (shopeeList === SHOPEE_LIST_TYPE.TOP_PERFORMANCE.toString()) {
-      setShopeeSort(SHOPEE_SORT_TYPE.BEST_SELLERS);
-    } else if (shopeeList === SHOPEE_LIST_TYPE.PROMOTION.toString()) {
-      setShopeeSort(SHOPEE_SORT_TYPE.TOP_COMMISSION);
-    } else {
-      setShopeeSort(SHOPEE_SORT_TYPE.RELEVANCE);
-    }
-  }, [shopeeList]);
+  // O shopeeList agora é fixo em DEFAULT via constante
 
   // --- HANDLERS ---
   const handleGarimpShopee = useCallback(async (targetPage?: number) => {
@@ -165,7 +156,7 @@ export default function RadarOfertasPage() {
           setGarimpProgressText('Buscando oportunidades...');
         }
         
-        const cacheKey = `${keyword}_${nextPage}_${shopeeSort}_${shopeeList}_${shopeeLimit}_${minPrice}_${maxPrice}_${minCommission}_${onlyOfficialShops}_${onlyCoupons}_${minDiscount}`;
+        const cacheKey = `${keyword}_${nextPage}_${shopeeSort}_${shopeeList}_${shopeeLimit}_${minPrice}_${maxPrice}_${minCommission}_${onlyOfficialShops}_${minDiscount}`;
         
         let data;
         if (shopeeCache.current[cacheKey]) {
@@ -197,9 +188,6 @@ export default function RadarOfertasPage() {
         if (data && data.status === 'SUCCESS') {
           let products = data.products || [];
           
-          if (onlyCoupons) {
-            products = products.filter((p: any) => p.discount_percent > 0 || p.metadata?.rawPrice < p.metadata?.rawOriginalPrice);
-          }
           if (minDiscount && minDiscount !== '0') {
             const minD = parseFloat(minDiscount);
             products = products.filter((p: any) => (p.discount_percent || 0) >= minD);
@@ -259,7 +247,7 @@ export default function RadarOfertasPage() {
       setIsGarimping(false);
       setGarimpProgressText('');
     }
-  }, [garimpKeywords, isGarimping, queryClient, minPrice, maxPrice, minCommission, shopeeSort, shopeeList, shopeeLimit, onlyOfficialShops, onlyCoupons, minDiscount]);
+  }, [garimpKeywords, isGarimping, queryClient, minPrice, maxPrice, minCommission, shopeeSort, shopeeList, shopeeLimit, onlyOfficialShops, minDiscount]);
 
   const togglePin = useCallback((product: Product) => {
     setPinnedProducts(prev => {
@@ -506,8 +494,8 @@ export default function RadarOfertasPage() {
           <div className="mt-5 pt-5 border-t border-white/5 space-y-4">
              <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Parâmetros de Curadoria</span>
-                {(minPrice || maxPrice || minCommission || minDiscount !== '0' || onlyCoupons || onlyOfficialShops) && (
-                  <Button variant="ghost" onClick={() => { setMinPrice(''); setMaxPrice(''); setMinCommission(''); setMinDiscount('0'); setOnlyCoupons(false); setOnlyOfficialShops(false); }} className="h-6 text-[9px] font-bold uppercase text-kinetic-orange">
+                {(minPrice || maxPrice || minCommission || minDiscount !== '0' || onlyOfficialShops) && (
+                  <Button variant="ghost" onClick={() => { setMinPrice(''); setMaxPrice(''); setMinCommission(''); setMinDiscount('0'); setOnlyOfficialShops(false); }} className="h-6 text-[9px] font-bold uppercase text-kinetic-orange">
                     Limpar Filtros
                   </Button>
                 )}
@@ -530,20 +518,7 @@ export default function RadarOfertasPage() {
                   </Select>
                 </div>
 
-                {/* Lista */}
-                <div className="space-y-2 col-span-2 md:col-span-1">
-                  <Label className="text-[9px] uppercase font-bold text-white/40">Lista Base</Label>
-                  <Select value={shopeeList.toString()} onValueChange={setShopeeList}>
-                    <SelectTrigger className="h-10 bg-deep-void border-none shadow-skeuo-pressed text-[10px] font-bold">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={SHOPEE_LIST_TYPE.DEFAULT.toString()}>{SHOPEE_LIST_TYPE_LABELS[SHOPEE_LIST_TYPE.DEFAULT]}</SelectItem>
-                      <SelectItem value={SHOPEE_LIST_TYPE.PROMOTION.toString()}>{SHOPEE_LIST_TYPE_LABELS[SHOPEE_LIST_TYPE.PROMOTION]}</SelectItem>
-                      <SelectItem value={SHOPEE_LIST_TYPE.TOP_PERFORMANCE.toString()}>{SHOPEE_LIST_TYPE_LABELS[SHOPEE_LIST_TYPE.TOP_PERFORMANCE]}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+
 
                 {/* Preços */}
                 <div className="space-y-2 col-span-2 md:col-span-2">
@@ -586,10 +561,6 @@ export default function RadarOfertasPage() {
                   <div className="flex items-center gap-2 group">
                     <Switch id="official-shops" checked={onlyOfficialShops} onCheckedChange={setOnlyOfficialShops} className="data-[state=checked]:bg-kinetic-orange scale-75" />
                     <Label htmlFor="official-shops" className="text-[9px] font-black uppercase tracking-widest text-white/40 group-hover:text-white/70 cursor-pointer">Lojas Oficiais</Label>
-                  </div>
-                  <div className="flex items-center gap-2 group">
-                    <Switch id="only-coupons" checked={onlyCoupons} onCheckedChange={setOnlyCoupons} className="data-[state=checked]:bg-kinetic-orange scale-75" />
-                    <Label htmlFor="only-coupons" className="text-[9px] font-black uppercase tracking-widest text-white/40 group-hover:text-white/70 cursor-pointer">Apenas com Cupom</Label>
                   </div>
                 </div>
 
