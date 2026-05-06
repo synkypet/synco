@@ -60,6 +60,12 @@ export interface ProductMetadata {
   estimatedPixSource?: 'heuristic.pix_0_92' | null;
   installments?: string | null;
 
+  // Campos de Cupons (Opcionais)
+  couponValue?: string | number;
+  minSpend?: string | number;
+  freeShippingMinSpend?: string | number;
+  couponCode?: string;
+
   // Timestamps
   fetchedAt?: string;
 }
