@@ -28,8 +28,8 @@ export async function POST(request: Request) {
     const { marketplaceService } = await import('@/services/supabase/marketplace-service');
     const enrichedConnections = await marketplaceService.getEnrichedConnections(user.id, supabaseAdmin);
 
-    // Server-side processing with tone support
-    const snapshots = await processLinks(links, enrichedConnections, tone);
+    // Server-side processing with tone support and randomized templates
+    const snapshots = await processLinks(links, enrichedConnections, tone, user.id, supabaseAdmin);
 
     return NextResponse.json({ 
       status: 'SUCCESS',

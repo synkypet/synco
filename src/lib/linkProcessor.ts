@@ -4,6 +4,8 @@
 import { MarketplaceAdapter, AffiliateResult } from './marketplaces/BaseAdapter';
 import { ShopeeAdapter } from './marketplaces/ShopeeAdapter';
 import { refineOfferCopy } from './ai/refiner';
+import { templateService } from '@/services/supabase/template-service';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
 
@@ -252,6 +254,7 @@ export function buildProductSnapshot(opts: {
   metadata: any;
   affiliateUrl: string;
   tone: string;
+  templatedMessage?: string;
   reaffiliation?: {
     incoming_url: string;
     resolved_url?: string;
@@ -333,8 +336,8 @@ export function buildProductSnapshot(opts: {
     id,
     factual,
     copy: {
-      messageText: buildMessageFromSnapshot(factual),
-      toneUsed: 'deterministic',
+      messageText: opts.templatedMessage || buildMessageFromSnapshot(factual),
+      toneUsed: opts.templatedMessage ? 'templated' : 'deterministic',
       generatedAt: new Date().toISOString()
     },
     metadata: {
@@ -350,7 +353,9 @@ export function buildProductSnapshot(opts: {
 export async function processLinks(
   links: string[], 
   userConnections: any[] = [], 
-  tone: string = 'auto'
+  tone: string = 'auto',
+  userId?: string,
+  supabase?: SupabaseClient
 ): Promise<ProductSnapshot[]> {
   const validLinks = links.filter(link => link.trim().length > 0);
   const results: ProductSnapshot[] = [];
@@ -392,12 +397,48 @@ export async function processLinks(
       }
 
       // 2. Construção do Snapshot inicial (Factual/Deterministico)
+      const price = metadata?.currentPriceFactual || metadata?.currentPrice || null;
+      const formatBRL = (val: number | null) => val !== null ? `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
+      
+      const factualForClassification: any = {
+        title: metadata?.name || 'Produto sem título',
+        price: price
+      };
+
+      const classification = classifyOffer(link, factualForClassification);
+      
+      // 1.5. Resolve Template (Randomized)
+      let templatedMessage = undefined;
+      if (supabase && metadata) {
+        const category = classification.type === 'coupon_offer' 
+          ? 'coupon' 
+          : classification.type === 'product_with_coupon' || classification.type === 'product_offer'
+            ? 'product'
+            : 'campaign';
+
+        const variables = {
+          titulo: metadata.name || 'Produto',
+          link: preResult?.generated_affiliate_url || link,
+          preco: formatBRL(price)?.replace('R$ ', '') || undefined,
+          preco_original: formatBRL(metadata.originalPrice || null)?.replace('R$ ', '') || undefined,
+          desconto: (metadata.commissionRate !== null && metadata.commissionRate !== undefined) ? (metadata.commissionRate * 100).toFixed(0) : undefined,
+          comissao: formatBRL(metadata.commissionValueFactual || null)?.replace('R$ ', '') || undefined,
+          loja: marketplace
+        };
+
+        const resolved = await templateService.resolveTemplate(supabase, category, variables, userId);
+        if (resolved) {
+          templatedMessage = resolved;
+        }
+      }
+
       const snapshot = buildProductSnapshot({
         id,
         originalUrl: link,
         metadata: metadata || {},
         affiliateUrl: preResult?.generated_affiliate_url || link,
         tone,
+        templatedMessage,
         reaffiliation: {
           incoming_url: link,
           resolved_url: preResult?.resolved_url,

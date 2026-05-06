@@ -15,11 +15,12 @@ import PageHeader from '@/components/shared/PageHeader';
 import {
     User as UserIcon, Building2, Clock, Users, Palette, Save, Plus,
     CheckCircle2, AlertCircle, TestTube, HelpCircle, Sparkles,
-    Shield, Send, BookOpen, Loader2, ChevronRight, Zap
+    Shield, Send, BookOpen, Loader2, ChevronRight, Zap, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { 
   useMarketplaceCatalog, 
@@ -249,19 +250,33 @@ export default function ConfiguracoesPage() {
                     </TabsContent>
     
                     <TabsContent value="ia" className="animate-in fade-in-50 duration-300">
-                        <Card className="p-12 border-none bg-deep-void/50 ring-1 ring-white/5 flex flex-col items-center text-center max-w-4xl shadow-skeuo-flat">
-                            <div className="w-16 h-16 rounded-2xl bg-purple-500/5 flex items-center justify-center mb-8 shadow-skeuo-flat border border-purple-500/10">
-                              <Sparkles className="w-8 h-8 text-purple-400/40" />
-                            </div>
-                            <h3 className="text-xl font-black uppercase tracking-tight font-headline italic mb-4 text-white/80">Vibe Engine (IA Custom)</h3>
-                            <p className="text-sm text-white/30 leading-relaxed max-w-xl mb-8 uppercase font-bold tracking-tighter">
-                               Em breve: Treine sua própria IA com exemplos de suas cópias. Configure a tonalidade padrão (M1, Divertido, Urgente) para todos os processamentos de links automáticos.
-                            </p>
-                            <div className="flex gap-4">
-                              <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-none px-3 h-6 text-[8px] font-black uppercase italic tracking-widest">Brain Mode: 0.1v</Badge>
-                              <Badge variant="outline" className="bg-white/5 text-white/20 border-none px-3 h-6 text-[8px] font-black uppercase tracking-widest">Aguardando Dataset</Badge>
-                            </div>
-                        </Card>
+                        <div className="grid md:grid-cols-2 gap-6 max-w-5xl">
+                            <Card className="p-8 border-none ring-1 ring-white/5 bg-gradient-to-br from-anthracite-surface to-deep-void shadow-skeuo-elevated">
+                                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center mb-6 shadow-skeuo-flat border border-purple-500/20">
+                                  <Sparkles className="w-6 h-6 text-purple-400" />
+                                </div>
+                                <h3 className="text-xl font-black uppercase tracking-tight font-headline italic mb-4">Templates de Mensagem</h3>
+                                <p className="text-sm text-white/40 leading-relaxed mb-8 font-medium">
+                                    Configure múltiplos layouts de mensagem para seus produtos e cupons. 
+                                    O sistema sorteará aleatoriamente entre seus templates ativos para evitar mensagens repetitivas.
+                                </p>
+                                <Link href="/configuracoes/templates">
+                                    <Button className="w-full h-12 font-black uppercase tracking-wider text-xs rounded-xl bg-white text-black hover:bg-white/90 shadow-skeuo-elevated transition-all">
+                                        Gerenciar Templates <ChevronRight className="w-4 h-4 ml-2" />
+                                    </Button>
+                                </Link>
+                            </Card>
+
+                            <Card className="p-8 border-none bg-deep-void/50 ring-1 ring-white/5 flex flex-col items-center text-center justify-center opacity-40">
+                                <div className="w-16 h-16 rounded-2xl bg-purple-500/5 flex items-center justify-center mb-6 shadow-skeuo-flat border border-purple-500/10">
+                                  <RefreshCw className="w-8 h-8 text-purple-400/20" />
+                                </div>
+                                <h4 className="text-xs font-black uppercase tracking-widest text-white/40 mb-2 font-headline italic">Vibe Engine (IA)</h4>
+                                <p className="text-[10px] max-w-[200px] leading-relaxed uppercase font-bold tracking-tighter">
+                                    Em breve: Treine sua própria IA com exemplos de suas cópias para gerar mensagens únicas.
+                                </p>
+                            </Card>
+                        </div>
                     </TabsContent>
     
                     <TabsContent value="users" className="animate-in fade-in-50 duration-300">
