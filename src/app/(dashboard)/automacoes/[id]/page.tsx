@@ -180,6 +180,7 @@ export default function AutomationDetailPage() {
         allGroups={allGroups || []}
         targetNames={targetNames}
         onAddDestination={() => setIsAddRouteOpen(true)}
+        onDeleteDestination={(routeId) => deleteRoute.mutate({ id: routeId, sourceId: id })}
         onUpdate={(updates) => {
           // Se houver updates de automation_routes, usamos a mutation de rota
           if (updates.automation_routes && updates.automation_routes[0]) {
@@ -206,12 +207,14 @@ export default function AutomationDetailPage() {
 
         {/* COLUNA DA DIREITA: DESTINOS E STATUS */}
         <div className="space-y-8">
-          <DestinationBlock
-            routes={routes || []}
-            targetNames={targetNames}
-            onAdd={() => setIsAddRouteOpen(true)}
-            onDelete={(routeId) => deleteRoute.mutate({ id: routeId, sourceId: id })}
-          />
+          {source.source_type !== 'group_monitor' && (
+            <DestinationBlock
+              routes={routes || []}
+              targetNames={targetNames}
+              onAdd={() => setIsAddRouteOpen(true)}
+              onDelete={(routeId) => deleteRoute.mutate({ id: routeId, sourceId: id })}
+            />
+          )}
         </div>
       </div>
 

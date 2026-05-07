@@ -19,7 +19,8 @@ import {
   ShieldCheck,
   BadgePercent,
   Users,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { KeywordManager, Keyword } from '@/components/automation/KeywordManager';
 import { SHOPEE_SORT_TYPE, SHOPEE_SORT_TYPE_LABELS } from '@/lib/constants/shopee';
@@ -30,6 +31,7 @@ interface OriginBlockProps {
   allGroups?: any[];
   targetNames?: Record<string, string>;
   onAddDestination?: () => void;
+  onDeleteDestination?: (id: string) => void;
 }
 
 export function OriginBlock({ 
@@ -37,7 +39,8 @@ export function OriginBlock({
   onUpdate, 
   allGroups = [], 
   targetNames = {},
-  onAddDestination
+  onAddDestination,
+  onDeleteDestination
 }: OriginBlockProps) {
   const initialKeywords = (source.config?.keywords || []) as Keyword[];
   const config = source.config || {};
@@ -264,40 +267,50 @@ export function OriginBlock({
             </div>
           </div>
 
-          {/* DESTINO RESUMO */}
+          {/* DESTINOS DE ENVIO */}
           <div className="md:col-span-3 space-y-4">
             <div className="flex items-center justify-between px-1">
               <Label className="text-[9px] uppercase font-black tracking-widest text-white/30 flex items-center gap-2">
-                <Target size={12} className="text-emerald-400" /> Destinos de Envio
+                <Target size={12} className="text-kinetic-orange" /> Destinos de Envio
               </Label>
               <button 
                 onClick={onAddDestination}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-glow-emerald/5"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-white/40 hover:text-kinetic-orange hover:bg-kinetic-orange/10 hover:border-kinetic-orange/20 transition-all shadow-skeuo-flat"
               >
                 <Plus size={10} />
                 <span className="text-[8px] font-black uppercase tracking-widest">Adicionar</span>
               </button>
             </div>
             
-            <div className="p-6 rounded-[32px] bg-emerald-500/[0.02] border border-emerald-500/5 shadow-skeuo-flat flex flex-col items-center justify-center text-center min-h-[140px]">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-3 leading-none">Direcionando para:</p>
-              <div className="flex flex-wrap justify-center gap-2 max-h-[80px] overflow-y-auto custom-scrollbar p-1">
-                {source.automation_routes?.length ? (
-                  source.automation_routes.map((r, idx) => (
-                    <Badge key={idx} variant="outline" className="bg-emerald-500/10 border-emerald-500/20 text-[9px] font-black uppercase tracking-widest py-1 px-3 shadow-glow-emerald/5">
-                       {targetNames[r.id] || (r.target_type === 'group' ? 'Carregando Grupo...' : 'Carregando Lista...')}
-                    </Badge>
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center gap-2 opacity-20">
-                    <Target size={20} />
-                    <span className="text-[9px] font-bold text-white uppercase tracking-widest italic">Nenhum destino ativo</span>
+            <div className="p-4 rounded-[32px] bg-deep-void/30 border border-white/5 shadow-skeuo-pressed space-y-3 min-h-[140px] max-h-[180px] overflow-y-auto custom-scrollbar">
+              {source.automation_routes?.length ? (
+                source.automation_routes.map((r, idx) => (
+                  <div 
+                    key={idx} 
+                    className="group flex items-center justify-between p-2.5 rounded-xl bg-deep-void/50 border border-white/5 hover:border-white/10 transition-all shadow-skeuo-pressed"
+                  >
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                       <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
+                          {r.target_type === 'group' ? <Users size={10} /> : <Target size={10} />}
+                       </div>
+                       <span className="text-[10px] font-bold text-white/60 truncate uppercase tracking-widest">
+                          {targetNames[r.id] || (r.target_type === 'group' ? 'Grupo...' : 'Lista...')}
+                       </span>
+                    </div>
+                    <button 
+                      onClick={() => onDeleteDestination?.(r.id)}
+                      className="p-1.5 text-white/10 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
-                )}
-              </div>
-              <p className="text-[8px] font-bold text-emerald-500/20 uppercase tracking-widest mt-4">
-                Gerencie as rotas detalhadas abaixo
-              </p>
+                ))
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center gap-2 py-8 opacity-10">
+                  <Target size={24} />
+                  <span className="text-[8px] font-black uppercase tracking-widest italic text-center">Nenhum destino configurado para envio em tempo real</span>
+                </div>
+              )}
             </div>
           </div>
 
