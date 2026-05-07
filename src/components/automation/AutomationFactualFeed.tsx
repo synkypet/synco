@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -92,10 +93,12 @@ export function AutomationFactualFeed({ campaigns, isLoading }: AutomationFactua
                 {/* Product Image Section */}
                 <div className="w-32 h-full relative overflow-hidden flex-shrink-0 border-r border-white/5">
                   {product.image_url ? (
-                    <img 
+                    <Image 
                       src={product.image_url} 
-                      alt="" 
-                      className="w-full h-full object-cover opacity-90 group-hover:scale-110 transition-transform duration-700" 
+                      alt={product.name || ''} 
+                      fill
+                      unoptimized
+                      className="object-cover opacity-90 group-hover:scale-110 transition-transform duration-700" 
                     />
                   ) : (
                     <div className="w-full h-full bg-deep-void flex items-center justify-center">
