@@ -398,7 +398,7 @@ export const automationService = {
       .from('automation_logs')
       .select('details')
       .eq('source_id', sourceId)
-      .eq('event_type', 'job_created')
+      .in('event_type', ['job_created', 'radar_dispatch'])
       .order('created_at', { ascending: false });
 
     if (logsError) {

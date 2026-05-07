@@ -344,6 +344,7 @@ export const radarDispatcherService = {
               event_type: 'radar_dispatch',
               details: { 
                 productId: product.id, 
+                campaignId: campaign.id,
                 routeId: route.id,
                 factualPrice: factual.price,
                 reaffiliated: factual.reaffiliation_status
