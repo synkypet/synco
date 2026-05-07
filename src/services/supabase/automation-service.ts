@@ -346,22 +346,56 @@ export const automationService = {
         .filter(Boolean)
     )] as string[];
 
+    let productMap = new Map<string, any>();
+    let sendStatusMap = new Map<string, string>(); // productId -> status real do send_job
+
     if (productIds.length > 0) {
+      // 1. Buscar dados do produto
       const { data: products } = await supabase
         .from('products')
         .select('id, name, image_url, current_price, discount_percent, commission_value, original_url')
         .in('id', productIds);
 
       if (products) {
-        const productMap = new Map(products.map(p => [p.id, p]));
-        return data.map((log: any) => ({
-          ...log,
-          _product: log.details?.productId ? productMap.get(log.details.productId) || null : null
-        }));
+        productMap = new Map(products.map(p => [p.id, p]));
+      }
+
+      // 2. Buscar o status real do send_job via campaign_items (espelhando campanhas)
+      const { data: campaignItems } = await supabase
+        .from('campaign_items')
+        .select('id, product_id')
+        .in('product_id', productIds);
+
+      if (campaignItems && campaignItems.length > 0) {
+        const campaignItemIds = campaignItems.map(ci => ci.id);
+
+        const { data: sendJobs } = await supabase
+          .from('send_jobs')
+          .select('campaign_item_id, status')
+          .in('campaign_item_id', campaignItemIds)
+          .order('created_at', { ascending: false });
+
+        if (sendJobs) {
+          // Para cada productId, pegar o status mais recente (primeiro resultado = mais novo)
+          const itemIdToProductId = new Map(campaignItems.map(ci => [ci.id, ci.product_id]));
+          const seenProductIds = new Set<string>();
+
+          for (const job of sendJobs) {
+            const prodId = itemIdToProductId.get(job.campaign_item_id);
+            if (prodId && !seenProductIds.has(prodId)) {
+              sendStatusMap.set(prodId, job.status);
+              seenProductIds.add(prodId);
+            }
+          }
+        }
       }
     }
 
-    return data;
+    return data.map((log: any) => ({
+      ...log,
+      _product: log.details?.productId ? productMap.get(log.details.productId) || null : null,
+      _sendStatus: log.details?.productId ? sendStatusMap.get(log.details.productId) || null : null,
+    }));
   },
 
   /**

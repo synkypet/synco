@@ -32,6 +32,7 @@ interface LogFeedProps {
 export function LogFeed({ logs, title, targetNames = {} }: LogFeedProps) {
   const [selectedLog, setSelectedLog] = React.useState<any>(null);
 
+  // Status técnico interno do log de automação
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'processing':
@@ -48,6 +49,28 @@ export function LogFeed({ logs, title, targetNames = {} }: LogFeedProps) {
         return <Badge className="bg-red-500/10 text-red-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Erro</Badge>;
       default:
         return <Badge className="bg-muted text-muted-foreground border-none font-black text-[9px] uppercase tracking-widest">Iniciado</Badge>;
+    }
+  };
+
+  // Status real de entrega vindo do send_job (espelhado de campanhas)
+  const getDeliveryStatusBadge = (sendStatus: string | null) => {
+    switch (sendStatus) {
+      case 'pending':
+        return <Badge className="bg-zinc-500/10 text-zinc-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><RefreshCw size={10} /> Na Fila</Badge>;
+      case 'processing':
+        return <Badge className="bg-blue-500/10 text-blue-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><RefreshCw size={10} className="animate-spin" /> Enviando</Badge>;
+      case 'sent':
+      case 'completed':
+        return <Badge className="bg-emerald-500/10 text-emerald-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Enviado</Badge>;
+      case 'failed':
+        return <Badge className="bg-red-500/10 text-red-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Falhou</Badge>;
+      case 'session_lost':
+        return <Badge className="bg-yellow-500/10 text-yellow-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Sessão Perdida</Badge>;
+      case 'cancelled':
+        return <Badge className="bg-zinc-600/10 text-zinc-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><XCircle size={10} /> Cancelado</Badge>;
+      default:
+        // Sem send_job ainda: produto foi descoberto mas ainda aguarda criação da campanha
+        return <Badge className="bg-zinc-700/20 text-zinc-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><Zap size={10} /> Descoberto</Badge>;
     }
   };
 
@@ -146,9 +169,9 @@ export function LogFeed({ logs, title, targetNames = {} }: LogFeedProps) {
                     </div>
                   </div>
 
-                  {/* Status + Link Externo */}
+                  {/* Status real de entrega + Link Externo */}
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    {getStatusBadge(log.status)}
+                    {getDeliveryStatusBadge(log._sendStatus)}
                     {p?.original_url && (
                       <a
                         href={p.original_url}
