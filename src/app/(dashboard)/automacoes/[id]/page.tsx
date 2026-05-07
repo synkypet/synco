@@ -24,8 +24,6 @@ import { DestinationBlock } from '@/components/automation/DestinationBlock';
 import { DeliveryBanner } from '@/components/automation/DeliveryBanner';
 import { LogFeed } from '@/components/automation/LogFeed';
 import { AutomationStatusHeader } from '@/components/automation/AutomationStatusHeader';
-import { AutomationAuditTrail } from '@/components/automation/AutomationAuditTrail';
-import { RadarActivityFeed } from '@/components/automation/RadarActivityFeed';
 import { AutomationTargetSelector } from '@/components/automation/AutomationTargetSelector';
 import { QuickListCreateDialog } from '@/components/automation/QuickListCreateDialog';
 
@@ -190,25 +188,12 @@ export default function AutomationDetailPage() {
         }}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* COLUNA DA ESQUERDA: ATIVIDADE E DESTINOS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        {/* COLUNA DA ESQUERDA: ATIVIDADE TÉCNICA (LOGS) */}
         <div className="lg:col-span-2 space-y-8">
-           {source.source_type === 'radar_offers' && (
-            <div className="animate-in slide-in-from-bottom-4 duration-500">
-              <div className="flex items-center justify-between mb-4 px-1">
-                <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Observabilidade do Radar</h4>
-                <Badge variant="outline" className="text-[8px] border-kinetic-orange/20 text-kinetic-orange uppercase tracking-widest">Tempo Real</Badge>
-              </div>
-              <RadarActivityFeed sourceId={id} />
-            </div>
-          )}
-
-          <div className="animate-in slide-in-from-bottom-4 duration-500 delay-100">
-            <AutomationAuditTrail 
-              campaigns={recentCampaigns || []} 
-              isLoading={loadingRecent} 
-            />
-          </div>
+           <div className="animate-in slide-in-from-bottom-4 duration-500">
+              <LogFeed logs={logs || []} title="Atividade Técnica do Sistema" />
+           </div>
         </div>
 
         {/* COLUNA DA DIREITA: DESTINOS E STATUS */}
@@ -223,7 +208,6 @@ export default function AutomationDetailPage() {
       </div>
 
       <div className="space-y-8 opacity-40">
-        <LogFeed logs={logs || []} title="Atividade Técnica do Sistema" />
         <DeliveryBanner />
       </div>
 
