@@ -123,21 +123,24 @@ export const radarDiscoveryService = {
     let globalInserted = 0;
     let tasksExecuted = 0;
 
-    for (const s of (sources || [])) {
+      for (const s of (sources || [])) {
       const config = (s.config as any) || {};
       const preset = config.preset_type || 'balanced';
 
-      // A. Mapeamento de Presets Operacionais (Utility Centralizada)
+      // A. Mapeamento de Presets Operacionais (Prioridade para o Sort manual da UI)
       let sortType = config.sortType || 1;
-      let totalBudget = getBudgetByPreset(preset, config.batchLimit);
       let cooldownMinutes = config.cooldown_minutes || 60;
+      let totalBudget = getBudgetByPreset(preset, config.batchLimit);
 
-      if (preset === 'aggressive') {
-        sortType = 2; cooldownMinutes = 20;
-      } else if (preset === 'conservative') {
-        sortType = 5; cooldownMinutes = 120;
-      } else if (preset === 'balanced') {
-        sortType = 1; cooldownMinutes = 60;
+      // Só sobrescreve se o usuário não tiver definido manualmente um sort ou se não for 'custom'
+      if (preset !== 'custom') {
+        if (preset === 'aggressive') {
+          sortType = 2; cooldownMinutes = 20;
+        } else if (preset === 'conservative') {
+          sortType = 5; cooldownMinutes = 120;
+        } else if (preset === 'balanced') {
+          sortType = 1; cooldownMinutes = 60;
+        }
       }
 
       // B. Ciclo Start & Cooldown Check
