@@ -47,11 +47,7 @@ export function GroupList({ groups, isLoading }: GroupListProps) {
         <TactileCard key={group.id} className="p-5 group hover:scale-[1.01] transition-all duration-300">
           <div className="flex items-start gap-4 mb-4">
             {/* Avatar do Grupo */}
-            <Avatar className="w-14 h-14 rounded-2xl shadow-skeuo-flat border-none flex-shrink-0 bg-deep-void">
-              <AvatarFallback className="bg-transparent text-white/30 text-lg font-black italic">
-                {group.name.substring(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+
 
             {/* Informações Principais */}
             <div className="flex-1 min-w-0">

@@ -92,19 +92,13 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
       {/* Header — Malha Operacional */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="flex items-center gap-6">
-          <div className="relative group">
-            <Avatar className="w-24 h-24 rounded-[32px] shadow-skeuo-elevated border-none ring-4 ring-deep-void bg-anthracite-surface">
-              <AvatarFallback className="bg-transparent text-3xl font-black text-white/20">
-                {group.name.substring(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-deep-void border-none flex items-center justify-center shadow-glow-orange">
-               <ShieldCheck className="w-4 h-4 text-kinetic-orange" />
-            </div>
-          </div>
+
           
           <div className="space-y-1">
-            <h1 className="text-3xl font-black tracking-tighter text-white drop-shadow-sm">{group.name}</h1>
+            <h1 className="text-3xl font-black tracking-tighter text-white drop-shadow-sm flex items-center gap-3">
+              {group.name}
+              <ShieldCheck className="w-6 h-6 text-kinetic-orange drop-shadow-glow" />
+            </h1>
             <div className="flex items-center gap-3 text-white/40 text-sm font-medium">
               <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> {totalMembers} membros</span>
               <span className="w-1 h-1 rounded-full bg-white/20" />
@@ -120,7 +114,7 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
                     meshData.session_role === 'admin' ? 'bg-emerald-500/20 text-emerald-500' :
                     'bg-white/10 text-white/50'
                   }`}>
-                    Sessão: {
+                    No grupo você é: {
                       meshData.session_role === 'creator' ? 'Dono' :
                       meshData.session_role === 'admin' ? 'Administrador' :
                       meshData.session_role === 'superadmin' ? 'Administrador' :
@@ -236,11 +230,7 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
                   return (
                   <div key={p.remote_id} className="p-4 flex items-center justify-between group hover:bg-white/[0.01] transition-colors">
                     <div className="flex items-center gap-4">
-                      <Avatar className="w-10 h-10 rounded-xl shadow-skeuo-flat border-none bg-deep-void">
-                        <AvatarFallback className="bg-transparent text-xs font-bold text-white/20">
-                          {displayTitle.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+
                       <div>
                         <p className="text-sm font-bold text-white/90">{displayTitle}</p>
                         {displaySubtitle !== displayTitle && (
