@@ -179,6 +179,7 @@ export default function AutomationDetailPage() {
         source={source}
         allGroups={allGroups || []}
         targetNames={targetNames}
+        onAddDestination={() => setIsAddRouteOpen(true)}
         onUpdate={(updates) => {
           // Se houver updates de automation_routes, usamos a mutation de rota
           if (updates.automation_routes && updates.automation_routes[0]) {
