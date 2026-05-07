@@ -90,9 +90,7 @@ export default function CanaisPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <KineticButton onClick={() => refetch()} className="shrink-0 h-12 w-12 rounded-xl bg-white/5 border-none shadow-skeuo-flat">
-          <RefreshCw size={18} className={isLoading ? "animate-spin text-kinetic-orange" : "text-white/70"} />
-        </KineticButton>
+
       </div>
 
       {isLoading ? (
