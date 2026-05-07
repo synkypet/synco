@@ -26,7 +26,11 @@ export const automationService = {
           id,
           target_type,
           target_id,
-          template_config
+          template_id,
+          template_config,
+          message_templates (
+            name
+          )
         )
       `)
       .eq('user_id', userId)

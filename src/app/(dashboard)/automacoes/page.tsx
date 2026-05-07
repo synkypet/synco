@@ -567,7 +567,9 @@ export default function AutomacoesDashboardPage() {
             const sourceName = source.external_group_id 
               ? allGroups?.find(g => g.remote_id === source.external_group_id)?.name || 'Grupo não identificado'
               : (source.source_type === 'radar_offers' ? 'Radar de Produtos' : 'Cupons Shopee');
-            const hasTemplate = !!firstRoute?.template_config?.body;
+            
+            const templateName = (firstRoute as any)?.message_templates?.name 
+              || (firstRoute?.template_config?.body ? 'Modelo personalizado' : 'Modelo padrão');
 
             return (
               <TactileCard key={source.id} className="group overflow-hidden border-white/5 hover:border-kinetic-orange/20 transition-all duration-500">
@@ -587,8 +589,8 @@ export default function AutomacoesDashboardPage() {
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <Badge variant={source.is_active ? "default" : "secondary"} className={source.is_active ? "bg-emerald-500 shadow-glow-orange-intense text-white border-none font-bold text-[9px] rounded-full" : "font-bold text-[9px] rounded-full"}>
-                        {source.is_active ? 'ATIVO' : 'PAUSADO'}
+                      <Badge variant={source.is_active ? "default" : "secondary"} className={source.is_active ? "bg-emerald-500 shadow-glow-orange-intense text-white border-none font-bold text-[9px] px-3 py-1 rounded-full" : "font-bold text-[9px] px-3 py-1 rounded-full"}>
+                        {source.is_active ? 'LIGADO E FUNCIONANDO' : 'DESLIGADO'}
                       </Badge>
                       {(!firstRoute || !firstRoute.target_id) && (
                         <Badge variant="outline" className="border-amber-500/50 text-amber-500 text-[8px] font-black uppercase">
@@ -598,51 +600,39 @@ export default function AutomacoesDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Flow Trace */}
-                  <div className="bg-white/5 rounded-2xl p-4 border border-white/[0.02] shadow-skeuo-pressed space-y-4">
-                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0">
-                           <Radio size={12} className="text-white/40" />
-                        </div>
+                  {/* Flow Trace Narrativo */}
+                  <div className="bg-white/5 rounded-2xl p-5 border border-white/[0.02] shadow-skeuo-pressed space-y-4">
+                     <div className="flex items-center gap-4">
                         <div className="flex-1 overflow-hidden">
-                           <p className="text-[9px] font-black uppercase text-white/20 tracking-widest">Origem</p>
-                           <p className="text-xs font-bold text-white/60 truncate italic">{sourceName}</p>
+                           <p className="text-[9px] font-black uppercase text-white/20 tracking-widest mb-2 flex items-center gap-1.5">
+                              <Radio size={10} /> Pega as ofertas de:
+                           </p>
+                           <p className="text-sm font-bold text-white/80 truncate italic bg-white/5 p-3 rounded-xl border border-white/5">{sourceName}</p>
                         </div>
-                        <ChevronRight size={14} className="text-white/10" />
-                        <div className="w-8 h-8 rounded-full bg-kinetic-orange/10 flex items-center justify-center shrink-0 border border-kinetic-orange/20">
-                           <Target size={12} className="text-kinetic-orange" />
+                        
+                        <div className="flex flex-col items-center justify-center gap-1 pt-4 opacity-40">
+                           <div className="w-6 h-6 rounded-full bg-kinetic-orange/20 flex items-center justify-center">
+                              <ChevronRight size={14} className="text-kinetic-orange" />
+                           </div>
                         </div>
-                        <div className="flex-1 overflow-hidden text-right">
-                           <p className="text-[9px] font-black uppercase text-white/20 tracking-widest">Destino</p>
-                           <p className="text-xs font-bold text-white/60 truncate italic">{targetName || '--'}</p>
+
+                        <div className="flex-1 overflow-hidden">
+                           <p className="text-[9px] font-black uppercase text-white/20 tracking-widest mb-2 flex items-center gap-1.5">
+                              <Target size={10} /> Envia para o grupo:
+                           </p>
+                           <p className="text-sm font-bold text-white/80 truncate italic bg-white/5 p-3 rounded-xl border border-white/5">{targetName || 'Não definido'}</p>
                         </div>
                      </div>
                   </div>
 
                   <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/[0.03]">
                     <div className="flex items-center gap-4">
-                       <div className="flex items-center gap-1.5 grayscale opacity-40">
-                         <FileText size={12} className={hasTemplate ? "text-kinetic-orange" : "text-white/20"} />
-                         <span className="text-[10px] font-bold uppercase tracking-tight">Template {hasTemplate ? '✓' : '--'}</span>
+                       <div className="flex items-center gap-2 text-white/40">
+                         <FileText size={14} className="text-kinetic-orange/60" />
+                         <span className="text-[10px] font-bold uppercase tracking-tight">Modelo: <span className="text-white/80">{templateName}</span></span>
                        </div>
-                       <div className="w-[1px] h-3 bg-white/10" />
-                       <div className="flex items-center gap-1.5 opacity-40">
-                         <Activity size={12} className="text-emerald-500 animate-pulse" />
-                         <span className="text-[10px] font-bold uppercase tracking-tight italic">Live Feed</span>
-                      </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {source.source_type === 'radar_offers' && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={`h-10 w-10 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all ${syncingId === source.id ? 'text-kinetic-orange' : 'text-white/40'}`}
-                          onClick={() => handleSync(source.id)}
-                          disabled={syncingId !== null}
-                        >
-                          <RefreshCw size={14} className={syncingId === source.id ? 'animate-spin' : ''} />
-                        </Button>
-                      )}
 
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
