@@ -50,7 +50,7 @@ export function InboundRuleManager({ filters, onUpdate }: InboundRuleManagerProp
       <div className="flex items-center justify-between">
         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 flex items-center gap-2">
           <Filter size={14} className="text-kinetic-orange" />
-          2. Curadoria (Filtros de Qualidade)
+          2. Regras de Seleção (Filtros)
         </h3>
       </div>
 

@@ -88,7 +88,7 @@ export default function AutomationDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
         <Loader2 className="animate-spin text-kinetic-orange" size={40} />
-        <p className="text-muted-foreground animate-pulse font-bold uppercase tracking-widest text-[10px]">Sincronizando Esteira Operacional...</p>
+        <p className="text-muted-foreground animate-pulse font-bold uppercase tracking-widest text-[10px]">Sincronizando Automação...</p>
       </div>
     );
   }
@@ -128,7 +128,7 @@ export default function AutomationDetailPage() {
     const promise = deleteSource.mutateAsync(id);
 
     toast.promise(promise, {
-      loading: 'Excluindo esteira operacional...',
+      loading: 'Excluindo automação...',
       success: () => {
         setIsDeleteOpen(false);
         router.push('/automacoes');
@@ -155,7 +155,7 @@ export default function AutomationDetailPage() {
       success: () => {
         setIsAddRouteOpen(false);
         setNewRouteTargetId('');
-        return "Novo destino vinculado à esteira.";
+        return "Novo destino vinculado.";
       },
       error: "Erro ao vincular destino."
     });
@@ -180,7 +180,9 @@ export default function AutomationDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <OriginBlock
           source={source}
-          sourceName={allGroups?.find(g => g.channel_id === source.channel_id && g.remote_id === source.external_group_id)?.name}
+          sourceName={source.external_group_id 
+            ? allGroups?.find(g => g.remote_id === source.external_group_id)?.name || 'Grupo não identificado'
+            : (source.source_type === 'radar_offers' ? 'Radar de Produtos' : 'Cupons Shopee')}
           onUpdate={(updates) => updateSource.mutate({ id, updates })}
           canActivate={routes && routes.length > 0}
           onToggleActive={(active) => {
@@ -209,7 +211,7 @@ export default function AutomationDetailPage() {
       {source.source_type === 'radar_offers' && (
         <div className="animate-in slide-in-from-bottom-4 duration-500 delay-150">
           <div className="mb-4">
-            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 ml-1">Observabilidade do Radar Pro</h4>
+            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 ml-1">Observabilidade do Radar de Produtos</h4>
           </div>
           <RadarActivityFeed sourceId={id} />
         </div>
@@ -224,7 +226,7 @@ export default function AutomationDetailPage() {
 
       <div className="pt-10 border-t border-white/5 space-y-8 opacity-60 hover:opacity-100 transition-opacity">
         <div className="flex items-center justify-between">
-          <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Configurações Avançadas de Esteira</h4>
+          <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Configurações Avançadas</h4>
           <Button 
             variant="ghost" 
             onClick={handleSavePipeline}

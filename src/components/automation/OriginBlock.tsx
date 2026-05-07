@@ -85,7 +85,7 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
       <div className="flex items-center justify-between">
         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 flex items-center gap-2">
           {isRadar ? <Zap size={14} className="text-kinetic-orange" /> : <Radio size={14} className="text-kinetic-orange animate-pulse" />}
-          1. Motor de Estratégia ({isRadar ? 'Radar Pro' : 'Monitoramento'})
+          1. Configuração de Origem ({isRadar ? 'Radar de Produtos' : 'Monitoramento'})
         </h3>
         <Button
           variant="ghost"
@@ -100,7 +100,7 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
           )}
         >
           <Power size={12} />
-          {source.is_active ? 'Rodando' : 'Pausado'}
+          {source.is_active ? 'Ligada' : 'Pausada'}
         </Button>
       </div>
 
@@ -108,7 +108,7 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
         {/* Multi-Keyword Section */}
         <div className="bg-deep-void rounded-2xl p-5 shadow-skeuo-pressed border border-white/5 space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Configuração de Busca (Keywords)</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Nichos de produtos</span>
             {isRadar && (
               <Button 
                 variant="ghost" 
@@ -156,7 +156,7 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] font-black text-kinetic-orange italic tracking-tight">Até ~{budgetPreview[idx] || 0} produtos</p>
-                    <p className="text-[8px] font-bold text-white/10 uppercase">Budget Alocado</p>
+                    <p className="text-[8px] font-bold text-white/10 uppercase">Estimativa de produtos</p>
                   </div>
                 </div>
               )) : (
@@ -181,7 +181,7 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
         {/* Presets Section */}
         {isRadar && (
           <div className="space-y-3">
-            <span className="text-[9px] font-black uppercase tracking-widest text-white/20 ml-1">Intensidade Operacional</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-white/20 ml-1">Frequência de envio</span>
             <div className="grid grid-cols-3 gap-3">
               <button
                 onClick={() => handleUpdatePreset('aggressive')}

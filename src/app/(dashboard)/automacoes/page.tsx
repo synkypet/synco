@@ -237,7 +237,7 @@ export default function AutomacoesDashboardPage() {
       {/* Header */}
       <PageHeader 
         title="Automações"
-        description="Controle de fluxo automático: Captação ➔ Regras ➔ Envio."
+        description="Crie regras automáticas para enviar as melhores ofertas."
         icon={<Zap size={24} />}
         actions={
           <Dialog open={isNewMonitorOpen} onOpenChange={setIsNewMonitorOpen}>
@@ -251,7 +251,7 @@ export default function AutomacoesDashboardPage() {
                  <DialogHeader>
                    <DialogTitle className="mb-4 flex items-center gap-2">
                       <Zap size={14} className="animate-pulse text-kinetic-orange" />
-                      Iniciar Esteira de Pipeline
+                      Nova Automação
                    </DialogTitle>
                  </DialogHeader>
                  
@@ -259,7 +259,7 @@ export default function AutomacoesDashboardPage() {
                     {/* 1. Nome */}
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest flex justify-between">
-                         Nome da Esteira
+                         Nome da Automação
                          {!isNameValid && newName.length > 0 && <span className="text-red-400 font-bold tracking-tight">Mín. 3 caracteres</span>}
                       </Label>
                       <Input 
@@ -272,7 +272,7 @@ export default function AutomacoesDashboardPage() {
   
                     {/* 2. Entrada */}
                     <div className="space-y-2">
-                      <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Origem de Dados (Source)</Label>
+                      <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">De onde vêm as ofertas?</Label>
                       <div className="flex gap-2">
                         <button
                           onClick={() => setEntryType('group_monitor')}
@@ -294,7 +294,7 @@ export default function AutomacoesDashboardPage() {
                           }`}
                         >
                           <Inbox size={20} className="mb-2" />
-                          <span className="text-[9px] font-black uppercase tracking-widest">Radar Pro</span>
+                          <span className="text-[9px] font-black uppercase tracking-widest">Radar de Produtos</span>
                         </button>
                         <button
                           onClick={() => setEntryType('coupon_shopee')}
@@ -399,7 +399,7 @@ export default function AutomacoesDashboardPage() {
 
                         {previewResults && (
                           <div className="space-y-2 p-4 bg-black/20 rounded-2xl border border-white/5 animate-in fade-in duration-500">
-                             <p className="text-[9px] font-black uppercase text-white/20 tracking-widest mb-3">Preview da Curadoria ({previewResults.length} itens)</p>
+                             <p className="text-[9px] font-black uppercase text-white/20 tracking-widest mb-3">Exemplo de produtos encontrados ({previewResults.length} itens)</p>
                              <div className="space-y-2 max-h-[220px] overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
                                 {previewResults.length === 0 ? (
                                   <p className="text-[10px] text-white/30 italic text-center py-4">Nenhum produto encontrado com estes filtros.</p>
@@ -564,6 +564,9 @@ export default function AutomacoesDashboardPage() {
             const targetName = firstRoute?.target_type === 'group' 
               ? allGroups?.find(g => g.id === firstRoute.target_id)?.name
               : allLists?.find(l => l.id === firstRoute?.target_id)?.name;
+            const sourceName = source.external_group_id 
+              ? allGroups?.find(g => g.remote_id === source.external_group_id)?.name || 'Grupo não identificado'
+              : (source.source_type === 'radar_offers' ? 'Radar de Produtos' : 'Cupons Shopee');
             const hasTemplate = !!firstRoute?.template_config?.body;
 
             return (
@@ -578,7 +581,7 @@ export default function AutomacoesDashboardPage() {
                         <h3 className="font-black text-white/90 uppercase tracking-tight italic text-lg">{source.name}</h3>
                         <div className="flex items-center gap-2 mt-0.5">
                            <Badge variant="outline" className="text-[8px] font-black uppercase border-white/10 text-white/40 h-4">
-                             {source.source_type === 'group_monitor' ? 'Monitoramento' : (source.source_type === 'radar_offers' ? 'Radar' : 'Cupons Shopee')}
+                             {source.source_type === 'group_monitor' ? 'Monitor de Grupos' : (source.source_type === 'radar_offers' ? 'Radar de Produtos' : 'Cupons Shopee')}
                            </Badge>
                         </div>
                       </div>
@@ -602,15 +605,15 @@ export default function AutomacoesDashboardPage() {
                            <Radio size={12} className="text-white/40" />
                         </div>
                         <div className="flex-1 overflow-hidden">
-                           <p className="text-[9px] font-black uppercase text-white/20 tracking-widest">Entrada (Source)</p>
-                           <p className="text-xs font-bold text-white/60 truncate italic">{source.external_group_id || (source.source_type === 'radar_offers' ? 'Radar de Ofertas' : 'Cupons Shopee')}</p>
+                           <p className="text-[9px] font-black uppercase text-white/20 tracking-widest">Origem</p>
+                           <p className="text-xs font-bold text-white/60 truncate italic">{sourceName}</p>
                         </div>
                         <ChevronRight size={14} className="text-white/10" />
                         <div className="w-8 h-8 rounded-full bg-kinetic-orange/10 flex items-center justify-center shrink-0 border border-kinetic-orange/20">
                            <Target size={12} className="text-kinetic-orange" />
                         </div>
                         <div className="flex-1 overflow-hidden text-right">
-                           <p className="text-[9px] font-black uppercase text-white/20 tracking-widest">Saída (Target)</p>
+                           <p className="text-[9px] font-black uppercase text-white/20 tracking-widest">Destino</p>
                            <p className="text-xs font-bold text-white/60 truncate italic">{targetName || '--'}</p>
                         </div>
                      </div>
@@ -689,8 +692,8 @@ export default function AutomacoesDashboardPage() {
                 <ShieldCheck size={48} className="text-white/10" />
              </div>
              <div className="space-y-1">
-                <p className="text-white/80 font-black uppercase tracking-[0.2em] text-sm italic">Nenhuma esteira operacional</p>
-                <p className="text-white/20 text-[10px] font-medium uppercase tracking-widest">Comece criando sua primeira automação de monitoramento</p>
+                <p className="text-white/80 font-black uppercase tracking-[0.2em] text-sm italic">Nenhuma automação criada</p>
+                <p className="text-white/20 text-[10px] font-medium uppercase tracking-widest">Crie sua primeira automação para começar o envio automático.</p>
              </div>
              <KineticButton 
               className="h-12 px-8 rounded-2xl shadow-glow-orange-intense/10"
