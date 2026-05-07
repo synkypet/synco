@@ -486,7 +486,6 @@ export default function AutomacoesDashboardPage() {
                                </SelectContent>
                              </Select>
                            </div>
-                            </div>
                         </div>
 
                         <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
