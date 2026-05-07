@@ -170,7 +170,7 @@ export default function AutomacoesDashboardPage() {
           limit: 10,
           minPrice: minPrice ? parseFloat(minPrice) : undefined,
           maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
-          minCommission: minCommission ? parseFloat(minCommission) : undefined
+          minCommission: undefined
         })
       });
       const data = await res.json();
@@ -486,15 +486,7 @@ export default function AutomacoesDashboardPage() {
                                </SelectContent>
                              </Select>
                            </div>
-                           <div className="space-y-2">
-                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Comissão Mín (%)</Label>
-                             <Input 
-                               type="number" 
-                               placeholder="Ex: 5" 
-                               value={minCommission} 
-                               onChange={(e) => setMinCommission(e.target.value)} 
-                             />
-                           </div>
+                            </div>
                         </div>
 
                         <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
