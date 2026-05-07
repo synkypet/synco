@@ -13,7 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, XCircle, AlertCircle, Search, ExternalLink, Info, RefreshCw, Zap, Tag, MapPin, Clock } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle, Search, ExternalLink, Info, RefreshCw, Zap, Tag, MapPin, Clock, Activity } from 'lucide-react';
 import Link from 'next/link';
 import {
   Dialog,
