@@ -192,7 +192,12 @@ export default function AutomationDetailPage() {
         {/* COLUNA DA ESQUERDA: ATIVIDADE TÉCNICA (LOGS) */}
         <div className="lg:col-span-2 space-y-8">
            <div className="animate-in slide-in-from-bottom-4 duration-500">
-              <LogFeed logs={logs || []} title="Atividade Técnica do Sistema" targetNames={targetNames} />
+              <LogFeed 
+                logs={logs || []} 
+                title="Atividade Técnica do Sistema" 
+                targetNames={targetNames} 
+                sourceType={source.source_type}
+              />
            </div>
         </div>
 

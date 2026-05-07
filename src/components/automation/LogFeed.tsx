@@ -27,10 +27,14 @@ interface LogFeedProps {
   logs: any[];
   title?: string;
   targetNames?: Record<string, string>;
+  sourceType?: string;
 }
 
-export function LogFeed({ logs, title, targetNames = {} }: LogFeedProps) {
+export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedProps) {
   const [selectedLog, setSelectedLog] = React.useState<any>(null);
+  
+  const isMonitor = sourceType === 'group_monitor';
+  const IconHeader = isMonitor ? Activity : Search;
 
   // Status técnico interno do log de automação
   const getStatusBadge = (status: string) => {
@@ -196,7 +200,7 @@ export function LogFeed({ logs, title, targetNames = {} }: LogFeedProps) {
       <TactileCard className="overflow-hidden">
         <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 flex items-center gap-2">
-            <Search size={14} className="text-kinetic-orange" />
+            <IconHeader size={14} className="text-kinetic-orange" />
             {title || 'Atividade Técnica do Sistema'}
           </h3>
           <span className="text-[9px] opacity-50 font-mono italic">Atualiza automaticamente</span>
