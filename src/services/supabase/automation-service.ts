@@ -361,17 +361,24 @@ export const automationService = {
       }
 
       // 2. Buscar o status real do send_job via radar_discovered_products → send_jobs
-      // O dispatcher grava campaign_id diretamente em radar_discovered_products (linha 321 do dispatcher)
-      // Isso é mais confiável que ir via campaign_items.product_id que pode ser null por validação de UUID
-      const { data: rdpEntries } = await supabase
-        .from('radar_discovered_products')
-        .select('product_id, campaign_id')
-        .eq('source_id', sourceId)
-        .in('product_id', productIds)
-        .not('campaign_id', 'is', null)
-        .order('created_at', { ascending: false });
+      // CHUNKING: PostgREST/Supabase pode dar erro 400 se a URL for muito longa com muitos IDs no .in()
+      const CHUNK_SIZE = 30;
+      const rdpEntries: any[] = [];
+      
+      for (let i = 0; i < productIds.length; i += CHUNK_SIZE) {
+        const chunk = productIds.slice(i, i + CHUNK_SIZE);
+        const { data: chunkData } = await supabase
+          .from('radar_discovered_products')
+          .select('product_id, campaign_id')
+          .eq('source_id', sourceId)
+          .in('product_id', chunk)
+          .not('campaign_id', 'is', null)
+          .order('created_at', { ascending: false });
+        
+        if (chunkData) rdpEntries.push(...chunkData);
+      }
 
-      if (rdpEntries && rdpEntries.length > 0) {
+      if (rdpEntries.length > 0) {
         // Pegar o campaign_id mais recente por product_id
         const productIdToCampaignId = new Map<string, string>();
         for (const rdp of rdpEntries) {
@@ -381,28 +388,30 @@ export const automationService = {
         }
 
         const campaignIds = [...new Set(productIdToCampaignId.values())] as string[];
+        const campaignIdToStatus = new Map<string, string>();
 
-        const { data: sendJobs } = await supabase
-          .from('send_jobs')
-          .select('campaign_id, status')
-          .in('campaign_id', campaignIds)
-          .order('created_at', { ascending: false });
+        for (let i = 0; i < campaignIds.length; i += CHUNK_SIZE) {
+          const chunk = campaignIds.slice(i, i + CHUNK_SIZE);
+          const { data: sendJobs } = await supabase
+            .from('send_jobs')
+            .select('campaign_id, status')
+            .in('campaign_id', chunk)
+            .order('created_at', { ascending: false });
 
-        if (sendJobs) {
-          // Para cada campaignId, pegar o status mais recente
-          const campaignIdToStatus = new Map<string, string>();
-          for (const job of sendJobs) {
-            if (!campaignIdToStatus.has(job.campaign_id)) {
-              campaignIdToStatus.set(job.campaign_id, job.status);
+          if (sendJobs) {
+            for (const job of sendJobs) {
+              if (!campaignIdToStatus.has(job.campaign_id)) {
+                campaignIdToStatus.set(job.campaign_id, job.status);
+              }
             }
           }
+        }
 
-          // Mapear de volta: productId → status
-          for (const [productId, campaignId] of productIdToCampaignId.entries()) {
-            const jobStatus = campaignIdToStatus.get(campaignId);
-            if (jobStatus) {
-              sendStatusMap.set(productId, jobStatus);
-            }
+        // Mapear de volta: productId → status
+        for (const [productId, campaignId] of productIdToCampaignId.entries()) {
+          const jobStatus = campaignIdToStatus.get(campaignId);
+          if (jobStatus) {
+            sendStatusMap.set(productId, jobStatus);
           }
         }
       }
