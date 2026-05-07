@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { 
   Zap, 
   Target, 
@@ -16,7 +17,8 @@ import {
   Filter, 
   DollarSign, 
   ShieldCheck,
-  BadgePercent
+  BadgePercent,
+  Users
 } from 'lucide-react';
 import { KeywordManager, Keyword } from '@/components/automation/KeywordManager';
 import { SHOPEE_SORT_TYPE, SHOPEE_SORT_TYPE_LABELS } from '@/lib/constants/shopee';
