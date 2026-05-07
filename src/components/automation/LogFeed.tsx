@@ -168,20 +168,12 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
                   className="flex items-center gap-4 p-4 hover:bg-white/[0.03] transition-colors group cursor-pointer"
                   onClick={() => setSelectedLog(log)}
                 >
-                  <div className="relative flex-shrink-0">
-                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/5 border border-white/5 shadow-skeuo-flat">
-                      {p?.image_url ? (
-                        <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-white/10">
-                          <Tag size={20} />
-                        </div>
-                      )}
-                    </div>
-                    {/* Badge de Status Flutuante para o Monitor */}
-                    {isMonitor && (
-                      <div className="absolute -top-1 -left-1 scale-[0.65] origin-top-left drop-shadow-lg">
-                        {getStatusBadge(log.status)}
+                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/5 border border-white/5 flex-shrink-0 shadow-skeuo-flat">
+                    {p?.image_url ? (
+                      <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white/10">
+                        <Tag size={20} />
                       </div>
                     )}
                   </div>
@@ -219,15 +211,23 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0 min-w-[80px]">
+                    {/* Status do Processamento (Maior e à Direita) */}
+                    {isMonitor && (
+                      <div className="scale-110 origin-right mb-1">
+                        {getStatusBadge(log.status)}
+                      </div>
+                    )}
+                    
                     {getDeliveryStatusBadge(log._sendStatus)}
+                    
                     {p?.original_url && (
                       <a
                         href={p.original_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="text-white/20 hover:text-kinetic-orange transition-colors"
+                        className="text-white/20 hover:text-kinetic-orange transition-colors mt-1"
                         title="Ver no Shopee"
                       >
                         <ExternalLink size={12} />
