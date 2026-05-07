@@ -19,7 +19,6 @@ import { useDestinations } from '@/hooks/use-destinations';
 import { useChannels } from '@/hooks/use-channels';
 
 import { OriginBlock } from '@/components/automation/OriginBlock';
-import { InboundRuleManager } from '@/components/automation/InboundRuleManager';
 import { TemplateBlock } from '@/components/automation/TemplateBlock';
 import { DestinationBlock } from '@/components/automation/DestinationBlock';
 import { DeliveryBanner } from '@/components/automation/DeliveryBanner';
@@ -32,6 +31,7 @@ import { AutomationTargetSelector } from '@/components/automation/AutomationTarg
 import { QuickListCreateDialog } from '@/components/automation/QuickListCreateDialog';
 
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Loader2, Save, Zap, Trash2 } from 'lucide-react';
 import {
   Dialog,
@@ -171,51 +171,48 @@ export default function AutomationDetailPage() {
   });
 
   return (
-    <div className="max-w-6xl mx-auto space-y-10 pb-32 animate-in fade-in duration-1000">
+    <div className="max-w-7xl mx-auto space-y-10 pb-32 animate-in fade-in duration-1000">
       <AutomationStatusHeader 
         source={source} 
         onBack={() => router.push('/automacoes')} 
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <OriginBlock
-            source={source}
-            sourceName={source.external_group_id 
-              ? allGroups?.find(g => g.remote_id === source.external_group_id)?.name || 'Grupo não identificado'
-              : (source.source_type === 'radar_offers' ? 'Radar de Produtos' : 'Cupons Shopee')}
-            onUpdate={(updates) => updateSource.mutate({ id, updates })}
-            canActivate={routes && routes.length > 0}
-            onToggleActive={(active) => {
-              if (active && (!routes || routes.length === 0)) {
-                toast.error('Configure um destino antes de ativar esta automação.');
-                return;
-              }
-              updateSource.mutate({ id, updates: { is_active: active } });
-            }}
-          />
+      {/* BLOCO 1: CENTRO DE COMANDO (NICHOS, RITMO E CURADORIA) */}
+      <OriginBlock
+        source={source}
+        onUpdate={(updates) => {
+          // Se houver updates de automation_routes, usamos a mutation de rota
+          if (updates.automation_routes && updates.automation_routes[0]) {
+            const r = updates.automation_routes[0];
+            upsertRoute.mutate({ ...r });
+          } else {
+            updateSource.mutate({ id, updates });
+          }
+        }}
+      />
 
-          <div className="bg-white/5 rounded-3xl p-8 border border-white/5 shadow-skeuo-pressed">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 flex items-center gap-2">
-                 2. Refinar Seleção (Preço e Comissão)
-              </h3>
-              <Button 
-                variant="ghost" 
-                onClick={handleSavePipeline}
-                disabled={isSaving}
-                className="h-8 text-[9px] font-black uppercase tracking-widest text-kinetic-orange hover:bg-kinetic-orange/10 bg-kinetic-orange/5 border border-kinetic-orange/20 rounded-xl"
-              >
-                {isSaving ? 'Salvando...' : 'Salvar Filtros'}
-              </Button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* COLUNA DA ESQUERDA: ATIVIDADE E DESTINOS */}
+        <div className="lg:col-span-2 space-y-8">
+           {source.source_type === 'radar_offers' && (
+            <div className="animate-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center justify-between mb-4 px-1">
+                <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Observabilidade do Radar</h4>
+                <Badge variant="outline" className="text-[8px] border-kinetic-orange/20 text-kinetic-orange uppercase tracking-widest">Tempo Real</Badge>
+              </div>
+              <RadarActivityFeed sourceId={id} />
             </div>
-            <InboundRuleManager
-              filters={filters}
-              onUpdate={setFilters}
+          )}
+
+          <div className="animate-in slide-in-from-bottom-4 duration-500 delay-100">
+            <AutomationAuditTrail 
+              campaigns={recentCampaigns || []} 
+              isLoading={loadingRecent} 
             />
           </div>
         </div>
 
+        {/* COLUNA DA DIREITA: DESTINOS E STATUS */}
         <div className="space-y-8">
           <DestinationBlock
             routes={routes || []}
