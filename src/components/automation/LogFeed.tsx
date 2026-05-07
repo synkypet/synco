@@ -293,9 +293,7 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
             </TableBody>
           </Table>
         </div>
-    </div>
-  );
-}
+      </TactileCard>
 
       {/* Modal de Auditoria Detalhada */}
       <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>
