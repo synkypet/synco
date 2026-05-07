@@ -22,7 +22,7 @@ import { OriginBlock } from '@/components/automation/OriginBlock';
 import { TemplateBlock } from '@/components/automation/TemplateBlock';
 import { DestinationBlock } from '@/components/automation/DestinationBlock';
 import { DeliveryBanner } from '@/components/automation/DeliveryBanner';
-import { AutomationFactualFeed } from '@/components/automation/AutomationFactualFeed';
+import { LogFeed } from '@/components/automation/LogFeed';
 import { AutomationStatusHeader } from '@/components/automation/AutomationStatusHeader';
 import { AutomationTargetSelector } from '@/components/automation/AutomationTargetSelector';
 import { QuickListCreateDialog } from '@/components/automation/QuickListCreateDialog';
@@ -189,17 +189,14 @@ export default function AutomationDetailPage() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        {/* COLUNA DA ESQUERDA: ENTREGAS REAIS (FACTUAL FEED) */}
+        {/* COLUNA DA ESQUERDA: ATIVIDADE TÉCNICA (LOGS) */}
         <div className="lg:col-span-2 space-y-8">
            <div className="animate-in slide-in-from-bottom-4 duration-500">
-              <AutomationFactualFeed 
-                campaigns={recentCampaigns || []} 
-                isLoading={loadingRecent} 
-              />
+              <LogFeed logs={logs || []} title="Atividade Técnica do Sistema" targetNames={targetNames} />
            </div>
         </div>
 
-        {/* COLUNA DA DIREITA: DESTINOS E CONFIGURAÇÃO */}
+        {/* COLUNA DA DIREITA: DESTINOS E STATUS */}
         <div className="space-y-8">
           <DestinationBlock
             routes={routes || []}

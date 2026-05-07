@@ -337,7 +337,31 @@ export const automationService = {
       console.error('Error fetching logs:', error);
       return [];
     }
-    return data || [];
+    if (!data || data.length === 0) return [];
+
+    // Enriquecimento batch: buscar dados reais dos produtos via IDs salvos em details.productId
+    const productIds = [...new Set(
+      data
+        .map((log: any) => log.details?.productId)
+        .filter(Boolean)
+    )] as string[];
+
+    if (productIds.length > 0) {
+      const { data: products } = await supabase
+        .from('products')
+        .select('id, name, image_url, current_price, discount_percent, commission_value, original_url')
+        .in('id', productIds);
+
+      if (products) {
+        const productMap = new Map(products.map(p => [p.id, p]));
+        return data.map((log: any) => ({
+          ...log,
+          _product: log.details?.productId ? productMap.get(log.details.productId) || null : null
+        }));
+      }
+    }
+
+    return data;
   },
 
   /**
@@ -398,7 +422,7 @@ export const automationService = {
       .from('automation_logs')
       .select('details')
       .eq('source_id', sourceId)
-      .in('event_type', ['job_created', 'radar_dispatch'])
+      .eq('event_type', 'job_created')
       .order('created_at', { ascending: false });
 
     if (logsError) {

@@ -57,7 +57,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               alt="SYNCO Logo" 
               fill
               priority
-              sizes="(max-width: 768px) 100vw, 200px"
               className={cn(
                 "object-contain transition-all duration-300",
                 !collapsed && "object-left"
