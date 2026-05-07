@@ -177,6 +177,7 @@ export default function AutomationDetailPage() {
       {/* BLOCO 1: CENTRO DE COMANDO (NICHOS, RITMO E CURADORIA) */}
       <OriginBlock
         source={source}
+        allGroups={allGroups || []}
         onUpdate={(updates) => {
           // Se houver updates de automation_routes, usamos a mutation de rota
           if (updates.automation_routes && updates.automation_routes[0]) {

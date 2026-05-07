@@ -24,9 +24,10 @@ import { SHOPEE_SORT_TYPE, SHOPEE_SORT_TYPE_LABELS } from '@/lib/constants/shope
 interface OriginBlockProps {
   source: AutomationSource;
   onUpdate: (updates: Partial<AutomationSource>) => void;
+  allGroups?: any[];
 }
 
-export function OriginBlock({ source, onUpdate }: OriginBlockProps) {
+export function OriginBlock({ source, onUpdate, allGroups = [] }: OriginBlockProps) {
   const initialKeywords = (source.config?.keywords || []) as Keyword[];
   const config = source.config || {};
   const [localKeywords, setLocalKeywords] = useState<Keyword[]>(initialKeywords);
@@ -47,6 +48,8 @@ export function OriginBlock({ source, onUpdate }: OriginBlockProps) {
     };
     onUpdate({ automation_routes: newRoutes });
   };
+
+  const currentOriginGroup = allGroups.find(g => g.external_id === source.external_group_id);
 
   return (
     <TactileCard className="p-6 relative overflow-hidden">
@@ -208,12 +211,69 @@ export function OriginBlock({ source, onUpdate }: OriginBlockProps) {
 
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 px-6 rounded-[32px] bg-deep-void/20 border border-dashed border-white/5">
-          <Target size={24} className="text-white/10 mb-4" />
-          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-2">Monitoramento Ativo de Grupos</h4>
-          <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest text-center max-w-sm">
-            Esta automação monitora mensagens em tempo real no grupo vinculado. Filtros de descoberta do Radar não são aplicáveis aqui.
-          </p>
+        <div className="grid grid-cols-1 md:grid-cols-7 gap-6 items-center py-6">
+          
+          {/* ORIGEM */}
+          <div className="md:col-span-3 space-y-4">
+            <Label className="text-[9px] uppercase font-black tracking-widest text-white/30 flex items-center gap-2 px-1">
+              <Users size={12} className="text-kinetic-orange" /> Fonte de Monitoramento (Origem)
+            </Label>
+            <div className="p-6 rounded-[32px] bg-deep-void/30 border border-white/5 shadow-skeuo-pressed space-y-4">
+              <Select 
+                value={source.external_group_id || ''} 
+                onValueChange={(v) => onUpdate({ external_group_id: v })}
+              >
+                <SelectTrigger className="h-14 bg-deep-void border-white/5 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-skeuo-pressed">
+                  <SelectValue placeholder="Selecione o grupo de origem" />
+                </SelectTrigger>
+                <SelectContent className="bg-anthracite-surface border-white/10">
+                  {allGroups.map((group) => (
+                    <SelectItem key={group.external_id} value={group.external_id} className="text-[10px] font-bold uppercase tracking-widest">
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-3 px-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-kinetic-orange animate-pulse shadow-glow-orange" />
+                <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
+                  Escutando mensagens de {currentOriginGroup?.name || 'nenhum grupo selecionado'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* FLUXO (SETA) */}
+          <div className="md:col-span-1 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center shadow-skeuo-flat">
+               <Zap size={20} className="text-kinetic-orange animate-pulse" />
+            </div>
+          </div>
+
+          {/* DESTINO RESUMO */}
+          <div className="md:col-span-3 space-y-4 opacity-80">
+            <Label className="text-[9px] uppercase font-black tracking-widest text-white/30 flex items-center gap-2 px-1">
+              <Target size={12} className="text-emerald-400" /> Fluxo de Distribuição
+            </Label>
+            <div className="p-6 rounded-[32px] bg-emerald-500/[0.02] border border-emerald-500/5 shadow-skeuo-flat flex flex-col items-center justify-center text-center min-h-[140px]">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-2">Destinos Configurados</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {source.automation_routes?.length ? (
+                  source.automation_routes.map((r, idx) => (
+                    <Badge key={idx} variant="outline" className="bg-emerald-500/5 border-emerald-500/10 text-[9px] font-black uppercase tracking-widest py-1">
+                       {r.target_type === 'group' ? 'Grupo' : 'Lista'}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-[9px] font-bold text-white/10 uppercase tracking-widest italic">Aguardando definição de destinos...</span>
+                )}
+              </div>
+              <p className="text-[8px] font-bold text-emerald-500/40 uppercase tracking-widest mt-4">
+                Configure os destinos detalhados abaixo
+              </p>
+            </div>
+          </div>
+
         </div>
       )}
     </TactileCard>
