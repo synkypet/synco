@@ -177,35 +177,58 @@ export default function AutomationDetailPage() {
         onBack={() => router.push('/automacoes')} 
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <OriginBlock
-          source={source}
-          sourceName={source.external_group_id 
-            ? allGroups?.find(g => g.remote_id === source.external_group_id)?.name || 'Grupo não identificado'
-            : (source.source_type === 'radar_offers' ? 'Radar de Produtos' : 'Cupons Shopee')}
-          onUpdate={(updates) => updateSource.mutate({ id, updates })}
-          canActivate={routes && routes.length > 0}
-          onToggleActive={(active) => {
-            if (active && (!routes || routes.length === 0)) {
-              toast.error('Configure um destino antes de ativar esta automação.');
-              return;
-            }
-            updateSource.mutate({ id, updates: { is_active: active } });
-          }}
-        />
-        <DestinationBlock
-          routes={routes || []}
-          targetNames={targetNames}
-          onAdd={() => setIsAddRouteOpen(true)}
-          onDelete={(routeId) => deleteRoute.mutate({ id: routeId, sourceId: id })}
-        />
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          <OriginBlock
+            source={source}
+            sourceName={source.external_group_id 
+              ? allGroups?.find(g => g.remote_id === source.external_group_id)?.name || 'Grupo não identificado'
+              : (source.source_type === 'radar_offers' ? 'Radar de Produtos' : 'Cupons Shopee')}
+            onUpdate={(updates) => updateSource.mutate({ id, updates })}
+            canActivate={routes && routes.length > 0}
+            onToggleActive={(active) => {
+              if (active && (!routes || routes.length === 0)) {
+                toast.error('Configure um destino antes de ativar esta automação.');
+                return;
+              }
+              updateSource.mutate({ id, updates: { is_active: active } });
+            }}
+          />
 
-      <div className="animate-in slide-in-from-bottom-4 duration-500 delay-100">
-        <ActiveFilterHUD 
-          filters={filters} 
-          config={source.config} 
-        />
+          <div className="bg-white/5 rounded-3xl p-8 border border-white/5 shadow-skeuo-pressed">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 flex items-center gap-2">
+                 2. Refinar Seleção (Preço e Comissão)
+              </h3>
+              <Button 
+                variant="ghost" 
+                onClick={handleSavePipeline}
+                disabled={isSaving}
+                className="h-8 text-[9px] font-black uppercase tracking-widest text-kinetic-orange hover:bg-kinetic-orange/10 bg-kinetic-orange/5 border border-kinetic-orange/20 rounded-xl"
+              >
+                {isSaving ? 'Salvando...' : 'Salvar Filtros'}
+              </Button>
+            </div>
+            <InboundRuleManager
+              filters={filters}
+              onUpdate={setFilters}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-8">
+          <DestinationBlock
+            routes={routes || []}
+            targetNames={targetNames}
+            onAdd={() => setIsAddRouteOpen(true)}
+            onDelete={(routeId) => deleteRoute.mutate({ id: routeId, sourceId: id })}
+          />
+
+          <ActiveFilterHUD 
+            filters={filters} 
+            config={source.config} 
+          />
+        </div>
       </div>
 
       {source.source_type === 'radar_offers' && (
@@ -224,30 +247,7 @@ export default function AutomationDetailPage() {
         />
       </div>
 
-      <div className="pt-10 border-t border-white/5 space-y-8 opacity-60 hover:opacity-100 transition-opacity">
-        <div className="flex items-center justify-between">
-          <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Configurações Avançadas</h4>
-          <Button 
-            variant="ghost" 
-            onClick={handleSavePipeline}
-            disabled={isSaving}
-            className="h-8 text-[9px] font-black uppercase tracking-widest text-kinetic-orange hover:bg-kinetic-orange/10"
-          >
-            {isSaving ? 'Salvando...' : 'Aplicar Alterações Manuais'}
-          </Button>
-        </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <InboundRuleManager
-            filters={filters}
-            onUpdate={setFilters}
-          />
-          <TemplateBlock
-            template={template}
-            onUpdate={setTemplate}
-          />
-        </div>
-      </div>
+
 
       <div className="space-y-8 opacity-40">
         <LogFeed logs={logs || []} title="Atividade Técnica do Sistema" />

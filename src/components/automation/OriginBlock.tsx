@@ -196,7 +196,7 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
                   Agressivo
                 </span>
                 <p className="text-[8px] text-center text-white/40 font-medium leading-tight">
-                  Envio constante.<br/>Ciclo de ~5 min.
+                  Máximo volume.<br/>30 itens / 20 min.<br/>Foco: Mais Vendidos.
                 </p>
               </button>
 
@@ -214,7 +214,7 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
                   Balanceado
                 </span>
                 <p className="text-[8px] text-center text-white/40 font-medium leading-tight">
-                  Equilíbrio ideal.<br/>Ciclo de ~15 min.
+                  Equilíbrio ideal.<br/>20 itens / 60 min.<br/>Foco: Relevância.
                 </p>
               </button>
 
@@ -232,7 +232,7 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
                   Conservador
                 </span>
                 <p className="text-[8px] text-center text-white/40 font-medium leading-tight">
-                  Foco total em qualidade.<br/>Ciclo de ~30 min.
+                  Qualidade máxima.<br/>10 itens / 120 min.<br/>Foco: Avaliações.
                 </p>
               </button>
             </div>
