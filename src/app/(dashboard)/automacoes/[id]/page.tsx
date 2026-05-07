@@ -193,29 +193,29 @@ export default function AutomationDetailPage() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        {/* COLUNA DA ESQUERDA: ATIVIDADE TÉCNICA (LOGS) */}
-        <div className="lg:col-span-2 space-y-8">
+        {/* COLUNA DA ESQUERDA/CENTRAL: HISTÓRICO DE AÇÕES */}
+        <div className={`${source.source_type === 'group_monitor' ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-8`}>
            <div className="animate-in slide-in-from-bottom-4 duration-500">
               <LogFeed 
                 logs={logs || []} 
-                title="Atividade Técnica do Sistema" 
+                title={source.source_type === 'group_monitor' ? "O que o sistema está fazendo agora" : "Histórico de Ações do Sistema"} 
                 targetNames={targetNames} 
                 sourceType={source.source_type}
               />
            </div>
         </div>
 
-        {/* COLUNA DA DIREITA: DESTINOS E STATUS */}
-        <div className="space-y-8">
-          {source.source_type !== 'group_monitor' && (
+        {/* COLUNA DA DIREITA: DESTINOS (OCULTA NO MONITOR) */}
+        {source.source_type !== 'group_monitor' && (
+          <div className="space-y-8">
             <DestinationBlock
               routes={routes || []}
               targetNames={targetNames}
               onAdd={() => setIsAddRouteOpen(true)}
               onDelete={(routeId) => deleteRoute.mutate({ id: routeId, sourceId: id })}
             />
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-8 opacity-40">

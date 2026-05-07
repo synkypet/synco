@@ -40,17 +40,17 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'processing':
-        return <Badge className="bg-blue-500/10 text-blue-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><RefreshCw size={10} className="animate-spin" /> Processando</Badge>;
+        return <Badge className="bg-blue-500/10 text-blue-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><RefreshCw size={10} className="animate-spin" /> Aguardando</Badge>;
       case 'processed':
-        return <Badge className="bg-emerald-500/10 text-emerald-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Enviado</Badge>;
+        return <Badge className="bg-emerald-500/10 text-emerald-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Sucesso</Badge>;
       case 'captured':
         return <Badge className="bg-kinetic-orange/10 text-kinetic-orange border-none font-black text-[9px] uppercase tracking-widest gap-1"><Zap size={10} /> Capturado</Badge>;
       case 'finished':
         return <Badge className="bg-zinc-500/10 text-zinc-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Finalizado</Badge>;
       case 'filtered':
-        return <Badge className="bg-yellow-500/10 text-yellow-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><XCircle size={10} /> Filtrado</Badge>;
+        return <Badge className="bg-amber-500/10 text-amber-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Pulado</Badge>;
       case 'error':
-        return <Badge className="bg-red-500/10 text-red-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Erro</Badge>;
+        return <Badge className="bg-red-500/10 text-red-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><XCircle size={10} /> Falha</Badge>;
       default:
         return <Badge className="bg-muted text-muted-foreground border-none font-black text-[9px] uppercase tracking-widest">Iniciado</Badge>;
     }
@@ -68,59 +68,57 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
         return <Badge className="bg-emerald-500/10 text-emerald-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Enviado</Badge>;
       case 'failed':
         return <Badge className="bg-red-500/10 text-red-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Falhou</Badge>;
-      case 'session_lost':
-        return <Badge className="bg-yellow-500/10 text-yellow-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Sessão Perdida</Badge>;
-      case 'cancelled':
-        return <Badge className="bg-zinc-600/10 text-zinc-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><XCircle size={10} /> Cancelado</Badge>;
-      default:
-        // Sem send_job ainda: produto foi descoberto mas ainda aguarda criação da campanha
-        return <Badge className="bg-zinc-700/20 text-zinc-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><Zap size={10} /> Capturado</Badge>;
+        return (
+          <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[8px] font-black uppercase tracking-widest px-2 py-0.5">
+            Na Fila
+          </Badge>
+        );
+      default: return null;
     }
   };
 
   const getEventDescription = (log: any) => {
     const { event_type, details } = log;
     switch (event_type) {
-      case 'radar_discovery': return details?.message || 'Busca autônoma realizada';
-      case 'radar_dispatch': return 'Produto enviado para o grupo';
+      case 'radar_discovery': return details?.message || 'Procurando novos produtos...';
+      case 'radar_dispatch': return 'Produto preparado para envio';
       case 'job_created': 
         return (
           <span className="flex items-center gap-1">
-            Job criado com sucesso 
+            Pronto para ser enviado
             <Link 
               href={`/campanhas/${details.campaignId}`}
               className="text-kinetic-orange hover:underline font-mono"
             >
-              ({details.campaignId?.substring(0, 8)})
+              (Ver Detalhes)
             </Link>
           </span>
         );
-      case 'no_routes': return 'Nenhuma rota de destino configurada';
-      case 'ingest_dedupe': return 'Link já processado recentemente (Dedupe Camada 1)';
-      case 'dest_dedupe': return 'Link já enviado para este destino (Dedupe Camada 2)';
-      case 'rule_rejected': return 'Rejeitado por filtros (Preço/Comissão/Keyword)';
-      case 'anti_loop': return 'Bloqueado: Origem coincide com Destino';
-      case 'fetch_failed': return 'Falha ao buscar metadados do produto';
+      case 'no_routes': return 'Nenhum lugar definido para enviar';
+      case 'ingest_dedupe': return 'Este produto já foi visto antes';
+      case 'dest_dedupe': return 'Já enviamos este produto para este grupo';
+      case 'rule_rejected': return 'Não atende aos seus filtros (preço ou comissão)';
+      case 'anti_loop': return 'Evitando enviar para o mesmo grupo de origem';
+      case 'fetch_failed': return 'Não conseguimos ler as informações do produto';
+      case 'operational_lock': return 'Aguardando tempo de segurança para o próximo envio';
       default: return event_type;
     }
   };
 
-  // Separar logs de dispatch (com produto enriquecido) de logs técnicos
   const dispatchLogs = logs.filter(l => l.event_type === 'radar_dispatch' && l._product);
   const techLogs = logs.filter(l => l.event_type !== 'radar_dispatch' || !l._product);
 
   return (
     <div className="space-y-6">
 
-      {/* SEÇÃO 1: PRODUTOS ENVIADOS — Cards Ricos */}
       {dispatchLogs.length > 0 && (
         <TactileCard className="overflow-hidden">
           <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
             <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 flex items-center gap-2">
               <CheckCircle2 size={14} className="text-emerald-500" />
-              Produtos Enviados
+              Últimos Produtos Encaminhados
             </h3>
-            <span className="text-[9px] text-white/20 font-black uppercase tracking-widest">{dispatchLogs.length} envios</span>
+            <span className="text-[9px] text-white/20 font-black uppercase tracking-widest">{dispatchLogs.length} sucessos</span>
           </div>
           <div className="divide-y divide-white/[0.03]">
             {dispatchLogs.map((log) => {
@@ -132,10 +130,8 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
                   className="flex items-center gap-4 p-4 hover:bg-white/[0.03] transition-colors group cursor-pointer"
                   onClick={() => setSelectedLog(log)}
                 >
-                  {/* Thumbnail */}
                   <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/5 border border-white/5 flex-shrink-0 shadow-skeuo-flat">
                     {p?.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-white/10">
@@ -144,7 +140,6 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
                     )}
                   </div>
 
-                  {/* Info */}
                   <div className="flex-1 min-w-0 space-y-1">
                     <p className="text-[11px] font-bold text-white/90 line-clamp-2 leading-tight">
                       {p?.name || 'Produto'}
@@ -155,25 +150,24 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
                       </span>
                       {p?.discount_percent > 0 && (
                         <span className="text-[9px] font-black text-white/30">
-                          -{p.discount_percent}% desc.
+                          -{p.discount_percent}% de desconto
                         </span>
                       )}
                       {p?.commission_value && (
                         <span className="text-[9px] font-black text-kinetic-orange/70 uppercase tracking-wide">
-                          Comis: R$ {p.commission_value.toFixed(2)}
+                          Ganha: R$ {p.commission_value.toFixed(2)}
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
                       <MapPin size={9} className="text-white/20 flex-shrink-0" />
-                      <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider truncate">{destName}</span>
+                      <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider truncate">Enviado para: {destName}</span>
                       <span className="text-[8px] text-white/10 font-mono ml-auto flex-shrink-0">
-                        {formatDistanceToNow(new Date(log.created_at), { locale: ptBR, addSuffix: true })}
+                        há {formatDistanceToNow(new Date(log.created_at), { locale: ptBR })}
                       </span>
                     </div>
                   </div>
 
-                  {/* Status real de entrega + Link Externo */}
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
                     {getDeliveryStatusBadge(log._sendStatus)}
                     {p?.original_url && (
@@ -196,63 +190,59 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
         </TactileCard>
       )}
 
-      {/* SEÇÃO 2: ATIVIDADE TÉCNICA — Tabela Compacta */}
       <TactileCard className="overflow-hidden">
         <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 flex items-center gap-2">
             <IconHeader size={14} className="text-kinetic-orange" />
-            {title || 'Atividade Técnica do Sistema'}
+            {title || 'O que o sistema está fazendo agora'}
           </h3>
-          <span className="text-[9px] opacity-50 font-mono italic">Atualiza automaticamente</span>
+          <span className="text-[9px] opacity-50 font-mono italic">Atualiza sozinho</span>
         </div>
 
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-white/5 border-none hover:bg-transparent">
-                <TableHead className="text-[10px] font-bold uppercase py-2">Hora</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-2 w-1/3">Link / Busca</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-2">Status</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-2">Decisão / Motivo</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4">Horário</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4 w-1/3">O que foi encontrado?</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4">Resultado</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4">O que aconteceu?</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {techLogs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic text-sm">
-                    Nenhuma atividade registrada ainda.
+                  <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic text-[10px] uppercase tracking-widest">
+                    Aguardando as primeiras atividades...
                   </TableCell>
                 </TableRow>
               ) : (
                 techLogs.map((log) => (
                   <TableRow 
                     key={log.id} 
-                    className="hover:bg-white/5 transition-colors border-white/5 cursor-pointer group"
+                    className="border-white/5 hover:bg-white/[0.02] cursor-pointer transition-colors"
                     onClick={() => setSelectedLog(log)}
                   >
-                    <TableCell className="text-[10px] opacity-50 font-mono">
-                      {format(new Date(log.created_at), 'HH:mm:ss', { locale: ptBR })}
+                    <TableCell className="p-4 text-[10px] font-mono text-white/40">
+                      {format(new Date(log.created_at), 'HH:mm:ss')}
                     </TableCell>
-                    <TableCell className="max-w-[150px] truncate">
-                      <div className="flex flex-col gap-0.5">
+                    <TableCell className="p-4">
+                      <div className="flex items-center gap-2 max-w-xs">
+                        {log.event_type === 'radar_discovery' ? (
+                           <Search size={10} className="text-kinetic-orange" />
+                        ) : (
+                           <Activity size={10} className="text-white/20" />
+                        )}
                         <span className="text-[10px] font-mono opacity-80 truncate" title={log.details?.url}>
                           {log.details?.url || 'N/A'}
                         </span>
-                        {log.details?.keyword && (
-                          <span className="text-[8px] font-black uppercase text-kinetic-orange/60 tracking-wider">Shopee Discovery</span>
-                        )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="p-4">
                       {getStatusBadge(log.status)}
                     </TableCell>
-                    <TableCell className="text-[11px] font-bold">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={log.status === 'filtered' ? 'text-yellow-500/80' : log.status === 'processing' ? 'text-blue-400' : 'text-white/70'}>
-                          {getEventDescription(log)}
-                        </span>
-                        <Info size={12} className="opacity-0 group-hover:opacity-40 transition-opacity flex-shrink-0" />
-                      </div>
+                    <TableCell className="p-4 text-[10px] font-bold text-white/60">
+                      {getEventDescription(log)}
                     </TableCell>
                   </TableRow>
                 ))
