@@ -105,7 +105,6 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
       </div>
 
       <div className="space-y-6">
-        {/* Multi-Keyword Section */}
         <div className="bg-deep-void rounded-2xl p-5 shadow-skeuo-pressed border border-white/5 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Nichos de produtos</span>
@@ -196,6 +195,9 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
                 <span className={cn("text-[9px] font-black uppercase tracking-widest", currentPreset === 'aggressive' ? "text-white" : "text-white/20")}>
                   Agressivo
                 </span>
+                <p className="text-[8px] text-center text-white/40 font-medium leading-tight">
+                  Envio constante.<br/>Ciclo de ~5 min.
+                </p>
               </button>
 
               <button
@@ -211,6 +213,9 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
                 <span className={cn("text-[9px] font-black uppercase tracking-widest", currentPreset === 'balanced' ? "text-white" : "text-white/20")}>
                   Balanceado
                 </span>
+                <p className="text-[8px] text-center text-white/40 font-medium leading-tight">
+                  Equilíbrio ideal.<br/>Ciclo de ~15 min.
+                </p>
               </button>
 
               <button
@@ -226,42 +231,15 @@ export function OriginBlock({ source, sourceName, onUpdate, canActivate = true, 
                 <span className={cn("text-[9px] font-black uppercase tracking-widest", currentPreset === 'conservative' ? "text-white" : "text-white/20")}>
                   Conservador
                 </span>
+                <p className="text-[8px] text-center text-white/40 font-medium leading-tight">
+                  Foco total em qualidade.<br/>Ciclo de ~30 min.
+                </p>
               </button>
             </div>
           </div>
         )}
 
-        {/* Advanced Config Toggle */}
-        {isRadar && (
-          <div className="pt-2">
-            <button 
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-white/20 hover:text-white/40 transition-colors"
-            >
-              {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              Configurações Avançadas
-            </button>
-            
-            {showAdvanced && (
-              <div className="mt-4 p-4 rounded-2xl bg-deep-void/50 border border-white/5 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold text-white/30 uppercase">ID da Fonte</span>
-                  <span className="text-[9px] font-mono text-white/20">{source.id}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold text-white/30 uppercase">Última Varredura</span>
-                  <span className="text-[9px] font-mono text-white/20">
-                    {source.last_restock_at ? new Date(source.last_restock_at).toLocaleTimeString() : 'Nunca'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold text-white/30 uppercase">Próxima Página</span>
-                  <span className="text-[9px] font-mono text-white/20">{source.discovery_page || 1}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+
 
         {!isRadar && (
           <div className="flex items-center justify-between px-1">
