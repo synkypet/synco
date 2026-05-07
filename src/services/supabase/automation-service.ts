@@ -360,31 +360,48 @@ export const automationService = {
         productMap = new Map(products.map(p => [p.id, p]));
       }
 
-      // 2. Buscar o status real do send_job via campaign_items (espelhando campanhas)
-      const { data: campaignItems } = await supabase
-        .from('campaign_items')
-        .select('id, product_id')
-        .in('product_id', productIds);
+      // 2. Buscar o status real do send_job via radar_discovered_products → send_jobs
+      // O dispatcher grava campaign_id diretamente em radar_discovered_products (linha 321 do dispatcher)
+      // Isso é mais confiável que ir via campaign_items.product_id que pode ser null por validação de UUID
+      const { data: rdpEntries } = await supabase
+        .from('radar_discovered_products')
+        .select('product_id, campaign_id')
+        .eq('source_id', sourceId)
+        .in('product_id', productIds)
+        .not('campaign_id', 'is', null)
+        .order('created_at', { ascending: false });
 
-      if (campaignItems && campaignItems.length > 0) {
-        const campaignItemIds = campaignItems.map(ci => ci.id);
+      if (rdpEntries && rdpEntries.length > 0) {
+        // Pegar o campaign_id mais recente por product_id
+        const productIdToCampaignId = new Map<string, string>();
+        for (const rdp of rdpEntries) {
+          if (rdp.product_id && rdp.campaign_id && !productIdToCampaignId.has(rdp.product_id)) {
+            productIdToCampaignId.set(rdp.product_id, rdp.campaign_id);
+          }
+        }
+
+        const campaignIds = [...new Set(productIdToCampaignId.values())] as string[];
 
         const { data: sendJobs } = await supabase
           .from('send_jobs')
-          .select('campaign_item_id, status')
-          .in('campaign_item_id', campaignItemIds)
+          .select('campaign_id, status')
+          .in('campaign_id', campaignIds)
           .order('created_at', { ascending: false });
 
         if (sendJobs) {
-          // Para cada productId, pegar o status mais recente (primeiro resultado = mais novo)
-          const itemIdToProductId = new Map(campaignItems.map(ci => [ci.id, ci.product_id]));
-          const seenProductIds = new Set<string>();
-
+          // Para cada campaignId, pegar o status mais recente
+          const campaignIdToStatus = new Map<string, string>();
           for (const job of sendJobs) {
-            const prodId = itemIdToProductId.get(job.campaign_item_id);
-            if (prodId && !seenProductIds.has(prodId)) {
-              sendStatusMap.set(prodId, job.status);
-              seenProductIds.add(prodId);
+            if (!campaignIdToStatus.has(job.campaign_id)) {
+              campaignIdToStatus.set(job.campaign_id, job.status);
+            }
+          }
+
+          // Mapear de volta: productId → status
+          for (const [productId, campaignId] of productIdToCampaignId.entries()) {
+            const jobStatus = campaignIdToStatus.get(campaignId);
+            if (jobStatus) {
+              sendStatusMap.set(productId, jobStatus);
             }
           }
         }

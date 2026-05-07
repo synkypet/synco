@@ -56,9 +56,9 @@ export function LogFeed({ logs, title, targetNames = {} }: LogFeedProps) {
   const getDeliveryStatusBadge = (sendStatus: string | null) => {
     switch (sendStatus) {
       case 'pending':
-        return <Badge className="bg-zinc-500/10 text-zinc-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><RefreshCw size={10} /> Na Fila</Badge>;
+        return <Badge className="bg-blue-500/10 text-blue-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><Clock size={10} /> Aguardando Envio</Badge>;
       case 'processing':
-        return <Badge className="bg-blue-500/10 text-blue-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><RefreshCw size={10} className="animate-spin" /> Enviando</Badge>;
+        return <Badge className="bg-kinetic-orange/10 text-kinetic-orange border-none font-black text-[9px] uppercase tracking-widest gap-1"><RefreshCw size={10} className="animate-spin" /> Processando</Badge>;
       case 'sent':
       case 'completed':
         return <Badge className="bg-emerald-500/10 text-emerald-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Enviado</Badge>;
@@ -70,7 +70,7 @@ export function LogFeed({ logs, title, targetNames = {} }: LogFeedProps) {
         return <Badge className="bg-zinc-600/10 text-zinc-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><XCircle size={10} /> Cancelado</Badge>;
       default:
         // Sem send_job ainda: produto foi descoberto mas ainda aguarda criação da campanha
-        return <Badge className="bg-zinc-700/20 text-zinc-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><Zap size={10} /> Descoberto</Badge>;
+        return <Badge className="bg-zinc-700/20 text-zinc-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><Zap size={10} /> Capturado</Badge>;
     }
   };
 
