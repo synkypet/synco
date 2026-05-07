@@ -178,6 +178,7 @@ export default function AutomationDetailPage() {
       <OriginBlock
         source={source}
         allGroups={allGroups || []}
+        targetNames={targetNames}
         onUpdate={(updates) => {
           // Se houver updates de automation_routes, usamos a mutation de rota
           if (updates.automation_routes && updates.automation_routes[0]) {

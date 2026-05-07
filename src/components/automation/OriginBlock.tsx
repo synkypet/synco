@@ -27,9 +27,10 @@ interface OriginBlockProps {
   source: AutomationSource;
   onUpdate: (updates: Partial<AutomationSource>) => void;
   allGroups?: any[];
+  targetNames?: Record<string, string>;
 }
 
-export function OriginBlock({ source, onUpdate, allGroups = [] }: OriginBlockProps) {
+export function OriginBlock({ source, onUpdate, allGroups = [], targetNames = {} }: OriginBlockProps) {
   const initialKeywords = (source.config?.keywords || []) as Keyword[];
   const config = source.config || {};
   const [localKeywords, setLocalKeywords] = useState<Keyword[]>(initialKeywords);
@@ -51,7 +52,7 @@ export function OriginBlock({ source, onUpdate, allGroups = [] }: OriginBlockPro
     onUpdate({ automation_routes: newRoutes });
   };
 
-  const currentOriginGroup = allGroups.find(g => g.external_id === source.external_group_id);
+  const currentOriginGroup = allGroups.find(g => g.remote_id === source.external_group_id);
 
   return (
     <TactileCard className="p-6 relative overflow-hidden">
@@ -230,16 +231,18 @@ export function OriginBlock({ source, onUpdate, allGroups = [] }: OriginBlockPro
                 </SelectTrigger>
                 <SelectContent className="bg-anthracite-surface border-white/10">
                   {allGroups.map((group) => (
-                    <SelectItem key={group.external_id} value={group.external_id} className="text-[10px] font-bold uppercase tracking-widest">
+                    <SelectItem key={group.id} value={group.remote_id || ''} className="text-[10px] font-bold uppercase tracking-widest">
                       {group.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <div className="flex items-center gap-3 px-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-kinetic-orange animate-pulse shadow-glow-orange" />
-                <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">
-                  Escutando mensagens de {currentOriginGroup?.name || 'nenhum grupo selecionado'}
+                <div className={`w-1.5 h-1.5 rounded-full ${currentOriginGroup ? 'bg-emerald-500 animate-pulse shadow-glow-emerald' : 'bg-kinetic-orange animate-pulse shadow-glow-orange'}`} />
+                <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">
+                  {currentOriginGroup 
+                    ? `Monitoramento Ativo: ${currentOriginGroup.name}` 
+                    : 'Aguardando seleção de grupo...'}
                 </p>
               </div>
             </div>
@@ -247,31 +250,32 @@ export function OriginBlock({ source, onUpdate, allGroups = [] }: OriginBlockPro
 
           {/* FLUXO (SETA) */}
           <div className="md:col-span-1 flex items-center justify-center">
-            <div className="w-12 h-12 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center shadow-skeuo-flat">
-               <Zap size={20} className="text-kinetic-orange animate-pulse" />
+            <div className="w-12 h-12 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center shadow-skeuo-flat relative">
+               <div className="absolute inset-0 bg-kinetic-orange/5 blur-xl rounded-full animate-pulse" />
+               <Zap size={20} className="text-kinetic-orange relative z-10 animate-pulse" />
             </div>
           </div>
 
           {/* DESTINO RESUMO */}
-          <div className="md:col-span-3 space-y-4 opacity-80">
+          <div className="md:col-span-3 space-y-4">
             <Label className="text-[9px] uppercase font-black tracking-widest text-white/30 flex items-center gap-2 px-1">
-              <Target size={12} className="text-emerald-400" /> Fluxo de Distribuição
+              <Target size={12} className="text-emerald-400" /> Fluxo de Distribuição (Destinos)
             </Label>
             <div className="p-6 rounded-[32px] bg-emerald-500/[0.02] border border-emerald-500/5 shadow-skeuo-flat flex flex-col items-center justify-center text-center min-h-[140px]">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-2">Destinos Configurados</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-3">Direcionando para:</p>
               <div className="flex flex-wrap justify-center gap-2">
                 {source.automation_routes?.length ? (
                   source.automation_routes.map((r, idx) => (
-                    <Badge key={idx} variant="outline" className="bg-emerald-500/5 border-emerald-500/10 text-[9px] font-black uppercase tracking-widest py-1">
-                       {r.target_type === 'group' ? 'Grupo' : 'Lista'}
+                    <Badge key={idx} variant="outline" className="bg-emerald-500/10 border-emerald-500/20 text-[9px] font-black uppercase tracking-widest py-1 px-3">
+                       {targetNames[r.id] || (r.target_type === 'group' ? 'Carregando Grupo...' : 'Carregando Lista...')}
                     </Badge>
                   ))
                 ) : (
-                  <span className="text-[9px] font-bold text-white/10 uppercase tracking-widest italic">Aguardando definição de destinos...</span>
+                  <span className="text-[9px] font-bold text-white/10 uppercase tracking-widest italic">Nenhum destino configurado abaixo...</span>
                 )}
               </div>
-              <p className="text-[8px] font-bold text-emerald-500/40 uppercase tracking-widest mt-4">
-                Configure os destinos detalhados abaixo
+              <p className="text-[8px] font-bold text-emerald-500/20 uppercase tracking-widest mt-4">
+                Pode ser alterado no painel abaixo
               </p>
             </div>
           </div>
