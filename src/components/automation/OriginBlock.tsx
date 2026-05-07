@@ -15,7 +15,8 @@ import {
   BarChart3, 
   Filter, 
   DollarSign, 
-  ShieldCheck
+  ShieldCheck,
+  BadgePercent
 } from 'lucide-react';
 import { KeywordManager, Keyword } from '@/components/automation/KeywordManager';
 import { SHOPEE_SORT_TYPE, SHOPEE_SORT_TYPE_LABELS } from '@/lib/constants/shopee';
@@ -103,30 +104,56 @@ export function OriginBlock({ source, onUpdate }: OriginBlockProps) {
             </Label>
           </div>
 
-          <div className="space-y-5 p-6 rounded-[24px] bg-deep-void/30 border border-white/5 shadow-skeuo-pressed">
-            {/* Estratégia de Busca */}
-            <div className="space-y-2.5">
-              <Label className="text-[8px] uppercase font-black text-white/20 ml-1 flex items-center gap-2">
-                <BarChart3 size={10} className="text-kinetic-orange" /> Estratégia de Busca
-              </Label>
-              <Select 
-                value={(config.sortType || SHOPEE_SORT_TYPE.RELEVANCE).toString()} 
-                onValueChange={(v) => handleUpdateConfig({ sortType: parseInt(v) })}
-              >
-                <SelectTrigger className="h-10 bg-deep-void border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-skeuo-pressed">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-anthracite-surface border-white/10">
-                  <SelectItem value={SHOPEE_SORT_TYPE.RELEVANCE.toString()} className="text-[9px] font-bold uppercase tracking-widest">{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.RELEVANCE]}</SelectItem>
-                  <SelectItem value={SHOPEE_SORT_TYPE.BEST_SELLERS.toString()} className="text-[9px] font-bold uppercase tracking-widest">{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.BEST_SELLERS]}</SelectItem>
-                  <SelectItem value={SHOPEE_SORT_TYPE.TOP_COMMISSION.toString()} className="text-[9px] font-bold uppercase tracking-widest">{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.TOP_COMMISSION]}</SelectItem>
-                  <SelectItem value={SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT.toString()} className="text-[9px] font-bold uppercase tracking-widest">{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT]}</SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="space-y-4 p-6 rounded-[24px] bg-deep-void/30 border border-white/5 shadow-skeuo-pressed">
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Estratégia de Busca */}
+              <div className="space-y-2">
+                <Label className="text-[8px] uppercase font-black text-white/20 ml-1 flex items-center gap-2">
+                  <BarChart3 size={10} className="text-kinetic-orange" /> Estratégia
+                </Label>
+                <Select 
+                  value={(config.sortType || SHOPEE_SORT_TYPE.RELEVANCE).toString()} 
+                  onValueChange={(v) => handleUpdateConfig({ sortType: parseInt(v) })}
+                >
+                  <SelectTrigger className="h-10 bg-deep-void border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-skeuo-pressed">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-anthracite-surface border-white/10">
+                    <SelectItem value={SHOPEE_SORT_TYPE.RELEVANCE.toString()} className="text-[9px] font-bold uppercase tracking-widest">{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.RELEVANCE]}</SelectItem>
+                    <SelectItem value={SHOPEE_SORT_TYPE.BEST_SELLERS.toString()} className="text-[9px] font-bold uppercase tracking-widest">{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.BEST_SELLERS]}</SelectItem>
+                    <SelectItem value={SHOPEE_SORT_TYPE.TOP_COMMISSION.toString()} className="text-[9px] font-bold uppercase tracking-widest">{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.TOP_COMMISSION]}</SelectItem>
+                    <SelectItem value={SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT.toString()} className="text-[9px] font-bold uppercase tracking-widest">{SHOPEE_SORT_TYPE_LABELS[SHOPEE_SORT_TYPE.HIGHEST_DISCOUNT]}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Desconto Mínimo (Readicionado como Select) */}
+              <div className="space-y-2">
+                <Label className="text-[8px] uppercase font-black text-white/20 ml-1 flex items-center gap-2">
+                  <BadgePercent size={10} className="text-emerald-500" /> Desconto Mín.
+                </Label>
+                <Select 
+                  value={(filters.min_discount_percent || 0).toString()} 
+                  onValueChange={(v) => handleUpdateFilters({ min_discount_percent: parseInt(v) })}
+                >
+                  <SelectTrigger className="h-10 bg-deep-void border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-skeuo-pressed">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-anthracite-surface border-white/10">
+                    <SelectItem value="0" className="text-[9px] font-bold uppercase tracking-widest">Qualquer</SelectItem>
+                    <SelectItem value="10" className="text-[9px] font-bold uppercase tracking-widest">10%+</SelectItem>
+                    <SelectItem value="20" className="text-[9px] font-bold uppercase tracking-widest">20%+</SelectItem>
+                    <SelectItem value="30" className="text-[9px] font-bold uppercase tracking-widest">30%+</SelectItem>
+                    <SelectItem value="50" className="text-[9px] font-bold uppercase tracking-widest">50%+</SelectItem>
+                    <SelectItem value="70" className="text-[9px] font-bold uppercase tracking-widest">70%+</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Faixa de Preço */}
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <Label className="text-[8px] uppercase font-black text-white/20 ml-1 flex items-center gap-2">
                  <DollarSign size={10} className="text-kinetic-orange" /> Faixa de Preço (R$)
               </Label>
@@ -155,7 +182,7 @@ export function OriginBlock({ source, onUpdate }: OriginBlockProps) {
             </div>
 
             {/* Toggles Compactos */}
-            <div className="pt-3 border-t border-white/5">
+            <div className="pt-2 border-t border-white/5">
                <div className="flex items-center justify-between p-3 rounded-xl bg-deep-void/40 border border-white/5 shadow-skeuo-pressed">
                   <div className="flex items-center gap-2.5">
                      <ShieldCheck size={14} className="text-emerald-500" />
