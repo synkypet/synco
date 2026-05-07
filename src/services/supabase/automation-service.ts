@@ -375,11 +375,11 @@ export const automationService = {
         const chunk = cleanProductIds.slice(i, i + CHUNK_SIZE);
         const { data: chunkData, error: chunkError } = await supabase
           .from('radar_discovered_products')
-          .select('product_id, campaign_id')
+          .select('product_id, campaign_id, discovered_at')
           .eq('source_id', sourceId)
           .in('product_id', chunk)
           .not('campaign_id', 'is', null)
-          .order('created_at', { ascending: false });
+          .order('discovered_at', { ascending: false }); // Corrigido para discovered_at
         
         if (chunkError) {
           console.error(`[GET-LOGS] [CHUNK-ERROR] RDP query failed for chunk ${i/CHUNK_SIZE}:`, chunkError);
@@ -389,7 +389,7 @@ export const automationService = {
       }
 
       if (rdpEntries.length > 0) {
-        // Pegar o campaign_id mais recente por product_id
+        // Pegar o campaign_id mais recente por product_id (rdpEntries já vem ordenado por discovered_at desc)
         const productIdToCampaignId = new Map<string, string>();
         for (const rdp of rdpEntries) {
           if (rdp.product_id && rdp.campaign_id && !productIdToCampaignId.has(rdp.product_id)) {
@@ -405,9 +405,8 @@ export const automationService = {
           const { data: sendJobs, error: jobsError } = await supabase
             .from('send_jobs')
             .select('campaign_id, status')
-            .in('campaign_id', chunk)
-            .order('created_at', { ascending: false });
-
+            .in('campaign_id', chunk); // Removido order desnecessário
+          
           if (jobsError) {
             console.error(`[GET-LOGS] [CHUNK-ERROR] SendJobs query failed for chunk ${i/CHUNK_SIZE}:`, jobsError);
             continue;
@@ -415,7 +414,9 @@ export const automationService = {
 
           if (sendJobs) {
             for (const job of sendJobs) {
-              if (!campaignIdToStatus.has(job.campaign_id)) {
+              // Em send_jobs, se houver múltiplos jobs para a mesma campanha, o status do processing ou sent prevalece
+              // Mas aqui como são automações 1:1 (1 produto por campanha normalmente), pegamos qualquer um
+              if (!campaignIdToStatus.has(job.campaign_id) || job.status === 'sent' || job.status === 'processing') {
                 campaignIdToStatus.set(job.campaign_id, job.status);
               }
             }
