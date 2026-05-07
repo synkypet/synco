@@ -31,7 +31,40 @@ export default function GruposPage() {
   };
 
   const handleSyncAll = async () => {
-    // ... (logic remains same)
+    if (!channels || channels.length === 0) {
+      toast.error('Nenhum canal de WhatsApp conectado para buscar grupos.');
+      return;
+    }
+
+    setIsSyncingAll(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      for (const channel of channels) {
+        if (channel.status !== 'active') continue;
+
+        try {
+          const res = await fetch('/api/wasender/groups/sync', {
+            method: 'POST',
+            body: JSON.stringify({ channel_id: channel.id })
+          });
+          if (res.ok) successCount++;
+          else failCount++;
+        } catch (err) {
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`${successCount} canal(ais) atualizado(s) com sucesso!`);
+        refetchGroups();
+      } else if (failCount > 0) {
+        toast.error('Não foi possível atualizar os grupos agora. Verifique sua conexão.');
+      }
+    } finally {
+      setIsSyncingAll(false);
+    }
   };
 
   const filteredGroups = groups?.filter(group => {
@@ -69,8 +102,7 @@ export default function GruposPage() {
               disabled={isSyncingAll || isLoadingChannels}
               className="gap-2 px-6 h-12"
             >
-              <RefreshCw size={18} className={isSyncingAll ? "animate-spin" : ""} />
-              Sincronizar Grupos
+              {isSyncingAll ? 'Buscando...' : 'Buscar grupos no WhatsApp'}
             </KineticButton>
           </div>
         }
@@ -86,12 +118,7 @@ export default function GruposPage() {
             onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
-        <KineticButton
-          onClick={() => refetchGroups()}
-          className="shrink-0 h-12 w-12 rounded-xl bg-white/5 border-none shadow-skeuo-flat"
-        >
-          <RefreshCw size={18} className={isLoading ? "animate-spin text-kinetic-orange" : "text-white/70"} />
-        </KineticButton>
+
       </div>
 
       {isLoading ? (
