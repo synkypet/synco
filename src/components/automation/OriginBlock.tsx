@@ -106,9 +106,6 @@ export function OriginBlock({ source, onUpdate }: OriginBlockProps) {
             />
           </div>
           
-          <p className="px-2 text-[9px] font-bold text-white/20 uppercase leading-relaxed tracking-wider">
-            O radar irá varrer a Shopee em busca dessas palavras-chave para encontrar ofertas factuais.
-          </p>
         </div>
 
         {/* COLUNA 2: RITMO E ESTRATÉGIA */}
