@@ -99,7 +99,7 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
             <span className="flex items-center gap-1">
               Pronto para ser enviado
               <Link 
-                href={`/campanhas/${details.campaignId}`}
+                href="/campanhas"
                 className="text-kinetic-orange hover:underline font-mono"
               >
                 (Ver Detalhes)
@@ -126,7 +126,7 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
           <span className="flex items-center gap-1">
             Job criado com sucesso 
             <Link 
-              href={`/campanhas/${details.campaignId}`}
+              href="/campanhas"
               className="text-kinetic-orange hover:underline font-mono"
             >
               ({details.campaignId?.substring(0, 8)})
