@@ -245,7 +245,18 @@ export const automationService = {
     const supabase = client || createClient();
     const { data, error } = await supabase
       .from('automation_sources')
-      .select('*')
+      .select(`
+        *,
+        automation_routes (
+          id,
+          target_type,
+          target_id,
+          template_id,
+          template_config,
+          filters,
+          is_active
+        )
+      `)
       .eq('id', id)
       .single();
 

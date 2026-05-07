@@ -97,7 +97,8 @@ export default function AutomacoesDashboardPage() {
   const [creationKeywords, setCreationKeywords] = useState<string[]>([]);
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
-  const [minCommission, setMinCommission] = useState('');
+  const [minDiscount, setMinDiscount] = useState('0');
+  const [onlyOfficialShops, setOnlyOfficialShops] = useState(false);
   const [shopeeSort, setShopeeSort] = useState(SHOPEE_SORT_TYPE.RELEVANCE.toString()); 
   const [shopeeList, setShopeeList] = useState(SHOPEE_LIST_TYPE.DEFAULT.toString());
   const [shopeeLimit, setShopeeLimit] = useState('10');
@@ -131,13 +132,15 @@ export default function AutomacoesDashboardPage() {
         keywords: creationKeywords.map(k => ({ term: k, weight: 1 })),
         sortType: parseInt(shopeeSort),
         listType: parseInt(shopeeList),
-        batchLimit: parseInt(shopeeLimit)
+        batchLimit: parseInt(shopeeLimit),
+        preset_type: 'custom'
       } : undefined,
-      // Passando filtros para a rota inicial
+      // Filtros alinhados com os campos reais lidos pelo discovery service
       filters: entryType === 'radar_offers' ? {
         min_price: minPrice ? parseFloat(minPrice) : undefined,
         max_price: maxPrice ? parseFloat(maxPrice) : undefined,
-        min_commission_value: minCommission ? parseFloat(minCommission) : undefined
+        min_discount_percent: parseInt(minDiscount) > 0 ? parseInt(minDiscount) : undefined,
+        only_official_stores: onlyOfficialShops || undefined
       } : undefined
     } as any); // Adicionando any para evitar erro de tipo se filters não estiver no DTO básico
 
@@ -361,8 +364,8 @@ export default function AutomacoesDashboardPage() {
                              <Input type="number" placeholder="0.00" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
                            </div>
                            <div className="space-y-2">
-                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Comissão Mín (R$)</Label>
-                             <Input type="number" placeholder="0.00" value={minCommission} onChange={(e) => setMinCommission(e.target.value)} />
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Preço Máx</Label>
+                             <Input type="number" placeholder="Sem limite" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
                            </div>
                            <div className="space-y-2">
                              <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Qtd/Ciclo</Label>
@@ -378,6 +381,50 @@ export default function AutomacoesDashboardPage() {
                                </SelectContent>
                              </Select>
                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Desconto Mín.</Label>
+                             <Select value={minDiscount} onValueChange={setMinDiscount}>
+                               <SelectTrigger>
+                                 <SelectValue />
+                               </SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="0">Qualquer</SelectItem>
+                                 <SelectItem value="10">10%+</SelectItem>
+                                 <SelectItem value="20">20%+</SelectItem>
+                                 <SelectItem value="30">30%+</SelectItem>
+                                 <SelectItem value="50">50%+</SelectItem>
+                                 <SelectItem value="70">70%+</SelectItem>
+                               </SelectContent>
+                             </Select>
+                           </div>
+                           <div className="space-y-2 flex flex-col justify-end">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Qtd/Ciclo</Label>
+                             <Select value={shopeeLimit} onValueChange={setShopeeLimit}>
+                               <SelectTrigger>
+                                 <SelectValue />
+                               </SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="3">3 itens</SelectItem>
+                                 <SelectItem value="5">5 itens</SelectItem>
+                                 <SelectItem value="10">10 itens</SelectItem>
+                                 <SelectItem value="20">20 itens</SelectItem>
+                               </SelectContent>
+                             </Select>
+                           </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
+                          <Label htmlFor="creation-official" className="text-[10px] uppercase font-black text-white/40 tracking-widest cursor-pointer">Apenas Lojas Oficiais</Label>
+                          <input
+                            id="creation-official"
+                            type="checkbox"
+                            checked={onlyOfficialShops}
+                            onChange={(e) => setOnlyOfficialShops(e.target.checked)}
+                            className="w-4 h-4 accent-orange-500 cursor-pointer"
+                          />
                         </div>
 
                         <div className="space-y-2">
