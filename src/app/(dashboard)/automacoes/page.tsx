@@ -63,6 +63,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { KeywordTagsInput } from '@/components/shared/KeywordTagsInput';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -386,15 +387,21 @@ export default function AutomacoesDashboardPage() {
                            </Select>
                         </div>
 
-                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
-                          <Label htmlFor="creation-official" className="text-[10px] uppercase font-black text-white/40 tracking-widest cursor-pointer">Apenas Lojas Oficiais</Label>
-                          <input
-                            id="creation-official"
-                            type="checkbox"
-                            checked={onlyOfficialShops}
-                            onChange={(e) => setOnlyOfficialShops(e.target.checked)}
-                            className="w-4 h-4 accent-orange-500 cursor-pointer"
-                          />
+                        <div className="pt-2 border-t border-white/5">
+                           <div className="flex items-center justify-between p-3 rounded-xl bg-deep-void/40 border border-white/5 shadow-skeuo-pressed">
+                              <div className="flex items-center gap-2.5">
+                                 <ShieldCheck size={14} className="text-emerald-500" />
+                                 <div className="flex flex-col">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-white/80 leading-none">Lojas Oficiais</span>
+                                    <span className="text-[7px] font-bold uppercase text-white/10 mt-0.5 tracking-tighter">Shopee Oficial / Indicado</span>
+                                 </div>
+                              </div>
+                              <Switch 
+                                checked={onlyOfficialShops} 
+                                onCheckedChange={setOnlyOfficialShops}
+                                className="scale-75"
+                              />
+                           </div>
                         </div>
 
                         <div className="space-y-2">
