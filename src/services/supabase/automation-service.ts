@@ -381,10 +381,7 @@ export const automationService = {
           .not('campaign_id', 'is', null)
           .order('discovered_at', { ascending: false }); // Corrigido para discovered_at
         
-        if (chunkError) {
-          console.error(`[GET-LOGS] [CHUNK-ERROR] RDP query failed for chunk ${i/CHUNK_SIZE}:`, chunkError);
-          continue;
-        }
+        if (chunkError) continue;
         if (chunkData) rdpEntries.push(...chunkData);
       }
 
@@ -407,15 +404,10 @@ export const automationService = {
             .select('campaign_id, status')
             .in('campaign_id', chunk); // Removido order desnecessário
           
-          if (jobsError) {
-            console.error(`[GET-LOGS] [CHUNK-ERROR] SendJobs query failed for chunk ${i/CHUNK_SIZE}:`, jobsError);
-            continue;
-          }
+          if (jobsError) continue;
 
           if (sendJobs) {
             for (const job of sendJobs) {
-              // Em send_jobs, se houver múltiplos jobs para a mesma campanha, o status do processing ou sent prevalece
-              // Mas aqui como são automações 1:1 (1 produto por campanha normalmente), pegamos qualquer um
               if (!campaignIdToStatus.has(job.campaign_id) || job.status === 'sent' || job.status === 'processing') {
                 campaignIdToStatus.set(job.campaign_id, job.status);
               }

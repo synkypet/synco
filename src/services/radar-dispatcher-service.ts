@@ -312,7 +312,6 @@ export const radarDispatcherService = {
 
             const campaign = await campaignService.create(source.user_id, campaignData, supabase);
             
-            // F. Marcar Vínculo como Despachado (Consumo)
             await supabase
               .from('radar_discovered_products')
               .update({ 
@@ -334,8 +333,6 @@ export const radarDispatcherService = {
               commission_value: product.commission_value,
               title: product.name
             });
-
-            console.log(`${sourceLogPrefix} [MARKED-DISPATCHED] Vínculo ${product.rdp_id} consumido com sucesso.`);
 
             await automationService.logEvent({
               source_id: source.id,
