@@ -228,24 +228,6 @@ export default function AutomationDetailPage() {
         </div>
       </div>
 
-      {source.source_type === 'radar_offers' && (
-        <div className="animate-in slide-in-from-bottom-4 duration-500 delay-150">
-          <div className="mb-4">
-            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 ml-1">Observabilidade do Radar de Produtos</h4>
-          </div>
-          <RadarActivityFeed sourceId={id} />
-        </div>
-      )}
-
-      <div className="animate-in slide-in-from-bottom-4 duration-500 delay-200">
-        <AutomationAuditTrail 
-          campaigns={recentCampaigns || []} 
-          isLoading={loadingRecent} 
-        />
-      </div>
-
-
-
       <div className="space-y-8 opacity-40">
         <LogFeed logs={logs || []} title="Atividade Técnica do Sistema" />
         <DeliveryBanner />
