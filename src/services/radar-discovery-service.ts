@@ -268,7 +268,7 @@ export const radarDiscoveryService = {
             for (const p of rawProducts) {
               const url = p.productLink || p.offerLink;
               
-              // 1. PRE-FILTER (Validação básica)
+              // 1. PRE-FILTER (Validação básica e Filtros do Usuário)
               if (!p.name || !p.imageUrl || !p.currentPriceFactual || p.currentPriceFactual <= 0 || !p.commissionRate) {
                 kwValidationSkipped++;
                 logActivity(supabase, {
@@ -280,6 +280,36 @@ export const radarDiscoveryService = {
                   discard_reason: 'Incomplete metadata',
                   page: s.discovery_page
                 });
+                continue;
+              }
+
+              // APLICAÇÃO DE FILTROS REAIS (NOVO)
+              const commPercent = Math.round((p.commissionRate || 0) * 100);
+              const discPercent = p.discountPercent || 0;
+              const hasCoupon = !!(p.coupon || p.offerLink?.includes('coupon'));
+
+              if (firstRouteFilters.min_price && p.currentPriceFactual < firstRouteFilters.min_price) {
+                kwValidationSkipped++;
+                continue;
+              }
+              if (firstRouteFilters.max_price && p.currentPriceFactual > firstRouteFilters.max_price) {
+                kwValidationSkipped++;
+                continue;
+              }
+              if (firstRouteFilters.min_commission_rate && commPercent < firstRouteFilters.min_commission_rate) {
+                kwValidationSkipped++;
+                continue;
+              }
+              if (firstRouteFilters.min_discount_percent && discPercent < firstRouteFilters.min_discount_percent) {
+                kwValidationSkipped++;
+                continue;
+              }
+              if (firstRouteFilters.only_official_stores && !p.officialStore) {
+                kwValidationSkipped++;
+                continue;
+              }
+              if (firstRouteFilters.only_coupons && !hasCoupon) {
+                kwValidationSkipped++;
                 continue;
               }
 
