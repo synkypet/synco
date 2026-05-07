@@ -178,8 +178,8 @@ export const radarDiscoveryService = {
       try {
         tasksExecuted++;
         
-        // 1. Preparar Keywords (Utility Centralizada)
-        let keywords = normalizeKeywords(config);
+        // 1. Preparar Keywords (Limitando a 5 para performance operacional)
+        let keywords = normalizeKeywords(config).slice(0, 5);
 
         // 2. Ordenação por Uso (Rotação)
         keywords = [...keywords].sort((a, b) => {

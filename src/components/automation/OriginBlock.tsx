@@ -102,7 +102,7 @@ export function OriginBlock({ source, onUpdate }: OriginBlockProps) {
                 setLocalKeywords(k);
                 onUpdate({ config: { ...config, keywords: k as any } });
               }}
-              maxKeywords={8}
+              maxKeywords={5}
             />
           </div>
           
