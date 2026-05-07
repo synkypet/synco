@@ -43,7 +43,14 @@ export function CampaignProductsDrawer({ offer, onClose }: CampaignProductsDrawe
           <div className="flex items-center gap-4">
             {offer?.imageUrl ? (
               <div className="relative w-16 h-16 rounded-xl overflow-hidden shadow-skeuo-flat shrink-0 border border-white/5">
-                <Image src={offer.imageUrl} alt={keyword || ''} fill className="object-cover" unoptimized />
+                <Image 
+                  src={offer.imageUrl} 
+                  alt={keyword || ''} 
+                  fill 
+                  sizes="(max-width: 768px) 100vw, 300px"
+                  className="object-cover" 
+                  unoptimized 
+                />
               </div>
             ) : (
               <div className="w-16 h-16 rounded-xl bg-white/5 flex items-center justify-center shrink-0 border border-white/5">
@@ -116,7 +123,14 @@ export function CampaignProductsDrawer({ offer, onClose }: CampaignProductsDrawe
                     <TactileCard key={`${product.productName}-${idx}`} className="p-3 flex gap-3 h-full hover:border-kinetic-orange/20 transition-colors group">
                       <div className="relative w-24 h-24 rounded-xl overflow-hidden shrink-0 bg-white/5 border border-white/5">
                         {product.imageUrl ? (
-                          <Image src={product.imageUrl} alt={product.productName || ''} fill className="object-cover group-hover:scale-105 transition-transform" unoptimized />
+                          <Image 
+                            src={product.imageUrl} 
+                            alt={product.productName || ''} 
+                            fill 
+                            sizes="(max-width: 768px) 100vw, 300px"
+                            className="object-cover group-hover:scale-105 transition-transform" 
+                            unoptimized 
+                          />
                         ) : (
                           <ShoppingBag className="absolute inset-0 m-auto text-white/10" size={24} />
                         )}

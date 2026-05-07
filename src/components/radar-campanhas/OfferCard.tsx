@@ -61,6 +61,7 @@ export function OfferCard({ offer, onClick }: OfferCardProps) {
             src={offer.imageUrl}
             alt={offer.offerName}
             fill
+            sizes="(max-width: 768px) 100vw, 400px"
             className="object-cover group-hover:scale-105 transition-transform duration-700"
             unoptimized
           />
