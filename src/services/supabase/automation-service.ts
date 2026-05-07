@@ -18,7 +18,7 @@ export const automationService = {
    */
   async listSources(userId: string, client?: SupabaseClient): Promise<AutomationSource[]> {
     const supabase = client || createClient();
-    const { data, error } = await supabase
+    const { data: sources, error } = await supabase
       .from('automation_sources')
       .select(`
         *,
@@ -27,10 +27,7 @@ export const automationService = {
           target_type,
           target_id,
           template_id,
-          template_config,
-          message_templates (
-            name
-          )
+          template_config
         )
       `)
       .eq('user_id', userId)
@@ -40,7 +37,34 @@ export const automationService = {
       console.error('Error listing automation sources:', error);
       return [];
     }
-    return data || [];
+
+    if (!sources) return [];
+
+    // 2. Buscar nomes dos templates manualmente (Evita erro PGRST200 por falta de FK explícita)
+    const templateIds = (sources as AutomationSource[])
+      .flatMap(s => s.automation_routes || [])
+      .map(r => r.template_id)
+      .filter(Boolean) as string[];
+
+    if (templateIds.length > 0) {
+      const { data: templates } = await supabase
+        .from('message_templates')
+        .select('id, name')
+        .in('id', templateIds);
+        
+      if (templates) {
+        sources.forEach(s => {
+          s.automation_routes?.forEach((r: any) => {
+            if (r.template_id) {
+              const t = templates.find(tpl => tpl.id === r.template_id);
+              if (t) (r as any).message_templates = { name: t.name };
+            }
+          });
+        });
+      }
+    }
+
+    return sources || [];
   },
 
   /**
