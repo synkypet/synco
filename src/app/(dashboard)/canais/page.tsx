@@ -103,8 +103,8 @@ export default function CanaisPage() {
         </div>
       ) : isError ? (
         <div className="p-12 text-center bg-red-500/5 rounded-[40px] shadow-skeuo-pressed">
-          <p className="text-red-500 font-black uppercase tracking-widest text-sm italic">Erro crítico de carregamento</p>
-          <p className="text-white/20 text-xs mt-1">Não foi possível sincronizar os canais com o Supabase.</p>
+          <p className="text-red-500 font-black uppercase tracking-widest text-sm italic">Houve um problema ao carregar</p>
+          <p className="text-white/20 text-xs mt-1">Não foi possível carregar seus canais agora.</p>
           <KineticButton onClick={() => refetch()} className="text-kinetic-orange mt-4 uppercase font-bold text-[10px] tracking-widest bg-transparent shadow-none">Tentar novamente</KineticButton>
         </div>
       ) : (

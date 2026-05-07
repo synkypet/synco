@@ -74,7 +74,35 @@ export function ChannelDialog({
         phoneNumber: initialData?.config?.phoneNumber || '',
       },
     });
-  
+    const [isDuplicate, setIsDuplicate] = React.useState(false);
+    const [isChecking, setIsChecking] = React.useState(false);
+
+    const checkDuplicate = async (number: string) => {
+      if (!number || number.length < 8) return;
+      setIsChecking(true);
+      try {
+        const url = `/api/channels/check-duplicate?phoneNumber=${encodeURIComponent(number)}${initialData ? `&excludeId=${initialData.id}` : ''}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        setIsDuplicate(data.exists);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsChecking(false);
+      }
+    };
+
+    const phoneNumber = form.watch('phoneNumber');
+    React.useEffect(() => {
+      const timer = setTimeout(() => {
+        if (phoneNumber && phoneNumber.length >= 8) {
+          checkDuplicate(phoneNumber);
+        } else {
+          setIsDuplicate(false);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }, [phoneNumber]);
     React.useEffect(() => {
       if (isOpen) {
         if (initialData) {
@@ -99,9 +127,9 @@ export function ChannelDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{initialData ? 'Editar Canal' : 'Criar Novo Canal'}</DialogTitle>
+          <DialogTitle>{initialData ? 'Configurações do Canal' : 'Novo Canal'}</DialogTitle>
           <DialogDescription>
-            Canais são as plataformas onde você publica suas ofertas.
+            Conecte seu WhatsApp para enviar ofertas para seus grupos.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -132,8 +160,8 @@ export function ChannelDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="whatsapp">WhatsApp (Wasender)</SelectItem>
-                      <SelectItem value="telegram">Telegram (Bot / User)</SelectItem>
+                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                      <SelectItem value="telegram">Telegram</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -154,6 +182,11 @@ export function ChannelDialog({
                     <FormDescription>
                       Número completo com DDI (Ex: +55).
                     </FormDescription>
+                    {isDuplicate && (
+                      <p className="text-[10px] font-black uppercase text-red-500 mt-1 italic animate-pulse">
+                        Este número já está sendo utilizado em outra conexão.
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -165,7 +198,7 @@ export function ChannelDialog({
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Descrição Operacional (Opcional)</FormLabel>
+                  <FormLabel>Descrição (Opcional)</FormLabel>
                   <FormControl>
                     <Input placeholder="Ex: Canal principal de promoções da tarde" {...field} />
                   </FormControl>
@@ -177,8 +210,8 @@ export function ChannelDialog({
               <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting} className="min-w-[100px]">
-                {isSubmitting ? 'Salvando...' : 'Salvar Canal'}
+              <Button type="submit" disabled={isSubmitting || isDuplicate || isChecking} className="min-w-[100px]">
+                {isChecking ? 'Verificando...' : isSubmitting ? 'Salvando...' : 'Salvar Canal'}
               </Button>
             </DialogFooter>
           </form>

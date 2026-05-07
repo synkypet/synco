@@ -61,14 +61,14 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
        
        toast.success(data.message);
     } catch (e: any) {
-       toast.error(`Falha ao sincronizar: ${e.message}`);
+       toast.error(`Falha ao atualizar grupos: ${e.message}`);
     } finally {
        setIsSyncingId(null);
     }
   };
 
   const handleDisconnect = (channel: Channel) => {
-    if (window.confirm(`Deseja realmente desconectar o WhatsApp do canal "${channel.name}"? As configurações locais serão mantidas.`)) {
+    if (window.confirm(`Deseja desconectar este WhatsApp do canal "${channel.name}"?`)) {
       disconnectChannel.mutate({ id: channel.id, user_id: user?.id as string });
     }
   };
@@ -88,14 +88,14 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
         case 'need_scan': return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-none font-black text-[9px] uppercase tracking-widest"><QrCode size={10} className="mr-1.5 text-kinetic-orange" /> Escanear QR</Badge>;
         case 'disconnected': return <Badge variant="outline" className="bg-white/5 text-white/40 border-none font-black text-[9px] uppercase tracking-widest"><PhoneOff size={10} className="mr-1.5" /> Desconectado</Badge>;
         case 'logged_out': 
-        case 'expired': return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-none font-black text-[9px] uppercase tracking-widest"><AlertCircle size={10} className="mr-1.5" /> Log-out / Expirado</Badge>;
-        default: return <Badge variant="outline" className="bg-white/5 text-white/40 border-none font-black text-[9px] uppercase tracking-widest">Sem Instância</Badge>;
+        case 'expired': return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-none font-black text-[9px] uppercase tracking-widest"><AlertCircle size={10} className="mr-1.5" /> WhatsApp Desconectado</Badge>;
+        default: return <Badge variant="outline" className="bg-white/5 text-white/40 border-none font-black text-[9px] uppercase tracking-widest">Não configurado</Badge>;
       }
     } else if (channel.type === 'telegram') {
       if (status === 'connected') {
         return <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-none font-black text-[9px] uppercase tracking-widest"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 mr-2 shrink-0 animate-pulse" /> Conectado</Badge>;
       }
-      return <Badge variant="outline" className="bg-white/5 text-white/40 border-none font-black text-[9px] uppercase tracking-widest">Sem Bot Token</Badge>;
+      return <Badge variant="outline" className="bg-white/5 text-white/40 border-none font-black text-[9px] uppercase tracking-widest">Token não informado</Badge>;
     }
     return null;
   };
@@ -141,7 +141,7 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
                       </h3>
                       <div className="flex items-center gap-2 mt-2">
                           <Badge variant="outline" className="text-[9px] font-black uppercase bg-white/5 border-none text-white/30 h-4 tracking-widest leading-none shadow-skeuo-flat">
-                           {isWhatsApp ? 'Módulo WhatsApp' : 'Protocolo Telegram'}
+                           {isWhatsApp ? 'WhatsApp' : 'Telegram'}
                          </Badge>
                       </div>
                     </div>
@@ -167,7 +167,7 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
                           onClick={() => onDelete(channel)} 
                           className="text-red-600 focus:text-red-400 focus:bg-red-500/10 gap-2 cursor-pointer text-[10px] font-bold uppercase tracking-widest"
                         >
-                          <Trash2 size={14} /> EXCLUIR INSTÂNCIA (REMOVER REMOTAMENTE)
+                          <Trash2 size={14} /> REMOVER CANAL
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -193,7 +193,7 @@ export function ChannelList({ channels, onEdit, onDelete }: ChannelListProps) {
                         className={`h-11 px-6 rounded-2xl font-headline text-[10px] font-black uppercase tracking-widest italic flex gap-3 ${!isConnected ? 'opacity-20 grayscale grayscale cursor-not-allowed grayscale' : ''}`}
                       >
                          <RefreshCw size={14} className={isSyncingId === channel.id ? "animate-spin" : ""} /> 
-                         Sincronizar Malha
+                         Buscar grupos no WhatsApp
                       </KineticButton>
                     ) : (
                       <div className="flex items-center gap-2 text-white/10">
