@@ -38,21 +38,37 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
 
   // Status técnico interno do log de automação
   const getStatusBadge = (status: string) => {
+    if (isMonitor) {
+      switch (status) {
+        case 'processing':
+          return <Badge className="bg-blue-500/10 text-blue-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><RefreshCw size={10} className="animate-spin" /> Aguardando</Badge>;
+        case 'processed':
+          return <Badge className="bg-emerald-500/10 text-emerald-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Sucesso</Badge>;
+        case 'filtered':
+          return <Badge className="bg-amber-500/10 text-amber-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Pulado</Badge>;
+        case 'error':
+          return <Badge className="bg-red-500/10 text-red-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><XCircle size={10} /> Falha</Badge>;
+        default:
+          return <Badge className="bg-muted text-muted-foreground border-none font-black text-[9px] uppercase tracking-widest">Iniciado</Badge>;
+      }
+    }
+
+    // LINGUAGEM RADAR (ORIGINAL - NÃO MEXER)
     switch (status) {
       case 'processing':
-        return <Badge className="bg-blue-500/10 text-blue-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><RefreshCw size={10} className="animate-spin" /> Aguardando</Badge>;
+        return <Badge className="bg-blue-500/10 text-blue-500 border-none font-bold text-[9px] uppercase tracking-widest gap-1.5 py-1"><RefreshCw size={10} className="animate-spin" /> PROCESSANDO</Badge>;
       case 'processed':
-        return <Badge className="bg-emerald-500/10 text-emerald-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Sucesso</Badge>;
+        return <Badge className="bg-emerald-500/10 text-emerald-500 border-none font-bold text-[9px] uppercase tracking-widest gap-1.5 py-1"><CheckCircle2 size={10} /> ENVIADO</Badge>;
       case 'captured':
-        return <Badge className="bg-kinetic-orange/10 text-kinetic-orange border-none font-black text-[9px] uppercase tracking-widest gap-1"><Zap size={10} /> Capturado</Badge>;
+        return <Badge className="bg-kinetic-orange/10 text-kinetic-orange border-none font-bold text-[9px] uppercase tracking-widest gap-1.5 py-1"><Zap size={10} /> CAPTURADO</Badge>;
       case 'finished':
-        return <Badge className="bg-zinc-500/10 text-zinc-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Finalizado</Badge>;
+        return <Badge className="bg-zinc-500/10 text-zinc-500 border-none font-bold text-[9px] uppercase tracking-widest gap-1.5 py-1"><CheckCircle2 size={10} /> FINALIZADO</Badge>;
       case 'filtered':
-        return <Badge className="bg-amber-500/10 text-amber-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Pulado</Badge>;
+        return <Badge className="bg-yellow-500/10 text-yellow-500 border-none font-bold text-[9px] uppercase tracking-widest gap-1.5 py-1"><AlertCircle size={10} /> FILTRADO</Badge>;
       case 'error':
-        return <Badge className="bg-red-500/10 text-red-500 border-none font-black text-[9px] uppercase tracking-widest gap-1"><XCircle size={10} /> Falha</Badge>;
+        return <Badge className="bg-red-500/10 text-red-500 border-none font-bold text-[9px] uppercase tracking-widest gap-1.5 py-1"><AlertCircle size={10} /> ERRO</Badge>;
       default:
-        return <Badge className="bg-muted text-muted-foreground border-none font-black text-[9px] uppercase tracking-widest">Iniciado</Badge>;
+        return <Badge className="bg-muted text-muted-foreground border-none font-bold text-[9px] uppercase tracking-widest">INICIADO</Badge>;
     }
   };
 
@@ -60,47 +76,69 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
   const getDeliveryStatusBadge = (sendStatus: string | null) => {
     switch (sendStatus) {
       case 'pending':
-        return <Badge className="bg-blue-500/10 text-blue-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><Clock size={10} /> Aguardando Envio</Badge>;
-      case 'processing':
-        return <Badge className="bg-kinetic-orange/10 text-kinetic-orange border-none font-black text-[9px] uppercase tracking-widest gap-1"><RefreshCw size={10} className="animate-spin" /> Processando</Badge>;
+        return <Badge className="bg-blue-500/10 text-blue-400 border-none font-black text-[8px] uppercase tracking-widest gap-1 px-2 py-0.5"><Clock size={10} /> Na Fila</Badge>;
       case 'sent':
       case 'completed':
-        return <Badge className="bg-emerald-500/10 text-emerald-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Enviado</Badge>;
+        return <Badge className="bg-emerald-500/10 text-emerald-400 border-none font-black text-[8px] uppercase tracking-widest gap-1 px-2 py-0.5"><CheckCircle2 size={10} /> Entregue</Badge>;
       case 'failed':
-        return <Badge className="bg-red-500/10 text-red-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Falhou</Badge>;
-        return (
-          <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[8px] font-black uppercase tracking-widest px-2 py-0.5">
-            Na Fila
-          </Badge>
-        );
+        return <Badge className="bg-red-500/10 text-red-400 border-none font-black text-[8px] uppercase tracking-widest gap-1 px-2 py-0.5"><AlertCircle size={10} /> Falhou</Badge>;
       default: return null;
     }
   };
 
   const getEventDescription = (log: any) => {
     const { event_type, details } = log;
+    
+    // Se for Monitoramento, usa linguagem humana
+    if (isMonitor) {
+      switch (event_type) {
+        case 'radar_discovery': return details?.message || 'Procurando novos produtos...';
+        case 'radar_dispatch': return 'Produto preparado para envio';
+        case 'job_created': 
+          return (
+            <span className="flex items-center gap-1">
+              Pronto para ser enviado
+              <Link 
+                href={`/campanhas/${details.campaignId}`}
+                className="text-kinetic-orange hover:underline font-mono"
+              >
+                (Ver Detalhes)
+              </Link>
+            </span>
+          );
+        case 'no_routes': return 'Nenhum lugar definido para enviar';
+        case 'ingest_dedupe': return 'Este produto já foi visto antes';
+        case 'dest_dedupe': return 'Já enviamos este produto para este grupo';
+        case 'rule_rejected': return 'Não atende aos seus filtros (preço ou comissão)';
+        case 'anti_loop': return 'Evitando enviar para o mesmo grupo de origem';
+        case 'fetch_failed': return 'Não conseguimos ler as informações do produto';
+        case 'operational_lock': return 'Aguardando tempo de segurança para o próximo envio';
+        default: return event_type;
+      }
+    }
+
+    // LINGUAGEM RADAR (ORIGINAL - NÃO MEXER)
     switch (event_type) {
-      case 'radar_discovery': return details?.message || 'Procurando novos produtos...';
-      case 'radar_dispatch': return 'Produto preparado para envio';
+      case 'radar_discovery': return details?.message || 'Busca autônoma realizada';
+      case 'radar_dispatch': return 'Produto enviado para o grupo';
       case 'job_created': 
         return (
           <span className="flex items-center gap-1">
-            Pronto para ser enviado
+            Job criado com sucesso 
             <Link 
               href={`/campanhas/${details.campaignId}`}
               className="text-kinetic-orange hover:underline font-mono"
             >
-              (Ver Detalhes)
+              ({details.campaignId?.substring(0, 8)})
             </Link>
           </span>
         );
-      case 'no_routes': return 'Nenhum lugar definido para enviar';
-      case 'ingest_dedupe': return 'Este produto já foi visto antes';
-      case 'dest_dedupe': return 'Já enviamos este produto para este grupo';
-      case 'rule_rejected': return 'Não atende aos seus filtros (preço ou comissão)';
-      case 'anti_loop': return 'Evitando enviar para o mesmo grupo de origem';
-      case 'fetch_failed': return 'Não conseguimos ler as informações do produto';
-      case 'operational_lock': return 'Aguardando tempo de segurança para o próximo envio';
+      case 'no_routes': return 'Nenhuma rota de destino configurada';
+      case 'ingest_dedupe': return 'Link já processado recentemente (Dedupe Camada 1)';
+      case 'dest_dedupe': return 'Link já enviado para este destino (Dedupe Camada 2)';
+      case 'rule_rejected': return 'Rejeitado por filtros (Preço/Comissão/Keyword)';
+      case 'anti_loop': return 'Bloqueado: Origem coincide com Destino';
+      case 'fetch_failed': return 'Falha ao buscar metadados do produto';
       default: return event_type;
     }
   };
@@ -116,9 +154,9 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
           <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
             <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 flex items-center gap-2">
               <CheckCircle2 size={14} className="text-emerald-500" />
-              Últimos Produtos Encaminhados
+              {isMonitor ? 'Últimos Produtos Encaminhados' : 'Produtos Enviados'}
             </h3>
-            <span className="text-[9px] text-white/20 font-black uppercase tracking-widest">{dispatchLogs.length} sucessos</span>
+            <span className="text-[9px] text-white/20 font-black uppercase tracking-widest">{dispatchLogs.length} {isMonitor ? 'sucessos' : 'envios'}</span>
           </div>
           <div className="divide-y divide-white/[0.03]">
             {dispatchLogs.map((log) => {
@@ -155,7 +193,7 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
                       )}
                       {p?.commission_value > 0 && (
                         <span className="text-[9px] font-black text-kinetic-orange/70 uppercase tracking-wide">
-                          Lucro: R$ {p.commission_value.toFixed(2)}
+                          {isMonitor ? 'Lucro' : 'Comis'}: R$ {p.commission_value.toFixed(2)}
                         </span>
                       )}
                       {p?.opportunity_score > 0 && (
@@ -166,9 +204,9 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
                     </div>
                     <div className="flex items-center gap-2">
                       <MapPin size={9} className="text-white/20 flex-shrink-0" />
-                      <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider truncate">Enviado para: {destName}</span>
+                      <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider truncate">{isMonitor ? `Enviado para: ${destName}` : destName}</span>
                       <span className="text-[8px] text-white/10 font-mono ml-auto flex-shrink-0">
-                        há {formatDistanceToNow(new Date(log.created_at), { locale: ptBR })}
+                        {isMonitor ? `há ${formatDistanceToNow(new Date(log.created_at), { locale: ptBR })}` : formatDistanceToNow(new Date(log.created_at), { locale: ptBR, addSuffix: true })}
                       </span>
                     </div>
                   </div>
@@ -199,19 +237,19 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
         <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 flex items-center gap-2">
             <IconHeader size={14} className="text-kinetic-orange" />
-            {title || 'O que o sistema está fazendo agora'}
+            {title}
           </h3>
-          <span className="text-[9px] opacity-50 font-mono italic">Atualiza sozinho</span>
+          <span className="text-[9px] opacity-50 font-mono italic">{isMonitor ? 'Atualiza sozinho' : 'Atualiza automaticamente'}</span>
         </div>
 
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-white/5 border-none hover:bg-transparent">
-                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4">Horário</TableHead>
-                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4 w-1/3">O que foi encontrado?</TableHead>
-                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4">Resultado</TableHead>
-                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4">O que aconteceu?</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4">{isMonitor ? 'Horário' : 'Hora'}</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4 w-1/3">{isMonitor ? 'O que foi encontrado?' : 'Link / Busca'}</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4">{isMonitor ? 'Resultado' : 'Status'}</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-white/30 h-10 px-4">{isMonitor ? 'O que aconteceu?' : 'Decisão / Motivo'}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -255,7 +293,9 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
             </TableBody>
           </Table>
         </div>
-      </TactileCard>
+    </div>
+  );
+}
 
       {/* Modal de Auditoria Detalhada */}
       <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>
