@@ -358,7 +358,7 @@ export default function AutomacoesDashboardPage() {
                            </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 gap-3">
                            <div className="space-y-2">
                              <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Preço Mín</Label>
                              <Input type="number" placeholder="0.00" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
@@ -367,53 +367,23 @@ export default function AutomacoesDashboardPage() {
                              <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Preço Máx</Label>
                              <Input type="number" placeholder="Sem limite" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
                            </div>
-                           <div className="space-y-2">
-                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Qtd/Ciclo</Label>
-                             <Select value={shopeeLimit} onValueChange={setShopeeLimit}>
-                               <SelectTrigger>
-                                 <SelectValue />
-                               </SelectTrigger>
-                               <SelectContent>
-                                 <SelectItem value="3">3 itens</SelectItem>
-                                 <SelectItem value="5">5 itens</SelectItem>
-                                 <SelectItem value="10">10 itens</SelectItem>
-                                 <SelectItem value="20">20 itens</SelectItem>
-                               </SelectContent>
-                             </Select>
-                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                           <div className="space-y-2">
-                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Desconto Mín.</Label>
-                             <Select value={minDiscount} onValueChange={setMinDiscount}>
-                               <SelectTrigger>
-                                 <SelectValue />
-                               </SelectTrigger>
-                               <SelectContent>
-                                 <SelectItem value="0">Qualquer</SelectItem>
-                                 <SelectItem value="10">10%+</SelectItem>
-                                 <SelectItem value="20">20%+</SelectItem>
-                                 <SelectItem value="30">30%+</SelectItem>
-                                 <SelectItem value="50">50%+</SelectItem>
-                                 <SelectItem value="70">70%+</SelectItem>
-                               </SelectContent>
-                             </Select>
-                           </div>
-                           <div className="space-y-2 flex flex-col justify-end">
-                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Qtd/Ciclo</Label>
-                             <Select value={shopeeLimit} onValueChange={setShopeeLimit}>
-                               <SelectTrigger>
-                                 <SelectValue />
-                               </SelectTrigger>
-                               <SelectContent>
-                                 <SelectItem value="3">3 itens</SelectItem>
-                                 <SelectItem value="5">5 itens</SelectItem>
-                                 <SelectItem value="10">10 itens</SelectItem>
-                                 <SelectItem value="20">20 itens</SelectItem>
-                               </SelectContent>
-                             </Select>
-                           </div>
+                        <div className="space-y-2">
+                           <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Desconto Mín.</Label>
+                           <Select value={minDiscount} onValueChange={setMinDiscount}>
+                             <SelectTrigger>
+                               <SelectValue />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="0">Qualquer</SelectItem>
+                               <SelectItem value="10">10%+</SelectItem>
+                               <SelectItem value="20">20%+</SelectItem>
+                               <SelectItem value="30">30%+</SelectItem>
+                               <SelectItem value="50">50%+</SelectItem>
+                               <SelectItem value="70">70%+</SelectItem>
+                             </SelectContent>
+                           </Select>
                         </div>
 
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
