@@ -13,7 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, XCircle, AlertCircle, Search, ExternalLink, Info, RefreshCw, Zap, Tag, MapPin, Clock, Activity } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle, Search, ExternalLink, Info, RefreshCw, Zap, Tag, MapPin, Clock, Activity, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import {
   Dialog,
@@ -68,11 +68,6 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
         return <Badge className="bg-emerald-500/10 text-emerald-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><CheckCircle2 size={10} /> Enviado</Badge>;
       case 'failed':
         return <Badge className="bg-red-500/10 text-red-400 border-none font-black text-[9px] uppercase tracking-widest gap-1"><AlertCircle size={10} /> Falhou</Badge>;
-        return (
-          <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[8px] font-black uppercase tracking-widest px-2 py-0.5">
-            Na Fila
-          </Badge>
-        );
       default: return null;
     }
   };
@@ -124,64 +119,108 @@ export function LogFeed({ logs, title, targetNames = {}, sourceType }: LogFeedPr
             {dispatchLogs.map((log) => {
               const p = log._product;
               const destName = targetNames[log.details?.routeId] || 'Destino';
+              const score = p?.opportunity_score || 0;
+              const marketplace = p?.marketplace || 'Shopee';
+
               return (
                 <div
                   key={log.id}
-                  className="flex items-center gap-4 p-4 hover:bg-white/[0.03] transition-colors group cursor-pointer"
+                  className="flex items-start gap-5 p-5 hover:bg-white/[0.03] transition-all group cursor-pointer border-l-2 border-transparent hover:border-kinetic-orange/40"
                   onClick={() => setSelectedLog(log)}
                 >
-                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/5 border border-white/5 flex-shrink-0 shadow-skeuo-flat">
+                  {/* Thumbnail com Badges de Radar */}
+                  <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-deep-void shadow-skeuo-pressed flex-shrink-0">
                     {p?.image_url ? (
-                      <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                      <img src={p.image_url} alt={p.name} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-white/10">
-                        <Tag size={20} />
+                        <Tag size={24} />
                       </div>
                     )}
+                    
+                    {/* Discount Overlay */}
+                    {p?.discount_percent > 0 && (
+                      <div className="absolute top-1.5 left-1.5 bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg uppercase tracking-tighter">
+                        -{p.discount_percent}%
+                      </div>
+                    )}
+
+                    {/* Score Overlay */}
+                    <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/10">
+                       <span className={`text-[8px] font-black ${score >= 90 ? 'text-kinetic-orange' : 'text-white/60'}`}>{score}</span>
+                    </div>
                   </div>
 
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <p className="text-[11px] font-bold text-white/90 line-clamp-2 leading-tight">
-                      {p?.name || 'Produto'}
-                    </p>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-[10px] font-black text-emerald-400">
-                        R$ {(log.details?.factualPrice ?? p?.current_price ?? 0).toFixed(2)}
-                      </span>
-                      {p?.discount_percent > 0 && (
-                        <span className="text-[9px] font-black text-white/30">
-                          -{p.discount_percent}% de desconto
-                        </span>
-                      )}
-                      {p?.commission_value && (
-                        <span className="text-[9px] font-black text-kinetic-orange/70 uppercase tracking-wide">
-                          Ganha: R$ {p.commission_value.toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin size={9} className="text-white/20 flex-shrink-0" />
-                      <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider truncate">Enviado para: {destName}</span>
-                      <span className="text-[8px] text-white/10 font-mono ml-auto flex-shrink-0">
+                  {/* Info */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-center justify-between gap-4">
+                       <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${marketplace === 'Shopee' ? 'bg-orange-500' : 'bg-blue-500'} animate-pulse`} />
+                          <span className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">{marketplace}</span>
+                          <span className="text-[8px] font-black text-emerald-500/60 uppercase tracking-widest bg-emerald-500/5 px-1.5 py-0.5 rounded">Factual</span>
+                       </div>
+                       <span className="text-[8px] text-white/10 font-mono uppercase tracking-widest whitespace-nowrap">
                         há {formatDistanceToNow(new Date(log.created_at), { locale: ptBR })}
                       </span>
                     </div>
+
+                    <p className="text-[11px] font-bold text-white/90 line-clamp-1 leading-tight group-hover:text-white transition-colors">
+                      {p?.name || 'Produto Monitorado'}
+                    </p>
+
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <div className="flex flex-col">
+                         <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Preço</span>
+                         <span className="text-[11px] font-black text-white/80">R$ {(log.details?.factualPrice ?? p?.current_price ?? 0).toFixed(2)}</span>
+                      </div>
+                      
+                      <div className="flex flex-col">
+                         <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Ganha</span>
+                         <span className="text-[11px] font-black text-kinetic-orange">
+                            {p?.commission_percent}% · R$ {p?.commission_value?.toFixed(2)}
+                         </span>
+                      </div>
+
+                      {p?.sales_count > 0 && (
+                        <div className="flex flex-col">
+                          <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Vendas</span>
+                          <div className="flex items-center gap-1">
+                            <TrendingUp size={10} className="text-emerald-500" />
+                            <span className="text-[10px] font-black text-white/60">{p.sales_count.toLocaleString('pt-BR')}+</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col ml-auto text-right">
+                         <span className="text-[7px] font-black text-white/20 uppercase tracking-widest mb-1">Destino de Envio</span>
+                         <div className="flex items-center gap-1.5 justify-end">
+                            <MapPin size={10} className="text-white/20" />
+                            <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest truncate max-w-[120px]">{destName}</span>
+                         </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                  {/* Ações / Status Delivery */}
+                  <div className="flex flex-col items-end gap-3 flex-shrink-0 pt-1">
                     {getDeliveryStatusBadge(log._sendStatus)}
-                    {p?.original_url && (
-                      <a
-                        href={p.original_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-white/20 hover:text-kinetic-orange transition-colors"
-                        title="Ver no Shopee"
-                      >
-                        <ExternalLink size={12} />
-                      </a>
-                    )}
+                    <div className="flex items-center gap-2">
+                       {p?.original_url && (
+                        <a
+                          href={p.original_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-white/20 hover:text-kinetic-orange hover:bg-kinetic-orange/10 transition-all"
+                          title="Ver no Marketplace"
+                        >
+                          <ExternalLink size={12} />
+                        </a>
+                      )}
+                      <button className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-white/20 hover:text-white transition-all">
+                        <Info size={12} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
