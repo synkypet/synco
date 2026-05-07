@@ -24,7 +24,6 @@ import { DestinationBlock } from '@/components/automation/DestinationBlock';
 import { DeliveryBanner } from '@/components/automation/DeliveryBanner';
 import { LogFeed } from '@/components/automation/LogFeed';
 import { AutomationStatusHeader } from '@/components/automation/AutomationStatusHeader';
-import { ActiveFilterHUD } from '@/components/automation/ActiveFilterHUD';
 import { AutomationAuditTrail } from '@/components/automation/AutomationAuditTrail';
 import { RadarActivityFeed } from '@/components/automation/RadarActivityFeed';
 import { AutomationTargetSelector } from '@/components/automation/AutomationTargetSelector';
@@ -219,11 +218,6 @@ export default function AutomationDetailPage() {
             targetNames={targetNames}
             onAdd={() => setIsAddRouteOpen(true)}
             onDelete={(routeId) => deleteRoute.mutate({ id: routeId, sourceId: id })}
-          />
-
-          <ActiveFilterHUD 
-            filters={filters} 
-            config={source.config} 
           />
         </div>
       </div>
