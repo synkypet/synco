@@ -255,45 +255,43 @@ export async function processInboundAutomation(payload: InboundPayload) {
 
         console.log(`${logPrefix} [ITEM] ✓ Produto: "${snapshot.factual.title}" | Preço: ${snapshot.factual.currentPriceFactual}`);
 
-        // --- INGESTÃO CONDICIONAL PARA O RADAR (Apenas comissão > 30%) ---
+        // --- ENRIQUECIMENTO DE DADOS (Estilo Radar) ---
         const commissionRate = snapshot.factual.commissionRate || 0;
-        if (commissionRate > 0.30) {
-          try {
-            const currentPrice = snapshot.factual.currentPriceFactual || 0;
-            // Regra: originalPrice só existe se for factual e > atual
-            const originalPrice = (snapshot.factual.originalPrice && snapshot.factual.originalPrice > currentPrice) 
-              ? snapshot.factual.originalPrice 
-              : null;
-            
-            let discountPercent = 0;
-            if (originalPrice && originalPrice > currentPrice) {
-              discountPercent = Math.round((1 - (currentPrice / originalPrice)) * 100);
-            }
+        const currentPrice = snapshot.factual.currentPriceFactual || 0;
+        const originalPrice = (snapshot.factual.originalPrice && snapshot.factual.originalPrice > currentPrice) 
+          ? snapshot.factual.originalPrice 
+          : null;
+        
+        let discountPercent = 0;
+        if (originalPrice && originalPrice > currentPrice) {
+          discountPercent = Math.round((1 - (currentPrice / originalPrice)) * 100);
+        }
 
-            const opportunityScore = Math.min(100, Math.round((discountPercent * 0.4) + (commissionRate * 100 * 0.6)));
+        const opportunityScore = Math.min(100, Math.round((discountPercent * 0.4) + (commissionRate * 100 * 0.6)));
 
-            const insertedProduct = await productService.upsertFromAutomation({
-              name: snapshot.factual.title,
-              marketplace: snapshot.factual.marketplace || 'Shopee',
-              original_url: snapshot.factual.originalUrl || rawUrl,
-              image_url: snapshot.factual.image || undefined,
-              current_price: currentPrice,
-              original_price: originalPrice ?? undefined, 
-              discount_percent: (discountPercent > 0) ? discountPercent : undefined,
-              commission_percent: commissionRate * 100,
-              commission_value: snapshot.factual.commissionValueFactual || 0,
-              opportunity_score: opportunityScore,
-              is_favorite: false,
-              already_sent: false,
-              free_shipping: false,
-              official_store: false,
-            }, supabase);
-            console.log(`${logPrefix} [ITEM] ✓ Produto HIGH-COMMISSION (${(commissionRate * 100).toFixed(1)}%) inserido no Radar (ID: ${insertedProduct?.id}).`);
-          } catch (dbErr) {
-            console.error(`${logPrefix} [ITEM] Falha ao inserir no Radar:`, dbErr);
-          }
-        } else {
-          console.log(`${logPrefix} [ITEM] [RADAR-SKIP] Comissão ${(commissionRate * 100).toFixed(1)}% < 30%. Não salvo no Radar.`);
+        // --- UPSERT DO PRODUTO (Garante ID para o Log) ---
+        let productId: string | undefined;
+        try {
+          const insertedProduct = await productService.upsertFromAutomation({
+            name: snapshot.factual.title,
+            marketplace: snapshot.factual.marketplace || 'Shopee',
+            original_url: snapshot.factual.originalUrl || rawUrl,
+            image_url: snapshot.factual.image || undefined,
+            current_price: currentPrice,
+            original_price: originalPrice ?? undefined, 
+            discount_percent: (discountPercent > 0) ? discountPercent : undefined,
+            commission_percent: commissionRate * 100,
+            commission_value: snapshot.factual.commissionValueFactual || 0,
+            opportunity_score: opportunityScore,
+            is_favorite: false,
+            already_sent: false,
+            free_shipping: false,
+            official_store: false,
+          }, supabase);
+          productId = insertedProduct?.id;
+          console.log(`${logPrefix} [ITEM] ✓ Produto vinculado (ID: ${productId}).`);
+        } catch (dbErr) {
+          console.error(`${logPrefix} [ITEM] Falha ao vincular produto:`, dbErr);
         }
 
         // Processar cada rota individualmente
@@ -308,7 +306,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
               user_id: userId,
               status: 'filtered',
               event_type: 'anti_loop',
-              details: { url: normalized, targetId: route.target_id, messageId }
+              details: { url: normalized, targetId: route.target_id, messageId, productId }
             }, supabase);
             continue;
           }
@@ -320,7 +318,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
               user_id: userId,
               status: 'filtered',
               event_type: 'rule_rejected',
-              details: { url: normalized, targetId: route.target_id, filters: route.filters, messageId }
+              details: { url: normalized, targetId: route.target_id, filters: route.filters, messageId, productId }
             }, supabase);
             continue;
           }
@@ -358,12 +356,28 @@ export async function processInboundAutomation(payload: InboundPayload) {
 
           console.log(`${logPrefix} [ITEM] [SUCCESS] ★ Campanha #${campaign.id} criada.`);
           
+          // Log de Despacho Detalhado (O que gera os cards ricos no UI)
+          await automationService.logEvent({
+            source_id: source.id,
+            user_id: userId,
+            status: 'processed',
+            event_type: 'radar_dispatch',
+            details: { 
+              url: normalized, 
+              productId, 
+              routeId: route.id, 
+              factualPrice: currentPrice,
+              messageId
+            }
+          }, supabase);
+
+          // Log Técnico de Criação de Job
           await automationService.logEvent({
             source_id: source.id,
             user_id: userId,
             status: 'processed',
             event_type: 'job_created',
-            details: { url: normalized, targetId: route.target_id, targetType: route.target_type, campaignId: campaign.id }
+            details: { url: normalized, productId, targetId: route.target_id, targetType: route.target_type, campaignId: campaign.id, messageId }
           }, supabase);
 
           results.push({ url: normalized, routeId: route.id, campaignId: campaign.id });
