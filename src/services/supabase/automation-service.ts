@@ -361,13 +361,19 @@ export const automationService = {
       }
 
       // 2. Buscar o status real do send_job via radar_discovered_products → send_jobs
-      // CHUNKING: PostgREST/Supabase pode dar erro 400 se a URL for muito longa com muitos IDs no .in()
-      const CHUNK_SIZE = 30;
+      // CHUNKING AGGRESSIVE: PostgREST/Supabase erro 400 URL muito longa. 
+      // Reduzindo para 15 para segurança absoluta.
+      const CHUNK_SIZE = 15;
       const rdpEntries: any[] = [];
       
-      for (let i = 0; i < productIds.length; i += CHUNK_SIZE) {
-        const chunk = productIds.slice(i, i + CHUNK_SIZE);
-        const { data: chunkData } = await supabase
+      // Filtrar apenas UUIDs válidos e únicos antes de fatiar
+      const cleanProductIds = [...new Set(productIds.filter(id => 
+        id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+      ))];
+
+      for (let i = 0; i < cleanProductIds.length; i += CHUNK_SIZE) {
+        const chunk = cleanProductIds.slice(i, i + CHUNK_SIZE);
+        const { data: chunkData, error: chunkError } = await supabase
           .from('radar_discovered_products')
           .select('product_id, campaign_id')
           .eq('source_id', sourceId)
@@ -375,6 +381,10 @@ export const automationService = {
           .not('campaign_id', 'is', null)
           .order('created_at', { ascending: false });
         
+        if (chunkError) {
+          console.error(`[GET-LOGS] [CHUNK-ERROR] RDP query failed for chunk ${i/CHUNK_SIZE}:`, chunkError);
+          continue;
+        }
         if (chunkData) rdpEntries.push(...chunkData);
       }
 
@@ -392,11 +402,16 @@ export const automationService = {
 
         for (let i = 0; i < campaignIds.length; i += CHUNK_SIZE) {
           const chunk = campaignIds.slice(i, i + CHUNK_SIZE);
-          const { data: sendJobs } = await supabase
+          const { data: sendJobs, error: jobsError } = await supabase
             .from('send_jobs')
             .select('campaign_id, status')
             .in('campaign_id', chunk)
             .order('created_at', { ascending: false });
+
+          if (jobsError) {
+            console.error(`[GET-LOGS] [CHUNK-ERROR] SendJobs query failed for chunk ${i/CHUNK_SIZE}:`, jobsError);
+            continue;
+          }
 
           if (sendJobs) {
             for (const job of sendJobs) {
