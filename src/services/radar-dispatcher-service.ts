@@ -114,6 +114,31 @@ export const radarDispatcherService = {
       }
 
       const keyword = (source.config as any)?.searchTerm || source.name;
+      const sendIntervalMinutes = (source.config as any)?.send_interval_minutes ?? 1;
+      
+      // Controla o tempo de agendamento em memória para esta fonte durante o loop
+      let currentScheduleCursor = new Date();
+      let hasExistingSchedule = false;
+
+      if (source.channel_id) {
+        const { data: lastScheduled } = await supabase
+          .from('send_jobs')
+          .select('scheduled_at')
+          .eq('channel_id', source.channel_id)
+          .eq('user_id', source.user_id)
+          .not('scheduled_at', 'is', null)
+          .order('scheduled_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastScheduled?.scheduled_at) {
+          const dbTime = new Date(lastScheduled.scheduled_at);
+          if (dbTime > currentScheduleCursor) {
+            currentScheduleCursor = dbTime;
+            hasExistingSchedule = true;
+          }
+        }
+      }
 
       // ─── BILLING ENFORCEMENT ───────────────────────────────────────────────
       let access = userAccessCache.get(source.user_id);
@@ -280,8 +305,19 @@ export const radarDispatcherService = {
               continue;
             }
 
+            let campaignScheduledAt = new Date();
+            if (hasExistingSchedule) {
+                currentScheduleCursor = new Date(currentScheduleCursor.getTime() + sendIntervalMinutes * 60 * 1000);
+                campaignScheduledAt = currentScheduleCursor;
+            } else {
+                campaignScheduledAt = new Date(); // primeira campanha vai agora
+                currentScheduleCursor = campaignScheduledAt;
+                hasExistingSchedule = true; // próximas campanhas nesta rodada sofrerão o delay
+            }
+
             const campaignData = {
               name: `RADAR: ${factual.title.substring(0, 30)}...`,
+              scheduled_at: campaignScheduledAt.toISOString(),
               items: [{
                 product_id: product.id,
                 product_name: factual.title,

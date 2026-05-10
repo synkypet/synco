@@ -232,6 +232,7 @@ export const campaignService = {
             status: 'pending',
             try_count: 0,
             fallback_channel_id: fallbackChannel?.id || null,
+            scheduled_at: dto.scheduled_at || null,
             origin: dto.origin || 'manual'
           });
         } else if (!isEligible) {

@@ -15,6 +15,37 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function isWithinSendWindow(
+  windowStart: string | null, 
+  windowEnd: string | null, 
+  timezone: string
+): boolean {
+  if (!windowStart || !windowEnd) return true;
+  
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', { 
+      timeZone: timezone, 
+      hour: 'numeric', 
+      minute: 'numeric', 
+      hour12: false 
+    });
+    const parts = formatter.formatToParts(now);
+    const hourStr = parts.find(p => p.type === 'hour')?.value;
+    const minStr = parts.find(p => p.type === 'minute')?.value;
+    if (!hourStr || !minStr) return true;
+    
+    const h = parseInt(hourStr, 10);
+    const h24 = h === 24 ? 0 : h;
+    const currentTime = `${h24.toString().padStart(2, '0')}:${minStr.padStart(2, '0')}`;
+    
+    return currentTime >= windowStart && currentTime <= windowEnd;
+  } catch (e) {
+    console.error('[WORKER] Error checking send window:', e);
+    return true;
+  }
+}
+
 // ─── Pacing Persistente (Check de BD) ───────────────────────────────────────
 async function checkPersistentPacing(supabase: any, channelId: string, cooldownMs: number) {
   const { data: lastJob } = await supabase
@@ -105,6 +136,7 @@ export async function POST(request: Request) {
       .from('send_jobs')
       .select('id, channel_id, user_id, origin')
       .eq('status', 'pending')
+      .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
       .order('updated_at', { ascending: true })
       .limit(SAMPLE_SIZE);
 
@@ -142,6 +174,26 @@ export async function POST(request: Request) {
       round++;
     }
 
+    // Buscar configs de janela de horário para os usuários ativos
+    const { data: userConfigs } = await supabase
+      .from('automation_sources')
+      .select('user_id, config')
+      .eq('source_type', 'radar_offers')
+      .eq('is_active', true)
+      .in('user_id', userOrder);
+
+    const userWindows = new Map<string, any>();
+    (userConfigs || []).forEach(src => {
+      const config = src.config as any;
+      if (config?.send_window_start && config?.send_window_end) {
+        userWindows.set(src.user_id, {
+          start: config.send_window_start,
+          end: config.send_window_end,
+          tz: config.send_window_timezone || 'America/Sao_Paulo'
+        });
+      }
+    });
+
     console.log(`[WORKER-STATS] [${requestId}] Depth: ${currentDepth}, Pending: ${totalPendingInitial}, Sample: ${recentPendingJobs?.length}, Users: ${userOrder.length}, Batch: ${activeChannelIds.length}`);
 
     // Logs Específicos para Diagnóstico de Fila (Fase 4)
@@ -169,6 +221,25 @@ export async function POST(request: Request) {
 
     // 3. Processamento Serial por Canal
     for (const channelId of activeChannelIds) {
+      // Identifica o user_id deste canal para checar a janela de horário
+      let channelUserId = null;
+      for (const [uid, chans] of channelsByUser.entries()) {
+        if (chans.includes(channelId)) {
+          channelUserId = uid;
+          break;
+        }
+      }
+
+      if (channelUserId && userWindows.has(channelUserId)) {
+        const win = userWindows.get(channelUserId);
+        if (!isWithinSendWindow(win.start, win.end, win.tz)) {
+          const formatter = new Intl.DateTimeFormat('en-US', { timeZone: win.tz, hour: '2-digit', minute: '2-digit', hour12: false });
+          const currentTime = formatter.format(new Date());
+          console.log(`[SEND-WINDOW-SKIP] userId:${channelUserId} window:${win.start}-${win.end} currentTime:${currentTime}`);
+          continue; // Pula todos os jobs desse canal (continuam pending)
+        }
+      }
+
       // Check de Deadline operacional
       const elapsed = Date.now() - startTime;
       if (elapsed > WORKER_DEADLINE_MS) {
@@ -202,7 +273,7 @@ export async function POST(request: Request) {
           continue;
         }
 
-        const { data: job } = await supabase.from('send_jobs').select('*').eq('channel_id', channelId).eq('status', 'pending').order('updated_at', { ascending: true }).limit(1).maybeSingle();
+        const { data: job } = await supabase.from('send_jobs').select('*').eq('channel_id', channelId).eq('status', 'pending').or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`).order('updated_at', { ascending: true }).limit(1).maybeSingle();
         if (!job) continue;
 
         const { data: lockedJob } = await supabase.from('send_jobs').update({ status: 'processing', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'pending').select().single();

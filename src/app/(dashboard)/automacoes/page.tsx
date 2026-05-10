@@ -108,6 +108,9 @@ export default function AutomacoesDashboardPage() {
   const [shopeeSort, setShopeeSort] = useState(SHOPEE_SORT_TYPE.RELEVANCE.toString()); 
   const [shopeeList, setShopeeList] = useState(SHOPEE_LIST_TYPE.DEFAULT.toString());
   const [shopeeLimit, setShopeeLimit] = useState('10');
+  const [sendIntervalMinutes, setSendIntervalMinutes] = useState('1');
+  const [sendWindowStart, setSendWindowStart] = useState('');
+  const [sendWindowEnd, setSendWindowEnd] = useState('');
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewResults, setPreviewResults] = useState<any[] | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
@@ -139,6 +142,10 @@ export default function AutomacoesDashboardPage() {
         sortType: parseInt(shopeeSort),
         listType: parseInt(shopeeList),
         batchLimit: parseInt(shopeeLimit),
+        send_interval_minutes: parseInt(sendIntervalMinutes) || 1,
+        send_window_start: (sendWindowStart && sendWindowEnd) ? sendWindowStart : undefined,
+        send_window_end: (sendWindowStart && sendWindowEnd) ? sendWindowEnd : undefined,
+        send_window_timezone: (sendWindowStart && sendWindowEnd) ? 'America/Sao_Paulo' : undefined,
         preset_type: 'custom'
       } : undefined,
       // Filtros alinhados com os campos reais lidos pelo discovery service
@@ -422,6 +429,51 @@ export default function AutomacoesDashboardPage() {
                               />
                            </div>
                         </div>
+
+                        {/* Configurações de Frequência e Horário */}
+                        <div className="pt-2 border-t border-white/5 space-y-4">
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Intervalo entre produtos</Label>
+                             <div className="relative">
+                               <Input 
+                                 type="number" 
+                                 min="1" 
+                                 max="1440" 
+                                 placeholder="1" 
+                                 value={sendIntervalMinutes} 
+                                 onChange={(e) => setSendIntervalMinutes(e.target.value)} 
+                                 className="pl-3 pr-20"
+                               />
+                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/20 uppercase pointer-events-none">minuto(s)</span>
+                             </div>
+                           </div>
+
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Horário de envio</Label>
+                             <div className="grid grid-cols-2 gap-3">
+                               <div className="relative">
+                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-white/10 uppercase z-10 pointer-events-none">Das</span>
+                                 <input 
+                                   type="time" 
+                                   className="bg-deep-void border border-white/5 h-10 w-full pl-9 pr-3 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors text-white"
+                                   value={sendWindowStart} 
+                                   onChange={(e) => setSendWindowStart(e.target.value)} 
+                                 />
+                               </div>
+                               <div className="relative">
+                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-white/10 uppercase z-10 pointer-events-none">Até</span>
+                                 <input 
+                                   type="time" 
+                                   className="bg-deep-void border border-white/5 h-10 w-full pl-9 pr-3 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors text-white"
+                                   value={sendWindowEnd} 
+                                   onChange={(e) => setSendWindowEnd(e.target.value)} 
+                                 />
+                               </div>
+                             </div>
+                             <p className="text-[8px] text-white/30 italic font-medium">Fora deste horário, os envios ficam pausados na fila</p>
+                           </div>
+                        </div>
+
 
                         <div className="space-y-2">
                           <Button 
