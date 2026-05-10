@@ -4,9 +4,11 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Zap, Activity, Clock, ShoppingCart, ArrowLeft } from 'lucide-react';
+import { Zap, Activity, Clock, ShoppingCart, ArrowLeft, Play, Pause, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useUpdateAutomationSource } from '@/hooks/use-automations';
+import { toast } from 'sonner';
 
 interface AutomationStatusHeaderProps {
   source: any;
@@ -16,6 +18,21 @@ interface AutomationStatusHeaderProps {
 export function AutomationStatusHeader({ source, onBack }: AutomationStatusHeaderProps) {
   const isActive = source.is_active;
   const lastRun = source.last_restock_at ? new Date(source.last_restock_at) : null;
+  const updateAutomation = useUpdateAutomationSource();
+
+  const handleToggle = async () => {
+    const newStatus = !isActive;
+    const promise = updateAutomation.mutateAsync({
+      id: source.id,
+      updates: { is_active: newStatus }
+    });
+
+    toast.promise(promise, {
+      loading: newStatus ? 'Ativando automação...' : 'Desativando automação...',
+      success: newStatus ? 'Operação Ativada!' : 'Operação Pausada.',
+      error: 'Falha ao alterar status.'
+    });
+  };
 
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/5">
@@ -41,12 +58,29 @@ export function AutomationStatusHeader({ source, onBack }: AutomationStatusHeade
           </div>
           <div className="flex items-center gap-4">
             <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Ambiente de Gerenciamento de Pipeline</span>
-            <Badge variant="outline" className={cn(
-              "text-[9px] font-black tracking-widest uppercase px-2 py-0.5 border-none",
-              isActive ? "bg-emerald-500/10 text-emerald-500" : "bg-white/5 text-zinc-500"
-            )}>
+            <button 
+              onClick={handleToggle}
+              disabled={updateAutomation.isPending}
+              className={cn(
+                "group/status relative flex items-center gap-2 px-3 py-1 rounded-full text-[9px] font-black tracking-widest uppercase transition-all duration-300 active:scale-95",
+                isActive 
+                  ? "bg-emerald-500 shadow-glow-orange-intense text-white border-none hover:brightness-110" 
+                  : "bg-white/5 text-zinc-500 hover:bg-white/10 hover:text-white/60"
+              )}
+            >
+              {updateAutomation.isPending ? (
+                <Loader2 size={10} className="animate-spin" />
+              ) : isActive ? (
+                <Pause size={10} className="fill-current" />
+              ) : (
+                <Play size={10} className="fill-current" />
+              )}
               {isActive ? 'Operação Ativa' : 'Pausada'}
-            </Badge>
+              
+              {isActive && (
+                <span className="absolute -inset-0.5 rounded-full bg-emerald-500/20 blur-sm -z-10 animate-pulse" />
+              )}
+            </button>
           </div>
         </div>
       </div>

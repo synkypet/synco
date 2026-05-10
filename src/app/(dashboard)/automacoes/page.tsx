@@ -7,7 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   useAutomationSources,
   useCreateAutomationPipeline,
-  useDeleteAutomationSource
+  useDeleteAutomationSource,
+  useUpdateAutomationSource
 } from '@/hooks/use-automations';
 import { useChannels } from '@/hooks/use-channels';
 import { useGroups } from '@/hooks/use-groups';
@@ -41,7 +42,9 @@ import {
   AlertCircle,
   RefreshCw,
   Trash2,
-  BadgePercent
+  BadgePercent,
+  Play,
+  Pause
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -71,6 +74,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
 import { SHOPEE_SORT_TYPE, SHOPEE_LIST_TYPE, SHOPEE_SORT_TYPE_LABELS, SHOPEE_LIST_TYPE_LABELS } from '@/lib/constants/shopee';
+import { cn } from '@/lib/utils';
 
 export default function AutomacoesDashboardPage() {
   const { user } = useAuth();
@@ -86,6 +90,7 @@ export default function AutomacoesDashboardPage() {
   // Mutations
   const createPipeline = useCreateAutomationPipeline();
   const deleteAutomation = useDeleteAutomationSource();
+  const updateAutomation = useUpdateAutomationSource();
 
   // New Creation State
   const [isNewMonitorOpen, setIsNewMonitorOpen] = useState(false);
@@ -224,6 +229,20 @@ export default function AutomacoesDashboardPage() {
       loading: 'Excluindo automação...',
       success: 'Automação removida permanentemente.',
       error: 'Erro ao excluir automação.'
+    });
+  };
+
+  const handleToggleStatus = async (source: AutomationSource) => {
+    const newStatus = !source.is_active;
+    const promise = updateAutomation.mutateAsync({ 
+      id: source.id, 
+      updates: { is_active: newStatus } 
+    });
+
+    toast.promise(promise, {
+      loading: newStatus ? 'Ativando automação...' : 'Desativando automação...',
+      success: newStatus ? 'Automação ligada!' : 'Automação pausada.',
+      error: 'Falha ao alterar status.'
     });
   };
 
@@ -604,9 +623,31 @@ export default function AutomacoesDashboardPage() {
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <Badge variant={source.is_active ? "default" : "secondary"} className={source.is_active ? "bg-emerald-500 shadow-glow-orange-intense text-white border-none font-bold text-[9px] px-3 py-1 rounded-full" : "font-bold text-[9px] px-3 py-1 rounded-full"}>
-                        {source.is_active ? 'LIGADO E FUNCIONANDO' : 'DESLIGADO'}
-                      </Badge>
+                      <button 
+                        onClick={() => handleToggleStatus(source)}
+                        disabled={updateAutomation.isPending}
+                        className={cn(
+                          "group/status relative flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-[9px] transition-all duration-300 active:scale-95",
+                          source.is_active 
+                            ? "bg-emerald-500 shadow-glow-orange-intense text-white border-none hover:brightness-110" 
+                            : "bg-white/5 text-white/40 border border-white/5 hover:bg-white/10 hover:text-white/60"
+                        )}
+                      >
+                        {updateAutomation.isPending && updateAutomation.variables?.id === source.id ? (
+                          <Loader2 size={10} className="animate-spin" />
+                        ) : source.is_active ? (
+                          <Pause size={10} className="fill-current" />
+                        ) : (
+                          <Play size={10} className="fill-current" />
+                        )}
+                        <span>{source.is_active ? 'LIGADO E FUNCIONANDO' : 'DESLIGADO'}</span>
+                        
+                        {/* Glow indicator only when active */}
+                        {source.is_active && (
+                          <span className="absolute -inset-0.5 rounded-full bg-emerald-500/20 blur-sm -z-10 animate-pulse" />
+                        )}
+                      </button>
+                      
                       {(!firstRoute || !firstRoute.target_id) && (
                         <Badge variant="outline" className="border-amber-500/50 text-amber-500 text-[8px] font-black uppercase">
                           Sem Destino

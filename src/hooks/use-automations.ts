@@ -54,6 +54,7 @@ export function useUpdateAutomationSource() {
       automationService.updateSource(id, updates),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['automation-source', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['automation-sources'] });
     }
   });
 }
