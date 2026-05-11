@@ -68,7 +68,8 @@ export async function GET(request: Request) {
     const { count, error: countError } = await supabase
       .from('send_jobs')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending');
+      .eq('status', 'pending')
+      .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`);
 
     if (countError) throw countError;
 

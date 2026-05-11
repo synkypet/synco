@@ -10,6 +10,7 @@ import type { SendResult, ErrorType } from '@/lib/providers/types';
 const MAX_RETRIES = parseInt(process.env.SEND_MAX_RETRIES || '3', 10);
 const DESTINATION_RATE_LIMIT_MS = parseInt(process.env.DESTINATION_RATE_LIMIT_MS || '1500', 10);
 const MAX_SLEEP_MS = 10000; // Limite de 10s para ambiente serverless
+const MAX_JOBS_PER_CHANNEL_PER_CYCLE = parseInt(process.env.MAX_JOBS_PER_CHANNEL_PER_CYCLE || '5', 10);
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -118,7 +119,11 @@ export async function POST(request: Request) {
     }
 
     // 2. Identificar Canais com Jobs Pendentes
-    const { count: totalPendingInitial } = await supabase.from('send_jobs').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+    const { count: totalPendingInitial } = await supabase
+      .from('send_jobs')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`);
 
     const CHANNELS_PER_BATCH = 8; // Reduzido para maior segurança em serverless (FRENTE 4)
     const WORKER_DEADLINE_MS = 45000; // 45 segundos de teto operacional
@@ -137,7 +142,8 @@ export async function POST(request: Request) {
       .select('id, channel_id, user_id, origin')
       .eq('status', 'pending')
       .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
-      .order('updated_at', { ascending: true })
+      .order('scheduled_at', { ascending: true, nullsFirst: true })
+      .order('created_at', { ascending: true })
       .limit(SAMPLE_SIZE);
 
     if (sampleError) throw new Error(`Fetch jobs error: ${sampleError.message}`);
@@ -219,7 +225,7 @@ export async function POST(request: Request) {
     let lockedSkipCount = 0;
     let deadlineReached = false;
 
-    // 3. Processamento Serial por Canal
+    // 3. Processamento Serial por Canal (Continuous Drain)
     for (const channelId of activeChannelIds) {
       // Identifica o user_id deste canal para checar a janela de horário
       let channelUserId = null;
@@ -236,13 +242,13 @@ export async function POST(request: Request) {
           const formatter = new Intl.DateTimeFormat('en-US', { timeZone: win.tz, hour: '2-digit', minute: '2-digit', hour12: false });
           const currentTime = formatter.format(new Date());
           console.log(`[SEND-WINDOW-SKIP] userId:${channelUserId} window:${win.start}-${win.end} currentTime:${currentTime}`);
-          continue; // Pula todos os jobs desse canal (continuam pending)
+          continue;
         }
       }
 
       // Check de Deadline operacional
-      const elapsed = Date.now() - startTime;
-      if (elapsed > WORKER_DEADLINE_MS) {
+      const elapsedTotal = Date.now() - startTime;
+      if (elapsedTotal > WORKER_DEADLINE_MS) {
         console.warn(`[WORKER-DEADLINE] [${requestId}] Atingido limite de 45s. Encerrando batch prematuramente.`);
         deadlineReached = true;
         break;
@@ -263,96 +269,126 @@ export async function POST(request: Request) {
       try {
         const { data: channel } = await supabase.from('channels').select('id, type, name').eq('id', channelId).single();
         if (!channel) continue;
+        
         const channelType = (channel.type as string) || 'whatsapp';
         const provider = getProvider(channelType);
-        const pacing = await checkPersistentPacing(supabase, channelId as string, provider.getCooldownMs());
+        const cooldownMs = provider.getCooldownMs();
+        
+        let sentForThisChannel = 0;
+        console.log(`[WORKER-DRAIN-START] [${requestId}] channelId:${channelId} maxJobs:${MAX_JOBS_PER_CHANNEL_PER_CYCLE} cooldownMs:${cooldownMs}`);
 
-        if (!pacing.isPaced) {
-          pacingSkipCount++;
-          logJob('INFO', 'N/A', { action: 'pacing_skip', channelId, remaining_cooldown_ms: pacing.remainingMs }, requestId);
-          continue;
-        }
+        while (sentForThisChannel < MAX_JOBS_PER_CHANNEL_PER_CYCLE) {
+          // 1. Verificar deadline antes de cada job no loop interno
+          if ((Date.now() - startTime) > WORKER_DEADLINE_MS) {
+            console.warn(`[WORKER-DRAIN-STOP] [${requestId}] Deadline atingido durante a drenagem do canal ${channelId}.`);
+            deadlineReached = true;
+            break;
+          }
 
-        const { data: job } = await supabase.from('send_jobs').select('*').eq('channel_id', channelId).eq('status', 'pending').or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`).order('updated_at', { ascending: true }).limit(1).maybeSingle();
-        if (!job) continue;
+          // 2. Verificar Pacing Persistente (Proteção contra outras instâncias)
+          const pacing = await checkPersistentPacing(supabase, channelId as string, cooldownMs);
+          if (!pacing.isPaced) {
+            // Se ainda está em cooldown, aguardamos o tempo restante (se for pequeno) ou pulamos
+            if (pacing.remainingMs > 0 && pacing.remainingMs < 5000) {
+              console.log(`[WORKER-DRAIN-COOLDOWN] [${requestId}] channelId:${channelId} aguardando pacing: ${pacing.remainingMs}ms`);
+              await sleep(pacing.remainingMs);
+            } else {
+              console.log(`[WORKER-DRAIN-SKIP] [${requestId}] channelId:${channelId} pacing ativo: ${pacing.remainingMs}ms`);
+              pacingSkipCount++;
+              break; // Sai do loop deste canal
+            }
+          }
 
-        const { data: lockedJob } = await supabase.from('send_jobs').update({ status: 'processing', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'pending').select().single();
-        if (!lockedJob) continue;
+          // 3. Buscar Próximo Job Elegível (Agendado para agora ou sem data)
+          const { data: job } = await supabase
+            .from('send_jobs')
+            .select('*')
+            .eq('channel_id', channelId)
+            .eq('status', 'pending')
+            .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
+            .order('scheduled_at', { ascending: true, nullsFirst: true })
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
 
-        processedAny = true;
-        const userTagJob = `[USER:${job.user_id.substring(0,8)}]`;
-        console.log(`[WORKER-CRON] Selecionado: [JOB:${job.id.substring(0,8)}] ${userTagJob} [ORIGIN:${job.origin}] (primeiro da fila pendente no canal)`);
-        logJob('INFO', job.id, { action: 'sending', channel: channel.name, destination: job.destination }, requestId, job.user_id, job.origin);
+          if (!job) {
+            console.log(`[WORKER-DRAIN-END] [${requestId}] channelId:${channelId} sent:${sentForThisChannel} reason:no_more_jobs`);
+            break;
+          }
 
-        try {
-          const { data: secretData } = await supabase.from('channel_secrets').select('session_api_key').eq('channel_id', channelId).maybeSingle();
-          const apiKey = secretData?.session_api_key;
-          if (!apiKey) throw new Error('API Key missing');
+          // 4. Lock Atômico do Job
+          const { data: lockedJob } = await supabase
+            .from('send_jobs')
+            .update({ status: 'processing', updated_at: new Date().toISOString() })
+            .eq('id', job.id)
+            .eq('status', 'pending')
+            .select()
+            .single();
 
-          const destination = provider.formatDestination(job.destination);
-          const result: SendResult = job.image_url 
-            ? await provider.sendMedia(apiKey, destination, job.image_url, job.message_body || '')
-            : await provider.sendMessage(apiKey, destination, job.message_body || '');
+          if (!lockedJob) continue;
 
-          if (result.success) {
-            await supabase.from('send_jobs').update({ status: 'completed', processed_at: new Date().toISOString(), try_count: job.try_count + 1 }).eq('id', job.id);
-            await supabase.from('send_receipts').insert({ send_job_id: job.id, user_id: job.user_id, campaign_id: job.campaign_id, destination: job.destination, wasender_message_id: result.messageId });
-            logJob('INFO', job.id, { action: 'delivered' }, requestId, job.user_id, job.origin);
-            results.push({ jobId: job.id, status: 'completed', origin: job.origin });
-          } else {
-            const errorType: string = result.errorType || provider.classifyError(result.error);
-            
-            // --- ETAPA 1: TRATAMENTO DE PERDA DE SESSÃO ---
-            if (errorType === 'SESSION_LOST') {
-              console.warn(`[WORKER-SESSION-LOST] [${requestId}] Sessão do canal ${channelId} perdida. Pausando fila.`);
-              
-              // 1. Marca o job atual como session_lost
-              await supabase.from('send_jobs').update({ 
-                status: 'session_lost', 
-                error_type: 'SESSION_LOST', 
-                last_error: 'Sessão WhatsApp Desconectada', 
-                processed_at: new Date().toISOString() 
-              }).eq('id', job.id);
-              
-              // 2. Pausa imediatamente todos os outros jobs pendentes deste canal para evitar queima da fila
-              await supabase.from('send_jobs').update({ 
-                status: 'session_lost', 
-                error_type: 'SESSION_LOST', 
-                last_error: 'Fila pausada: Sessão WhatsApp Desconectada',
-                updated_at: new Date().toISOString()
-              }).eq('channel_id', channelId).eq('status', 'pending');
-              
-              logJob('WARN', job.id, { action: 'paused_channel', reason: 'session_lost' }, requestId, job.user_id, job.origin);
-              results.push({ jobId: job.id, status: 'session_lost', error: result.error, origin: job.origin });
-              
-              // 3. Abandona o processamento deste canal
-              break; // Sai do try/catch, vai para o finally (libera lock) e passa para o próximo canal do batch
+          processedAny = true;
+          logJob('INFO', job.id, { action: 'sending', channel: channel.name, destination: job.destination }, requestId, job.user_id, job.origin);
+
+          try {
+            const { data: secretData } = await supabase.from('channel_secrets').select('session_api_key').eq('channel_id', channelId).maybeSingle();
+            const apiKey = secretData?.session_api_key;
+            if (!apiKey) throw new Error('API Key missing');
+
+            const destination = provider.formatDestination(job.destination);
+            const result: SendResult = job.image_url 
+              ? await provider.sendMedia(apiKey, destination, job.image_url, job.message_body || '')
+              : await provider.sendMessage(apiKey, destination, job.message_body || '');
+
+            if (result.success) {
+              await supabase.from('send_jobs').update({ status: 'completed', processed_at: new Date().toISOString(), try_count: job.try_count + 1 }).eq('id', job.id);
+              await supabase.from('send_receipts').insert({ send_job_id: job.id, user_id: job.user_id, campaign_id: job.campaign_id, destination: job.destination, wasender_message_id: result.messageId });
+              logJob('INFO', job.id, { action: 'delivered' }, requestId, job.user_id, job.origin);
+              results.push({ jobId: job.id, status: 'completed', origin: job.origin });
+            } else {
+              const errorType: string = result.errorType || provider.classifyError(result.error);
+              if (errorType === 'SESSION_LOST') {
+                console.warn(`[WORKER-SESSION-LOST] [${requestId}] Sessão do canal ${channelId} perdida.`);
+                await supabase.from('send_jobs').update({ status: 'session_lost', error_type: 'SESSION_LOST', last_error: 'Sessão WhatsApp Desconectada', processed_at: new Date().toISOString() }).eq('id', job.id);
+                await supabase.from('send_jobs').update({ status: 'session_lost', error_type: 'SESSION_LOST', last_error: 'Fila pausada: Sessão WhatsApp Desconectada', updated_at: new Date().toISOString() }).eq('channel_id', channelId).eq('status', 'pending');
+                break; // Sai do loop do canal
+              }
+              const finalStatus = (errorType === 'PERMANENT' || job.try_count + 1 >= MAX_RETRIES) ? 'failed' : 'pending';
+              await supabase.from('send_jobs').update({ status: finalStatus, error_type: errorType, try_count: job.try_count + 1, last_error: result.error, processed_at: new Date().toISOString() }).eq('id', job.id);
+              results.push({ jobId: job.id, status: finalStatus, error: result.error, origin: job.origin });
+            }
+          } catch (jobError: any) {
+            const errorMessage = jobError.message || 'Unknown pre-send error';
+            await supabase.from('send_jobs').update({ status: 'failed', error_type: 'FATAL', last_error: errorMessage, processed_at: new Date().toISOString() }).eq('id', job.id);
+            results.push({ jobId: job.id, status: 'failed', error: errorMessage, origin: job.origin });
+          }
+
+          // Sync Campaign
+          try {
+            await supabase.rpc('check_and_close_campaign', { p_campaign_id: job.campaign_id });
+          } catch (e) {}
+
+          sentForThisChannel++;
+          console.log(`[WORKER-DRAIN-SENT] [${requestId}] channelId:${channelId} jobId:${job.id.substring(0,8)} count:${sentForThisChannel}/${MAX_JOBS_PER_CHANNEL_PER_CYCLE}`);
+
+          // 5. Aguardar Cooldown entre mensagens do mesmo canal (Safe Sleep)
+          if (sentForThisChannel < MAX_JOBS_PER_CHANNEL_PER_CYCLE) {
+            const elapsed = Date.now() - startTime;
+            const timeRemaining = WORKER_DEADLINE_MS - elapsed;
+            const safeSleepMs = cooldownMs + 1000; // Margem de segurança de 1s
+
+            if (timeRemaining < safeSleepMs) {
+              console.log(`[WORKER-DRAIN-END] [${requestId}] channelId:${channelId} sent:${sentForThisChannel} reason:deadline_before_sleep timeRemaining:${timeRemaining}ms`);
+              deadlineReached = true;
+              break;
             }
 
-            const finalStatus = (errorType === 'PERMANENT' || job.try_count + 1 >= MAX_RETRIES) ? 'failed' : 'pending';
-            await supabase.from('send_jobs').update({ status: finalStatus, error_type: errorType, try_count: job.try_count + 1, last_error: result.error, processed_at: new Date().toISOString() }).eq('id', job.id);
-            logJob('WARN', job.id, { action: 'failed', error: result.error, nextStatus: finalStatus }, requestId, job.user_id, job.origin);
-            results.push({ jobId: job.id, status: finalStatus, error: result.error, origin: job.origin });
+            await sleep(cooldownMs);
           }
-        } catch (jobError: any) {
-          const errorMessage = jobError.message || 'Unknown pre-send error';
-          console.error(`[WORKER-JOB-ERROR] [${requestId}] Job ${job.id}:`, errorMessage);
-          
-          await supabase.from('send_jobs').update({ 
-            status: 'failed', 
-            error_type: 'FATAL', 
-            last_error: errorMessage,
-            processed_at: new Date().toISOString()
-          }).eq('id', job.id);
-          
-          logJob('ERROR', job.id, { action: 'fatal_error', error: errorMessage }, requestId, job.user_id, job.origin);
-          results.push({ jobId: job.id, status: 'failed', error: errorMessage, origin: job.origin });
         }
-
-        try {
-          await supabase.rpc('check_and_close_campaign', { p_campaign_id: job.campaign_id });
-        } catch (closeError) {
-          console.error(`[WORKER-SYNC] Failed to close campaign ${job.campaign_id}:`, closeError);
+        
+        if (sentForThisChannel >= MAX_JOBS_PER_CHANNEL_PER_CYCLE) {
+          console.log(`[WORKER-DRAIN-END] [${requestId}] channelId:${channelId} sent:${sentForThisChannel} reason:max_per_channel`);
         }
 
       } finally {
@@ -361,7 +397,11 @@ export async function POST(request: Request) {
     }
 
     // 4. Agendamento do Próximo Ciclo (Auto-Retrigger Controlado)
-    const { count: finalPendingCount } = await supabase.from('send_jobs').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+    const { count: finalPendingCount } = await supabase
+      .from('send_jobs')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`);
 
     // ─── Log de Resumo de Batch (Observabilidade por Origem) ──────────────────
     const originCounts = results.reduce((acc: Record<string, number>, r: any) => {

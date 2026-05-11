@@ -160,22 +160,44 @@ export const radarDispatcherService = {
         userConnectionsCache.set(source.user_id, connections);
       }
 
-      // ─── QUEUE DEPTH ENFORCEMENT (Fase 1) ──────────────────────────────────
-      const { count: radarPendingCount } = await supabase
+      // ─── QUEUE DEPTH & BACKPRESSURE ENFORCEMENT (Híbrido Ready/Future) ─────
+      // 1. Contagem de jobs PRONTOS para envio imediato
+      const { count: readyPendingCount } = await supabase
         .from('send_jobs')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', source.user_id)
         .eq('status', 'pending')
-        .eq('origin', 'radar');
+        .eq('origin', 'radar')
+        .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`);
 
-      const MAX_RADAR_PENDING = 10;
-      if (radarPendingCount !== null && radarPendingCount >= MAX_RADAR_PENDING) {
-        console.log(`${sourceLogPrefix} Fila cheia (${radarPendingCount}/${MAX_RADAR_PENDING} jobs pendentes). Aguardando envios antes de criar novos.`);
+      // 2. Contagem de jobs AGENDADOS para o futuro
+      const { count: futurePendingCount } = await supabase
+        .from('send_jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', source.user_id)
+        .eq('status', 'pending')
+        .eq('origin', 'radar')
+        .gt('scheduled_at', new Date().toISOString());
+
+      // Configuração de Limites (Baseado em routeCount * fator)
+      const routeCount = routes.length || 1;
+      const MAX_READY_PENDING = Math.max(100, routeCount * 2);
+      const MAX_FUTURE_SCHEDULED = Math.max(250, routeCount * 5);
+
+      if (readyPendingCount !== null && readyPendingCount >= MAX_READY_PENDING) {
+        console.log(`[RADAR-BACKPRESSURE-READY] ${sourceLogPrefix} Fila de envio imediato cheia (${readyPendingCount}/${MAX_READY_PENDING}).`);
+        continue;
+      }
+
+      if (futurePendingCount !== null && futurePendingCount >= MAX_FUTURE_SCHEDULED) {
+        console.log(`[RADAR-BACKPRESSURE-FUTURE] ${sourceLogPrefix} Backlog futuro atingido (${futurePendingCount}/${MAX_FUTURE_SCHEDULED}).`);
         continue;
       }
       
-      let userQuota = MAX_RADAR_PENDING - (radarPendingCount || 0);
-      console.log(`${sourceLogPrefix} Fila: ${radarPendingCount || 0}/${MAX_RADAR_PENDING}. Criando até ${userQuota} novos jobs.`);
+      console.log(`[RADAR-BACKPRESSURE-OK] ${sourceLogPrefix} Ready:${readyPendingCount || 0}/${MAX_READY_PENDING} | Future:${futurePendingCount || 0}/${MAX_FUTURE_SCHEDULED}`);
+      
+      let userQuota = MAX_READY_PENDING - (readyPendingCount || 0);
+      console.log(`${sourceLogPrefix} Fila: ${readyPendingCount || 0}/${MAX_READY_PENDING}. Criando até ${userQuota} novos jobs.`);
 
       // ─── BUSCA DE CANDIDATOS PARA ESTA FONTE (Nova Arquitetura) ─────────
       // Buscamos via tabela de vínculo radar_discovered_products com JOIN em products

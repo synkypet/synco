@@ -81,6 +81,9 @@ export default function AutomacoesDashboardPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   
+  // Configurações de Limite
+  const MAX_RADAR_SOURCES = Number(process.env.NEXT_PUBLIC_MAX_RADAR_SOURCES_PER_USER || 3);
+  
   // Queries
   const { data: sources, isLoading } = useAutomationSources(user?.id as string);
   const { data: channels } = useChannels(user?.id);
@@ -116,12 +119,16 @@ export default function AutomacoesDashboardPage() {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isQuickListOpen, setIsQuickListOpen] = useState(false);
 
+  // Cálculos de Limite
+  const activeRadarCount = sources?.filter(s => s.source_type === 'radar_offers' && s.is_active).length || 0;
+  const isRadarLimitReached = entryType === 'radar_offers' && activeRadarCount >= MAX_RADAR_SOURCES;
+
   // Validação simples
   const isNameValid = newName.trim().length >= 3;
   const isEntryValid = entryType === 'radar_offers' || (channelId && sourceGroupId);
   const isTargetValid = !!targetId;
   const isSearchTermValid = entryType === 'radar_offers' ? creationKeywords.length > 0 : true;
-  const isFormValid = isNameValid && isEntryValid && isTargetValid && isSearchTermValid;
+  const isFormValid = isNameValid && isEntryValid && isTargetValid && isSearchTermValid && !isRadarLimitReached;
 
   const handleCreatePipeline = () => {
     if (!isFormValid) return;
@@ -164,7 +171,13 @@ export default function AutomacoesDashboardPage() {
         router.push(`/automacoes/${data.id}`);
         return 'Automação criada com sucesso!';
       },
-      error: (err: any) => `Erro na criação: ${err.message || 'Verifique os dados.'}`
+      error: (err: any) => {
+        // Captura mensagem amigável da Trigger do banco ou fallback
+        if (err.message?.includes('limite de radares ativos')) {
+          return err.message;
+        }
+        return `Erro na criação: ${err.message || 'Verifique os dados.'}`;
+      }
     });
   };
 
@@ -279,10 +292,23 @@ export default function AutomacoesDashboardPage() {
             <DialogContent className="max-w-xl p-0 overflow-y-auto max-h-[90vh]">
               <div className="p-6 bg-gradient-to-b from-white/5 to-transparent">
                  <DialogHeader>
-                   <DialogTitle className="mb-4 flex items-center gap-2">
-                      <Zap size={14} className="animate-pulse text-kinetic-orange" />
-                      Nova Automação
-                   </DialogTitle>
+                    <DialogTitle className="mb-4 flex items-center justify-between gap-2">
+                       <div className="flex items-center gap-2">
+                         <Zap size={14} className="animate-pulse text-kinetic-orange" />
+                         Nova Automação
+                       </div>
+                       {entryType === 'radar_offers' && (
+                         <div className={cn(
+                           "flex items-center gap-2 px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest transition-all",
+                           activeRadarCount >= MAX_RADAR_SOURCES 
+                             ? "bg-red-500/10 border-red-500/20 text-red-500" 
+                             : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
+                         )}>
+                           <Activity size={10} />
+                           Radares Ativos: {activeRadarCount}/{MAX_RADAR_SOURCES}
+                         </div>
+                       )}
+                    </DialogTitle>
                  </DialogHeader>
                  
                  <div className="space-y-6 pt-2">
@@ -431,7 +457,7 @@ export default function AutomacoesDashboardPage() {
                         </div>
 
                         {/* Configurações de Frequência e Horário */}
-                        <div className="pt-2 border-t border-white/5 space-y-4">
+                        <div className="pt-4 border-t border-white/5 space-y-5">
                            <div className="space-y-2">
                              <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Intervalo entre produtos</Label>
                              <div className="relative">
@@ -446,10 +472,23 @@ export default function AutomacoesDashboardPage() {
                                />
                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/20 uppercase pointer-events-none">minuto(s)</span>
                              </div>
+                             <p className="text-[8px] text-white/30 font-medium leading-tight">
+                               Controla o tempo entre um produto e outro. Exemplo: 5 minutos = o Radar só inicia o próximo produto após esse intervalo.
+                             </p>
+                           </div>
+
+                           <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck size={12} className="text-emerald-500/50" />
+                                <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Proteção Anti-Spam</span>
+                              </div>
+                              <p className="text-[8px] text-white/30 font-medium leading-normal italic">
+                                Os grupos de uma mesma campanha são enviados em sequência com proteção automática: aproximadamente 1 grupo a cada ~5,5 segundos por canal.
+                              </p>
                            </div>
 
                            <div className="space-y-2">
-                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Horário de envio</Label>
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Horário permitido para envios</Label>
                              <div className="grid grid-cols-2 gap-3">
                                <div className="relative">
                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-white/10 uppercase z-10 pointer-events-none">Das</span>
@@ -470,7 +509,9 @@ export default function AutomacoesDashboardPage() {
                                  />
                                </div>
                              </div>
-                             <p className="text-[8px] text-white/30 italic font-medium">Fora deste horário, os envios ficam pausados na fila</p>
+                             <p className="text-[8px] text-white/30 italic font-medium leading-tight">
+                               Fora deste horário, os produtos ficam pausados na fila e são enviados automaticamente quando o horário voltar.
+                             </p>
                            </div>
                         </div>
 
@@ -509,6 +550,18 @@ export default function AutomacoesDashboardPage() {
                                     </div>
                                   ))
                                 )}
+                             </div>
+                          </div>
+                        )}
+
+                        {isRadarLimitReached && (
+                          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 animate-in fade-in zoom-in duration-300">
+                             <ShieldAlert size={20} className="text-red-500 shrink-0" />
+                             <div className="space-y-0.5">
+                                <p className="text-[10px] font-black uppercase text-red-500 tracking-widest">Limite Atingido</p>
+                                <p className="text-[9px] font-medium text-red-400/80 leading-tight">
+                                   Você atingiu o limite de {MAX_RADAR_SOURCES} radares ativos. Desative um radar existente para criar outro.
+                                </p>
                              </div>
                           </div>
                         )}

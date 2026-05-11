@@ -238,63 +238,78 @@ export function OriginBlock({
               </div>
 
               {/* Frequência e Janela de Envio */}
-              <div className="pt-2 border-t border-white/5 space-y-4">
-                 <div className="space-y-2">
-                   <Label className="text-[8px] uppercase font-black text-white/20 ml-1">Intervalo entre produtos</Label>
-                   <div className="relative">
-                     <Input 
-                       type="number" 
-                       min="1" 
-                       max="1440" 
-                       placeholder="1" 
-                       value={localConfig.send_interval_minutes || ''} 
-                       onChange={(e) => handleUpdateLocalConfig({ send_interval_minutes: parseInt(e.target.value) || 1 })}
-                       className="bg-deep-void border-white/5 h-10 w-full pl-3 pr-20 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors"
-                     />
-                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-white/20 uppercase pointer-events-none">minuto(s)</span>
-                   </div>
-                 </div>
+              <div className="pt-4 border-t border-white/5 space-y-5">
+                  <div className="space-y-2">
+                    <Label className="text-[8px] uppercase font-black text-white/20 ml-1">Intervalo entre produtos</Label>
+                    <div className="relative">
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        max="1440" 
+                        placeholder="1" 
+                        value={localConfig.send_interval_minutes || ''} 
+                        onChange={(e) => handleUpdateLocalConfig({ send_interval_minutes: parseInt(e.target.value) || 1 })}
+                        className="bg-deep-void border-white/5 h-10 w-full pl-3 pr-20 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-white/20 uppercase pointer-events-none">minuto(s)</span>
+                    </div>
+                    <p className="text-[8px] text-white/30 font-medium leading-tight ml-1">
+                      Define a pausa entre produtos diferentes. Exemplo: 5 minutos = o próximo produto só será iniciado após essa pausa.
+                    </p>
+                  </div>
 
-                 <div className="space-y-2">
-                   <Label className="text-[8px] uppercase font-black text-white/20 ml-1">Horário de envio</Label>
-                   <div className="grid grid-cols-2 gap-3">
-                     <div className="relative">
-                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-white/10 uppercase z-10 pointer-events-none">Das</span>
-                       <input 
-                         type="time" 
-                         className="bg-deep-void border border-white/5 h-10 w-full pl-9 pr-3 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors text-white"
-                         value={localConfig.send_window_start || ''} 
-                         onChange={(e) => {
-                           const start = e.target.value;
-                           const end = localConfig.send_window_end;
-                           handleUpdateLocalConfig({
-                             send_window_start: start || undefined,
-                             send_window_end: (start && end) ? end : undefined,
-                             send_window_timezone: (start && end) ? 'America/Sao_Paulo' : undefined
-                           });
-                         }} 
-                       />
-                     </div>
-                     <div className="relative">
-                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-white/10 uppercase z-10 pointer-events-none">Até</span>
-                       <input 
-                         type="time" 
-                         className="bg-deep-void border border-white/5 h-10 w-full pl-9 pr-3 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors text-white"
-                         value={localConfig.send_window_end || ''} 
-                         onChange={(e) => {
-                           const end = e.target.value;
-                           const start = localConfig.send_window_start;
-                           handleUpdateLocalConfig({
-                             send_window_end: end || undefined,
-                             send_window_start: (start && end) ? start : undefined,
-                             send_window_timezone: (start && end) ? 'America/Sao_Paulo' : undefined
-                           });
-                         }} 
-                       />
-                     </div>
-                   </div>
-                   <p className="text-[8px] text-white/30 italic font-medium ml-1">Fora deste horário, os envios ficam pausados na fila</p>
-                 </div>
+                  <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={12} className="text-emerald-500/50" />
+                      <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Proteção Anti-Spam</span>
+                    </div>
+                    <p className="text-[8px] text-white/30 font-medium leading-normal italic">
+                      Os grupos da mesma campanha são enviados gradualmente com proteção automática: aproximadamente 1 grupo a cada ~5,5 segundos por canal.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-[8px] uppercase font-black text-white/20 ml-1">Horário permitido para envios</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-white/10 uppercase z-10 pointer-events-none">Das</span>
+                        <input 
+                          type="time" 
+                          className="bg-deep-void border border-white/5 h-10 w-full pl-9 pr-3 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors text-white"
+                          value={localConfig.send_window_start || ''} 
+                          onChange={(e) => {
+                            const start = e.target.value;
+                            const end = localConfig.send_window_end;
+                            handleUpdateLocalConfig({
+                              send_window_start: start || undefined,
+                              send_window_end: (start && end) ? end : undefined,
+                              send_window_timezone: (start && end) ? 'America/Sao_Paulo' : undefined
+                            });
+                          }} 
+                        />
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-white/10 uppercase z-10 pointer-events-none">Até</span>
+                        <input 
+                          type="time" 
+                          className="bg-deep-void border border-white/5 h-10 w-full pl-9 pr-3 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors text-white"
+                          value={localConfig.send_window_end || ''} 
+                          onChange={(e) => {
+                            const end = e.target.value;
+                            const start = localConfig.send_window_start;
+                            handleUpdateLocalConfig({
+                              send_window_end: end || undefined,
+                              send_window_start: (start && end) ? start : undefined,
+                              send_window_timezone: (start && end) ? 'America/Sao_Paulo' : undefined
+                            });
+                          }} 
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[8px] text-white/30 italic font-medium ml-1 leading-tight">
+                      Fora deste horário, os produtos ficam pausados na fila e são enviados automaticamente quando o horário voltar.
+                    </p>
+                  </div>
               </div>
 
               {/* Botão de Salvar */}
