@@ -30,6 +30,7 @@ import {
 import { AffiliateSettingsCard } from '@/components/settings/AffiliateSettingsCard';
 import { PlanDetailsCard } from '@/components/billing/PlanDetailsCard';
 import { useProfile } from '@/hooks/use-profile';
+import { useSendPreferences } from '@/hooks/use-send-preferences';
 import { useEffect } from 'react';
 
 export default function ConfiguracoesPage() {
@@ -52,6 +53,18 @@ export default function ConfiguracoesPage() {
         setFullName(profile.full_name);
       }
     }, [profile]);
+
+    // Send Preferences State
+    const { preferences, upsertPreferences, isUpdating: isUpdatingPreferences } = useSendPreferences(user?.id);
+    const [sendWindowStart, setSendWindowStart] = useState('');
+    const [sendWindowEnd, setSendWindowEnd] = useState('');
+
+    useEffect(() => {
+      if (preferences) {
+        setSendWindowStart(preferences.send_window_start || '');
+        setSendWindowEnd(preferences.send_window_end || '');
+      }
+    }, [preferences]);
     
     // Real Data Hooks
     const { data: catalog, isLoading: isLoadingCatalog } = useMarketplaceCatalog();
@@ -98,6 +111,7 @@ export default function ConfiguracoesPage() {
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
                     <TabsList className="bg-muted/30 p-1 rounded-xl flex-wrap h-auto gap-1 border border-white/5 shadow-skeuo-pressed">
                         <TabsTrigger value="profile" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg"><UserIcon className="w-3.5 h-3.5" /> Perfil</TabsTrigger>
+                        <TabsTrigger value="automation" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg"><Zap className="w-3.5 h-3.5" /> Automação</TabsTrigger>
                         <TabsTrigger value="billing" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg"><Shield className="w-3.5 h-3.5" /> Assinatura</TabsTrigger>
                         <TabsTrigger value="affiliates" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg">🛍️ Afiliados</TabsTrigger>
                     </TabsList>
@@ -218,6 +232,80 @@ export default function ConfiguracoesPage() {
     
 
     
+                    <TabsContent value="automation" className="space-y-6 animate-in fade-in-50 duration-300">
+                        <div className="grid md:grid-cols-2 gap-6 max-w-4xl">
+                            <Card className="p-6 md:col-span-2 border-none ring-1 ring-white/5 bg-anthracite-surface/50">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <Clock className="w-5 h-5 text-kinetic-orange" />
+                                    <h3 className="font-bold text-lg font-headline italic">Horário permitido para envios</h3>
+                                </div>
+                                <p className="text-[11px] text-white/30 uppercase tracking-widest mb-8 italic leading-relaxed">
+                                    Define quando o SYNCO pode enviar mensagens automaticamente. Fora desse horário, os produtos ficam pausados na fila e são enviados quando o horário voltar.
+                                </p>
+
+                                <div className="p-6 rounded-[24px] bg-black/20 border border-white/5 shadow-skeuo-pressed space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Início do Turno (Das)</Label>
+                                            <input 
+                                                type="time" 
+                                                className="bg-deep-void border border-white/5 h-12 w-full px-4 text-xs font-black rounded-xl shadow-skeuo-pressed outline-none focus:ring-1 focus:ring-kinetic-orange/30 transition-all text-white"
+                                                value={sendWindowStart || ''} 
+                                                onChange={(e) => setSendWindowStart(e.target.value)} 
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Fim do Turno (Até)</Label>
+                                            <input 
+                                                type="time" 
+                                                className="bg-deep-void border border-white/5 h-12 w-full px-4 text-xs font-black rounded-xl shadow-skeuo-pressed outline-none focus:ring-1 focus:ring-kinetic-orange/30 transition-all text-white"
+                                                value={sendWindowEnd || ''} 
+                                                onChange={(e) => setSendWindowEnd(e.target.value)} 
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 flex flex-wrap gap-4 border-t border-white/5">
+                                        <Button 
+                                            className="h-12 px-8 font-black uppercase tracking-widest text-xs rounded-xl bg-kinetic-orange text-black hover:bg-kinetic-orange/90 shadow-glow-orange-intense transition-all"
+                                            onClick={() => upsertPreferences({ 
+                                                send_window_start: sendWindowStart || null, 
+                                                send_window_end: sendWindowEnd || null,
+                                                send_window_timezone: 'America/Sao_Paulo'
+                                            })}
+                                            disabled={!!isUpdatingPreferences || (!!sendWindowStart !== !!sendWindowEnd)}
+                                        >
+                                            {isUpdatingPreferences ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                                            Salvar horário de envio
+                                        </Button>
+
+                                        <Button 
+                                            variant="outline"
+                                            className="h-12 px-8 font-black uppercase tracking-widest text-xs rounded-xl border-white/10 bg-white/5 text-white hover:bg-white/10 shadow-skeuo-flat transition-all"
+                                            onClick={() => {
+                                                setSendWindowStart('');
+                                                setSendWindowEnd('');
+                                                upsertPreferences({ 
+                                                    send_window_start: null, 
+                                                    send_window_end: null,
+                                                    send_window_timezone: 'America/Sao_Paulo'
+                                                });
+                                            }}
+                                            disabled={isUpdatingPreferences}
+                                        >
+                                            <Send className="w-4 h-4 mr-2 text-emerald-400" />
+                                            Enviar em qualquer horário
+                                        </Button>
+                                    </div>
+                                    
+                                    <p className="text-[9px] text-white/20 uppercase font-bold tracking-tight italic">
+                                        * Essa configuração vale para todos os Radares e campanhas automáticas da sua conta.
+                                    </p>
+                                </div>
+                            </Card>
+                        </div>
+                    </TabsContent>
+
                     <TabsContent value="billing" className="animate-in fade-in-50 duration-300">
                         <PlanDetailsCard />
                     </TabsContent>

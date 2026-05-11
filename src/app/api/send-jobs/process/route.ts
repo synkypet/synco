@@ -11,6 +11,7 @@ const MAX_RETRIES = parseInt(process.env.SEND_MAX_RETRIES || '3', 10);
 const DESTINATION_RATE_LIMIT_MS = parseInt(process.env.DESTINATION_RATE_LIMIT_MS || '1500', 10);
 const MAX_SLEEP_MS = 10000; // Limite de 10s para ambiente serverless
 const MAX_JOBS_PER_CHANNEL_PER_CYCLE = parseInt(process.env.MAX_JOBS_PER_CHANNEL_PER_CYCLE || '5', 10);
+const SEND_WINDOW_RESTRICTED_ORIGINS = ['radar', 'coupon', 'coupon_shopee', 'monitor'];
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -40,7 +41,13 @@ function isWithinSendWindow(
     const h24 = h === 24 ? 0 : h;
     const currentTime = `${h24.toString().padStart(2, '0')}:${minStr.padStart(2, '0')}`;
     
-    return currentTime >= windowStart && currentTime <= windowEnd;
+    if (windowStart <= windowEnd) {
+      // Janela padrão (ex: 08:30 às 22:30)
+      return currentTime >= windowStart && currentTime <= windowEnd;
+    } else {
+      // Janela que cruza meia-noite (ex: 22:30 às 08:30)
+      return currentTime >= windowStart || currentTime <= windowEnd;
+    }
   } catch (e) {
     console.error('[WORKER] Error checking send window:', e);
     return true;
@@ -180,22 +187,20 @@ export async function POST(request: Request) {
       round++;
     }
 
-    // Buscar configs de janela de horário para os usuários ativos
-    const { data: userConfigs } = await supabase
-      .from('automation_sources')
-      .select('user_id, config')
-      .eq('source_type', 'radar_offers')
-      .eq('is_active', true)
+    // 3. Buscar Preferências Globais de Envio dos Usuários (user_send_preferences)
+    // send_window_* em automation_sources.config está deprecated.
+    const { data: globalPreferences } = await supabase
+      .from('user_send_preferences')
+      .select('user_id, send_window_start, send_window_end, send_window_timezone')
       .in('user_id', userOrder);
-
+    
     const userWindows = new Map<string, any>();
-    (userConfigs || []).forEach(src => {
-      const config = src.config as any;
-      if (config?.send_window_start && config?.send_window_end) {
-        userWindows.set(src.user_id, {
-          start: config.send_window_start,
-          end: config.send_window_end,
-          tz: config.send_window_timezone || 'America/Sao_Paulo'
+    (globalPreferences || []).forEach(pref => {
+      if (pref.send_window_start && pref.send_window_end) {
+        userWindows.set(pref.user_id, {
+          start: pref.send_window_start,
+          end: pref.send_window_end,
+          tz: pref.send_window_timezone || 'America/Sao_Paulo'
         });
       }
     });
@@ -236,14 +241,13 @@ export async function POST(request: Request) {
         }
       }
 
-      if (channelUserId && userWindows.has(channelUserId)) {
-        const win = userWindows.get(channelUserId);
-        if (!isWithinSendWindow(win.start, win.end, win.tz)) {
-          const formatter = new Intl.DateTimeFormat('en-US', { timeZone: win.tz, hour: '2-digit', minute: '2-digit', hour12: false });
-          const currentTime = formatter.format(new Date());
-          console.log(`[SEND-WINDOW-SKIP] userId:${channelUserId} window:${win.start}-${win.end} currentTime:${currentTime}`);
-          continue;
-        }
+      const win = channelUserId ? userWindows.get(channelUserId) : null;
+      const isOutsideWindow = win ? !isWithinSendWindow(win.start, win.end, win.tz) : false;
+
+      if (isOutsideWindow && win) {
+        const formatter = new Intl.DateTimeFormat('en-US', { timeZone: win.tz, hour: '2-digit', minute: '2-digit', hour12: false });
+        const currentTimeStr = formatter.format(new Date());
+        console.log(`[SEND-WINDOW-FILTER-ACTIVE] userId:${channelUserId} channelId:${channelId} window:${win.start}-${win.end} currentTime:${currentTimeStr} restrictedOrigins:${SEND_WINDOW_RESTRICTED_ORIGINS.join(',')}`);
       }
 
       // Check de Deadline operacional
@@ -300,20 +304,39 @@ export async function POST(request: Request) {
           }
 
           // 3. Buscar Próximo Job Elegível (Agendado para agora ou sem data)
-          const { data: job } = await supabase
+          let query = supabase
             .from('send_jobs')
             .select('*')
             .eq('channel_id', channelId)
             .eq('status', 'pending')
             .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
             .order('scheduled_at', { ascending: true, nullsFirst: true })
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle();
+            .order('created_at', { ascending: true });
+
+          // Se estiver fora da janela global, ajustamos a query para NÃO trazer origens restritas
+          // Isso evita varrer centenas de jobs automáticos pending.
+          // Importante: origin IS NULL é tratado como liberado por compatibilidade.
+          if (isOutsideWindow) {
+            const restrictedList = SEND_WINDOW_RESTRICTED_ORIGINS.join(',');
+            query = query.or(`origin.is.null,origin.not.in.(${restrictedList})`);
+          }
+
+          const { data: job } = await query.limit(1).maybeSingle();
 
           if (!job) {
-            console.log(`[WORKER-DRAIN-END] [${requestId}] channelId:${channelId} sent:${sentForThisChannel} reason:no_more_jobs`);
+            if (isOutsideWindow) {
+              console.log(`[WORKER-DRAIN-END] [${requestId}] channelId:${channelId} sent:${sentForThisChannel} reason:no_more_manual_jobs_in_restricted_window`);
+            } else {
+              console.log(`[WORKER-DRAIN-END] [${requestId}] channelId:${channelId} sent:${sentForThisChannel} reason:no_more_jobs`);
+            }
             break;
+          }
+
+          // 3.1 Checagem de Janela (Defensiva)
+          if (isOutsideWindow && job.origin && SEND_WINDOW_RESTRICTED_ORIGINS.includes(job.origin)) {
+            // Isso só deve acontecer se a query .not().in() falhar ou houver race condition
+            console.warn(`[SEND-WINDOW-SKIP-DEFENSIVE] userId:${channelUserId} jobId:${job.id} origin:${job.origin} (Filtro de query deveria ter evitado isso)`);
+            break; // Para evitar loop infinito
           }
 
           // 4. Lock Atômico do Job
