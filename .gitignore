@@ -44,3 +44,7 @@ next-env.d.ts
 /synco-backup.bundle
 *.log
 *.bundle
+supabase_restore_*.sql
+backups/
+*.dump
+*.backup

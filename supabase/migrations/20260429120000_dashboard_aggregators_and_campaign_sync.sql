@@ -43,25 +43,23 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 3. Função Idempotente para Fechamento de Campanha
-CREATE OR REPLACE FUNCTION check_and_close_campaign(p_campaign_id UUID)
-RETURNS VOID AS $$
-DECLARE
-    v_pending_count INT;
+CREATE OR REPLACE FUNCTION public.check_and_close_campaign(p_campaign_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
-    -- Conta jobs que ainda não terminaram (inclui processing e scheduled)
-    SELECT COUNT(*) INTO v_pending_count
-    FROM send_jobs
-    WHERE campaign_id = p_campaign_id
-      AND status IN ('pending', 'processing', 'scheduled');
-
-    -- Se não houver mais nada pendente, fecha a campanha de forma idempotente
-    -- Mitigação de Race Condition via check de status na clausula WHERE
-    IF v_pending_count = 0 THEN
-        UPDATE campaigns 
-        SET status = 'completed', 
-            updated_at = NOW()
-        WHERE id = p_campaign_id 
-          AND status != 'completed';
-    END IF;
+    UPDATE public.campaigns
+    SET status = 'completed',
+        updated_at = NOW()
+    WHERE id = p_campaign_id
+      AND status != 'completed'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM public.send_jobs
+          WHERE campaign_id = p_campaign_id
+            AND status IN ('pending', 'processing', 'scheduled')
+      );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;

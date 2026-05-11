@@ -45,29 +45,32 @@ UPDATE public.plans SET price_monthly = 197.00 WHERE name = 'Pro';
 
 -- Se um seed fosse rodar agora:
 INSERT INTO public.plans (name, billing_cycle, price_monthly, limits)
-VALUES 
-('Starter', 'monthly', 59.00, '{
-    "quotas": {
-        "max_channels": 1,
-        "max_groups_sync": 50,
-        "max_sends_per_month": 10000
-    },
-    "features": {
-        "radar_access": false,
-        "api_access": false,
-        "advanced_reports": false
-    }
-}'),
-('Pro', 'monthly', 197.00, '{
-    "quotas": {
-        "max_channels": 3,
-        "max_groups_sync": 200,
-        "max_sends_per_month": 100000
-    },
-    "features": {
-        "radar_access": true,
-        "api_access": false,
-        "advanced_reports": true
-    }
-}')
-ON CONFLICT (id) DO NOTHING; -- Planos normalmente não têm chave única fixa em nome, mas isso é seguro se a database estiver limpa, ou podemos confiar no update acima.
+SELECT * FROM (VALUES 
+    ('Starter', 'monthly', 59.00, '{
+        "quotas": {
+            "max_channels": 1,
+            "max_groups_sync": 50,
+            "max_sends_per_month": 10000
+        },
+        "features": {
+            "radar_access": false,
+            "api_access": false,
+            "advanced_reports": false
+        }
+    }'::jsonb),
+    ('Pro', 'monthly', 197.00, '{
+        "quotas": {
+            "max_channels": 3,
+            "max_groups_sync": 200,
+            "max_sends_per_month": 100000
+        },
+        "features": {
+            "radar_access": true,
+            "api_access": false,
+            "advanced_reports": true
+        }
+    }'::jsonb)
+) AS v(name, billing_cycle, price_monthly, limits)
+WHERE NOT EXISTS (
+    SELECT 1 FROM public.plans p WHERE p.name = v.name
+);

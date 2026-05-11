@@ -9,27 +9,24 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  active_radar_count integer;
-  max_radar_sources integer := 3; -- Limite hardcoded conforme solicitado
 BEGIN
-  -- Só aplicamos a lógica se estivermos inserindo ou atualizando um radar para ATIVO
+  -- Só aplicamos a lógica se estivermos inserindo ou atualizando um radar para ATIVO.
   -- Outros source_type não são afetados.
   IF NEW.source_type = 'radar_offers' AND COALESCE(NEW.is_active, true) = true THEN
-    
-    -- Evita condição de corrida entre duas criações simultâneas do mesmo usuário
+
+    -- Evita condição de corrida entre duas criações simultâneas do mesmo usuário.
     PERFORM pg_advisory_xact_lock(hashtext(NEW.user_id::text));
 
-    -- Contamos quantos radares ativos o usuário já possui, excluindo o próprio registro (em caso de update)
-    SELECT COUNT(*)
-    INTO active_radar_count
-    FROM public.automation_sources
-    WHERE user_id = NEW.user_id
-      AND source_type = 'radar_offers'
-      AND is_active = true
-      AND id IS DISTINCT FROM NEW.id;
-
-    IF active_radar_count >= max_radar_sources THEN
+    -- Bloqueia se já existem 3 ou mais radares ativos do mesmo usuário,
+    -- excluindo o próprio registro em caso de UPDATE.
+    IF (
+      SELECT COUNT(*)
+      FROM public.automation_sources
+      WHERE user_id = NEW.user_id
+        AND source_type = 'radar_offers'
+        AND is_active = true
+        AND id IS DISTINCT FROM NEW.id
+    ) >= 3 THEN
       RAISE EXCEPTION 'Você atingiu o limite de radares ativos. Desative ou exclua um radar existente para criar outro.'
         USING ERRCODE = 'P0001';
     END IF;

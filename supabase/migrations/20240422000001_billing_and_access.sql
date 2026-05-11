@@ -87,29 +87,32 @@ EXCEPTION WHEN others THEN NULL; END $$;
 
 -- Seed inicial de planos
 INSERT INTO public.plans (name, billing_cycle, limits)
-VALUES 
-('Starter', 'monthly', '{
-    "quotas": {
-        "max_channels": 1,
-        "max_groups_sync": 50,
-        "max_sends_per_month": 10000
-    },
-    "features": {
-        "radar_access": false,
-        "api_access": false,
-        "advanced_reports": false
-    }
-}'),
-('Pro', 'monthly', '{
-    "quotas": {
-        "max_channels": 3,
-        "max_groups_sync": 200,
-        "max_sends_per_month": 100000
-    },
-    "features": {
-        "radar_access": true,
-        "api_access": false,
-        "advanced_reports": true
-    }
-}')
-ON CONFLICT DO NOTHING;
+SELECT * FROM (VALUES 
+    ('Starter', 'monthly', '{
+        "quotas": {
+            "max_channels": 1,
+            "max_groups_sync": 50,
+            "max_sends_per_month": 10000
+        },
+        "features": {
+            "radar_access": false,
+            "api_access": false,
+            "advanced_reports": false
+        }
+    }'::jsonb),
+    ('Pro', 'monthly', '{
+        "quotas": {
+            "max_channels": 3,
+            "max_groups_sync": 200,
+            "max_sends_per_month": 100000
+        },
+        "features": {
+            "radar_access": true,
+            "api_access": false,
+            "advanced_reports": true
+        }
+    }'::jsonb)
+) AS v(name, billing_cycle, limits)
+WHERE NOT EXISTS (
+    SELECT 1 FROM public.plans p WHERE p.name = v.name
+);
