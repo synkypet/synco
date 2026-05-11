@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { KineticButton } from '@/components/ui/KineticButton';
 import { 
   Zap, 
   Target, 
@@ -20,7 +21,8 @@ import {
   BadgePercent,
   Users,
   Plus,
-  Trash2
+  Trash2,
+  Save
 } from 'lucide-react';
 import { KeywordManager, Keyword } from '@/components/automation/KeywordManager';
 import { SHOPEE_SORT_TYPE, SHOPEE_SORT_TYPE_LABELS } from '@/lib/constants/shopee';
@@ -46,21 +48,35 @@ export function OriginBlock({
   const config = source.config || {};
   const [localKeywords, setLocalKeywords] = useState<Keyword[]>(initialKeywords);
 
-  // Filtros da primeira rota (Curadoria)
-  const filters = source.automation_routes?.[0]?.filters || {};
+  const [localConfig, setLocalConfig] = useState<any>(() => ({ ...config }));
+  const [localFilters, setLocalFilters] = useState<any>(() => ({ ...source.automation_routes?.[0]?.filters }));
+  const [isDirty, setIsDirty] = useState(false);
 
-  const handleUpdateConfig = (updates: any) => {
-    onUpdate({ config: { ...config, ...updates, preset_type: 'custom' } });
+  const filters = localFilters;
+
+  const handleUpdateLocalConfig = (updates: any) => {
+    setLocalConfig((prev: any) => ({ ...prev, ...updates }));
+    setIsDirty(true);
   };
 
-  const handleUpdateFilters = (updates: any) => {
-    if (!source.automation_routes?.[0]) return;
-    const newRoutes = [...source.automation_routes];
-    newRoutes[0] = {
-      ...newRoutes[0],
-      filters: { ...newRoutes[0].filters, ...updates }
-    };
-    onUpdate({ automation_routes: newRoutes });
+  const handleUpdateLocalFilters = (updates: any) => {
+    setLocalFilters((prev: any) => ({ ...prev, ...updates }));
+    setIsDirty(true);
+  };
+
+  const handleSave = () => {
+    onUpdate({ config: { ...config, ...localConfig, preset_type: 'custom' } });
+    
+    if (source.automation_routes?.[0]) {
+      const newRoutes = [...source.automation_routes];
+      newRoutes[0] = {
+        ...newRoutes[0],
+        filters: { ...newRoutes[0].filters, ...localFilters }
+      };
+      onUpdate({ automation_routes: newRoutes });
+    }
+    
+    setIsDirty(false);
   };
 
   const currentOriginGroup = allGroups.find(g => g.remote_id === source.external_group_id);
@@ -135,8 +151,8 @@ export function OriginBlock({
                     <BarChart3 size={10} className="text-kinetic-orange" /> Estratégia
                   </Label>
                   <Select 
-                    value={(config.sortType || SHOPEE_SORT_TYPE.RELEVANCE).toString()} 
-                    onValueChange={(v) => handleUpdateConfig({ sortType: parseInt(v) })}
+                    value={(localConfig.sortType || SHOPEE_SORT_TYPE.RELEVANCE).toString()} 
+                    onValueChange={(v) => handleUpdateLocalConfig({ sortType: parseInt(v) })}
                   >
                     <SelectTrigger className="h-10 bg-deep-void border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-skeuo-pressed">
                       <SelectValue />
@@ -157,7 +173,7 @@ export function OriginBlock({
                   </Label>
                   <Select 
                     value={(filters.min_discount_percent || 0).toString()} 
-                    onValueChange={(v) => handleUpdateFilters({ min_discount_percent: parseInt(v) })}
+                    onValueChange={(v) => handleUpdateLocalFilters({ min_discount_percent: parseInt(v) })}
                   >
                     <SelectTrigger className="h-10 bg-deep-void border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-skeuo-pressed">
                       <SelectValue />
@@ -186,7 +202,7 @@ export function OriginBlock({
                       type="number" 
                       className="bg-deep-void border-white/5 h-10 w-full pl-9 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors"
                       value={filters.min_price || ''}
-                      onChange={(e) => handleUpdateFilters({ min_price: Number(e.target.value) })}
+                      onChange={(e) => handleUpdateLocalFilters({ min_price: Number(e.target.value) })}
                       placeholder="0.00"
                     />
                   </div>
@@ -196,7 +212,7 @@ export function OriginBlock({
                       type="number" 
                       className="bg-deep-void border-white/5 h-10 w-full pl-9 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors"
                       value={filters.max_price || ''}
-                      onChange={(e) => handleUpdateFilters({ max_price: Number(e.target.value) })}
+                      onChange={(e) => handleUpdateLocalFilters({ max_price: Number(e.target.value) })}
                       placeholder="Sem limite"
                     />
                   </div>
@@ -215,7 +231,7 @@ export function OriginBlock({
                     </div>
                     <Switch 
                       checked={filters.only_official_stores} 
-                      onCheckedChange={(v) => handleUpdateFilters({ only_official_stores: v })}
+                      onCheckedChange={(v) => handleUpdateLocalFilters({ only_official_stores: v })}
                       className="scale-75"
                     />
                  </div>
@@ -231,8 +247,8 @@ export function OriginBlock({
                        min="1" 
                        max="1440" 
                        placeholder="1" 
-                       value={config.send_interval_minutes || ''} 
-                       onChange={(e) => handleUpdateConfig({ send_interval_minutes: parseInt(e.target.value) || 1 })}
+                       value={localConfig.send_interval_minutes || ''} 
+                       onChange={(e) => handleUpdateLocalConfig({ send_interval_minutes: parseInt(e.target.value) || 1 })}
                        className="bg-deep-void border-white/5 h-10 w-full pl-3 pr-20 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors"
                      />
                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-white/20 uppercase pointer-events-none">minuto(s)</span>
@@ -247,11 +263,11 @@ export function OriginBlock({
                        <input 
                          type="time" 
                          className="bg-deep-void border border-white/5 h-10 w-full pl-9 pr-3 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors text-white"
-                         value={config.send_window_start || ''} 
+                         value={localConfig.send_window_start || ''} 
                          onChange={(e) => {
                            const start = e.target.value;
-                           const end = config.send_window_end;
-                           handleUpdateConfig({
+                           const end = localConfig.send_window_end;
+                           handleUpdateLocalConfig({
                              send_window_start: start || undefined,
                              send_window_end: (start && end) ? end : undefined,
                              send_window_timezone: (start && end) ? 'America/Sao_Paulo' : undefined
@@ -264,11 +280,11 @@ export function OriginBlock({
                        <input 
                          type="time" 
                          className="bg-deep-void border border-white/5 h-10 w-full pl-9 pr-3 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors text-white"
-                         value={config.send_window_end || ''} 
+                         value={localConfig.send_window_end || ''} 
                          onChange={(e) => {
                            const end = e.target.value;
-                           const start = config.send_window_start;
-                           handleUpdateConfig({
+                           const start = localConfig.send_window_start;
+                           handleUpdateLocalConfig({
                              send_window_end: end || undefined,
                              send_window_start: (start && end) ? start : undefined,
                              send_window_timezone: (start && end) ? 'America/Sao_Paulo' : undefined
@@ -279,6 +295,19 @@ export function OriginBlock({
                    </div>
                    <p className="text-[8px] text-white/30 italic font-medium ml-1">Fora deste horário, os envios ficam pausados na fila</p>
                  </div>
+              </div>
+
+              {/* Botão de Salvar */}
+              <div className="pt-6 flex justify-end border-t border-white/5">
+                {isDirty ? (
+                  <KineticButton onClick={handleSave} className="gap-2 h-10 px-6 rounded-xl animate-in fade-in duration-300">
+                    <Save size={16} /> Salvar alterações
+                  </KineticButton>
+                ) : (
+                  <span className="text-[10px] uppercase font-black tracking-widest text-emerald-500/50 italic mr-2 self-center animate-in fade-in duration-300 flex items-center gap-1.5">
+                    <ShieldCheck size={12} /> Configurações salvas
+                  </span>
+                )}
               </div>
             </div>
           </div>
