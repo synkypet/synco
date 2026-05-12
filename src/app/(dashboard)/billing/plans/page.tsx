@@ -100,8 +100,8 @@ export default function PlansPage() {
       
       // Refresh total para atualizar estados de acesso
       setTimeout(() => {
-        router.push('/dashboard');
         router.refresh();
+        router.replace('/');
       }, 1500);
 
     } catch (err: any) {
