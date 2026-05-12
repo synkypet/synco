@@ -50,7 +50,7 @@ export function MarketplaceGrid() {
         <div>
           <h3 className="text-lg font-bold text-red-700">Erro ao carregar marketplaces</h3>
           <p className="text-sm text-red-500 max-w-xs mx-auto">
-            Não foi possível estabelecer conexão com o catálogo do Supabase.
+            Não foi possível carregar os marketplaces. Tente novamente ou contate o suporte.
           </p>
         </div>
         <Button variant="outline" onClick={handleRetry} className="gap-2">
@@ -84,8 +84,27 @@ export function MarketplaceGrid() {
     });
   };
 
+  const activeConnectionsCount = connections?.filter(c => c.is_active).length || 0;
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+    <div className="space-y-6">
+      {catalog && catalog.length > 0 && activeConnectionsCount === 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between p-6 bg-amber-50/50 rounded-2xl border-2 border-amber-100 border-dashed animate-in fade-in slide-in-from-top-4">
+          <div className="flex gap-4 items-start sm:items-center">
+            <div className="p-3 bg-amber-100 rounded-full text-amber-600 shrink-0">
+              <AlertCircle size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-amber-800">Você ainda não conectou nenhum marketplace.</h3>
+              <p className="text-sm text-amber-600 max-w-xl">
+                Adicione suas credenciais de afiliado da Shopee ou de outro marketplace para começar a usar o Radar e as ofertas automáticas.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
       {catalog?.map((marketplace) => {
         const connection = connections?.find(c => c.marketplace_id === marketplace.id);
         return (
@@ -99,6 +118,7 @@ export function MarketplaceGrid() {
           />
         );
       })}
+      </div>
     </div>
   );
 }

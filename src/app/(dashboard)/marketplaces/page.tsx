@@ -17,7 +17,7 @@ export default function MarketplacesPage() {
         </div>
         <p className="text-muted-foreground max-w-2xl">
           Conecte suas contas de afiliado para que o SYNCO consiga gerar seus links automaticamente. 
-          Ative os marketplaces desejados e insira seu ID de rastreio.
+          Ative os marketplaces desejados e insira seu ID de rastreio. Sem marketplace conectado, o SYNCO não consegue buscar produtos, montar ofertas ou alimentar o Radar.
         </p>
       </div>
 

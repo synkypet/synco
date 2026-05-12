@@ -14,10 +14,20 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { marketplace_id, secret } = body;
+    const { marketplace_id, secret, shopee_app_id } = body;
 
     if (!marketplace_id || !secret) {
       return NextResponse.json({ error: 'Faltam dados obrigatórios' }, { status: 400 });
+    }
+
+    if (!process.env.SYNCO_MASTER_KEY || process.env.SYNCO_MASTER_KEY.length !== 64) {
+      console.error('SERVER ERROR: SYNCO_MASTER_KEY ausente ou inválida. Não é possível instanciar segredo.');
+      return NextResponse.json({ error: 'Configuração de criptografia ausente no servidor.' }, { status: 500 });
+    }
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('SERVER ERROR: SUPABASE_SERVICE_ROLE_KEY ausente.');
+      return NextResponse.json({ error: 'Configuração de banco de dados ausente no servidor.' }, { status: 500 });
     }
 
     // 1. Encripta no Side de Segurança
@@ -41,14 +51,35 @@ export async function POST(request: Request) {
       }, { onConflict: 'user_id, marketplace_id' });
 
     if (upsertError) {
-      console.error('Falha ao salvar segredo criptografado:', upsertError);
-      return NextResponse.json({ error: 'Falha interna ao injetar segredo' }, { status: 500 });
+      console.error('Falha ao salvar segredo criptografado:', upsertError.message);
+      return NextResponse.json({ error: 'Falha interna ao armazenar credencial.' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    // 3. Atualizar o registro público do usuário em user_marketplaces
+    const { error: connectionError } = await supabaseAdmin
+      .from('user_marketplaces')
+      .upsert({
+        user_id: user.id,
+        marketplace_id: marketplace_id,
+        shopee_app_id: shopee_app_id || null,
+        has_secret: true,
+        connection_status: 'configured',
+        last_error: null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id, marketplace_id' });
+
+    if (connectionError) {
+      console.error('Falha ao atualizar status da conexão de marketplace:', connectionError.message);
+      return NextResponse.json({ error: 'Falha interna ao atualizar status.' }, { status: 500 });
+    }
+
+    return NextResponse.json({ 
+      ok: true,
+      status: 'configured' 
+    });
     
   } catch (error: any) {
-    console.error('Error on secret encryption route:', error);
-    return NextResponse.json({ error: error.message || 'Erro interno' }, { status: 500 });
+    console.error('Error on secret encryption route:', error.message || 'Unknown error');
+    return NextResponse.json({ error: 'Erro interno ao processar credencial.' }, { status: 500 });
   }
 }

@@ -12,6 +12,7 @@ import {
 } from '@/hooks/use-automations';
 import { useChannels } from '@/hooks/use-channels';
 import { useAccess } from '@/hooks/use-access';
+import { useUserMarketplaceConnections } from '@/hooks/use-marketplaces';
 import { useGroups } from '@/hooks/use-groups';
 import { useDestinations } from '@/hooks/use-destinations';
 import { useQueryClient } from '@tanstack/react-query';
@@ -126,12 +127,17 @@ export default function AutomacoesDashboardPage() {
   const activeRadarCount = sources?.filter(s => s.source_type === 'radar_offers' && s.is_active).length || 0;
   const isRadarLimitReached = entryType === 'radar_offers' && activeRadarCount >= maxRadars;
 
+  // Marketplaces
+  const { data: connections } = useUserMarketplaceConnections(user?.id);
+  const activeConnectionsCount = connections?.filter(c => c.is_active).length || 0;
+  const isMarketplaceRequiredAndMissing = (entryType === 'radar_offers' || entryType === 'coupon_shopee') && activeConnectionsCount === 0;
+
   // Validação simples
   const isNameValid = newName.trim().length >= 3;
-  const isEntryValid = entryType === 'radar_offers' || (channelId && sourceGroupId);
+  const isEntryValid = entryType === 'radar_offers' || entryType === 'coupon_shopee' || (channelId && sourceGroupId);
   const isTargetValid = !!targetId;
   const isSearchTermValid = entryType === 'radar_offers' ? creationKeywords.length > 0 : true;
-  const isFormValid = isNameValid && isEntryValid && isTargetValid && isSearchTermValid && !isRadarLimitReached;
+  const isFormValid = isNameValid && isEntryValid && isTargetValid && isSearchTermValid && !isRadarLimitReached && !isMarketplaceRequiredAndMissing;
 
   const handleCreatePipeline = () => {
     if (!isFormValid) return;
@@ -370,7 +376,21 @@ export default function AutomacoesDashboardPage() {
                       </div>
                     </div>
   
-                    {entryType === 'radar_offers' && (
+                    {isMarketplaceRequiredAndMissing && (
+                      <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-3 animate-in fade-in zoom-in duration-300">
+                         <AlertCircle size={20} className="text-amber-500 shrink-0" />
+                         <div className="space-y-0.5">
+                            <p className="text-[10px] font-black uppercase text-amber-500 tracking-widest">
+                              Marketplace Obrigatório
+                            </p>
+                            <p className="text-[9px] font-medium text-amber-400/80 leading-tight">
+                               Sem marketplace conectado, o SYNCO não consegue buscar produtos ou cupons. Conecte sua conta em Configurações &gt; Marketplaces.
+                            </p>
+                         </div>
+                      </div>
+                    )}
+
+                    {entryType === 'radar_offers' && !isMarketplaceRequiredAndMissing && (
                       <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest flex justify-between">
@@ -561,7 +581,7 @@ export default function AutomacoesDashboardPage() {
                       </div>
                     )}
 
-                    {entryType === 'coupon_shopee' && (
+                    {entryType === 'coupon_shopee' && !isMarketplaceRequiredAndMissing && (
                       <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
                         <div className="grid grid-cols-2 gap-4">
                            <div className="space-y-2">

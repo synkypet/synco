@@ -22,6 +22,9 @@ export interface UserMarketplaceConnection {
     shopee_app_id?: string;
     shopee_app_secret?: string; // used for transit
     has_secret?: boolean; // stored UI flag ensuring config exists
+    connection_status?: 'not_connected' | 'connected' | 'error' | 'pending_verification' | 'configured';
+    last_error?: string;
+    last_verified_at?: string;
     created_at: string;
     updated_at: string;
 }

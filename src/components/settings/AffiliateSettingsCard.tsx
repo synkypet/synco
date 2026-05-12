@@ -77,7 +77,8 @@ export function AffiliateSettingsCard({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             marketplace_id: marketplace.id,
-            secret: shopeeAppSecret
+            secret: shopeeAppSecret,
+            shopee_app_id: shopeeAppId
           })
         });
 
@@ -110,8 +111,10 @@ export function AffiliateSettingsCard({
     setIsTesting(true);
     setTestResult(null);
     try {
-      const response = await fetch('/api/settings/marketplaces/shopee/test', {
-        method: 'POST'
+      const response = await fetch('/api/marketplaces/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marketplace_id: marketplace.id })
       });
       const data = await response.json();
       setTestResult({
@@ -149,21 +152,25 @@ export function AffiliateSettingsCard({
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <Badge 
-            variant="outline" 
-            className={cn(
-              "text-[9px] font-black uppercase tracking-widest border-none px-2 h-6 shadow-skeuo-pressed",
-              isConfigured ? "bg-emerald-500/10 text-emerald-500" : "bg-deep-void text-white/20"
-            )}
-          >
-            {isConfigured ? 'Parametrizado' : 'Pendente'}
-          </Badge>
-          {isShopee && connection?.has_secret && (
-            <Badge 
-              variant="outline" 
-              className="text-[9px] font-black uppercase tracking-widest border-none px-2 h-6 shadow-skeuo-pressed bg-kinetic-orange/10 text-kinetic-orange flex items-center gap-1 mt-1"
-            >
-              <ShieldCheck className="w-3 h-3" /> API Configurada
+          {connection?.connection_status === 'connected' ? (
+            <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-emerald-500/20 px-2 h-6 shadow-skeuo-pressed bg-emerald-500/10 text-emerald-500">
+              <ShieldCheck className="w-3 h-3 mr-1" /> Conectado
+            </Badge>
+          ) : connection?.connection_status === 'error' ? (
+            <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-red-500/20 px-2 h-6 shadow-skeuo-pressed bg-red-500/10 text-red-500">
+              <AlertCircle className="w-3 h-3 mr-1" /> Erro na conexão
+            </Badge>
+          ) : connection?.connection_status === 'pending_verification' ? (
+            <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-amber-500/20 px-2 h-6 shadow-skeuo-pressed bg-amber-500/10 text-amber-500">
+              <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Verificação pendente
+            </Badge>
+          ) : connection?.connection_status === 'configured' ? (
+            <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-blue-500/20 px-2 h-6 shadow-skeuo-pressed bg-blue-500/10 text-blue-400">
+              <ShieldCheck className="w-3 h-3 mr-1" /> Credenciais salvas
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-white/5 px-2 h-6 shadow-skeuo-pressed bg-deep-void text-white/40">
+              Não conectado
             </Badge>
           )}
           <div className="flex items-center gap-2 mt-2">
@@ -237,17 +244,19 @@ export function AffiliateSettingsCard({
                 </div>
 
                 {connection?.has_secret && (
-                  <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-500">
+                  <div className="pt-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-500">
                     <button
                       type="button"
                       onClick={handleTestConnection}
                       disabled={isTesting}
                       className={cn(
                         "flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all",
-                        testResult?.valid 
+                        connection.connection_status === 'connected'
                           ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
-                          : testResult?.valid === false
-                          ? "bg-red-500/10 border-red-500/20 text-red-400 col-span-2"
+                          : connection.connection_status === 'error'
+                          ? "bg-red-500/10 border-red-500/20 text-red-400"
+                          : (connection.connection_status === 'pending_verification' || connection.connection_status === 'configured')
+                          ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
                           : "bg-deep-void/50 border-white/5 text-white/40 hover:text-white/60 hover:border-white/10"
                       )}
                     >
@@ -256,15 +265,17 @@ export function AffiliateSettingsCard({
                       ) : (
                         <ShieldCheck className="w-3 h-3" />
                       )}
-                      {isTesting ? 'Validando...' : 'Testar Conexão Open API'}
+                      {isTesting ? 'Verificando...' : (connection.connection_status === 'error' ? 'Testar novamente' : 'Testar Conexão')}
                     </button>
 
-                    {testResult && (
+                    {(testResult?.message || connection.last_error || connection.connection_status === 'pending_verification' || connection.connection_status === 'configured') && (
                       <p className={cn(
-                        "mt-2 text-[8px] font-bold uppercase tracking-tighter leading-tight",
-                        testResult.valid ? "text-emerald-500/70" : "text-red-400"
+                        "text-[9px] font-bold uppercase tracking-tighter leading-tight",
+                        (testResult?.valid || connection.connection_status === 'connected') ? "text-emerald-500/70" : (connection.connection_status === 'pending_verification' || connection.connection_status === 'configured' ? "text-amber-500/70" : "text-red-400")
                       )}>
-                        {testResult.message}
+                        {testResult?.message || connection.last_error || 
+                         (connection.connection_status === 'configured' && 'Suas credenciais foram salvas com segurança. Clique em Testar conexão para validar com a Shopee.') ||
+                         (connection.connection_status === 'pending_verification' && 'Configuração salva. Verificação em andamento...')}
                       </p>
                     )}
                   </div>

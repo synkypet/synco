@@ -62,6 +62,8 @@ import { SHOPEE_SORT_TYPE, SHOPEE_LIST_TYPE, SHOPEE_SORT_TYPE_LABELS, SHOPEE_LIS
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { KeywordTagsInput } from '@/components/shared/KeywordTagsInput';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserMarketplaceConnections } from '@/hooks/use-marketplaces';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useShopeeOffers, ShopeeOffer } from '@/hooks/use-shopee-offers';
 import { useShopeeCouponPages } from '@/hooks/use-shopee-coupon-pages';
@@ -85,6 +87,10 @@ interface DiscoveryPage {
 }
 
 export default function RadarOfertasPage() {
+  const { user } = useAuth();
+  const { data: connections, isLoading: isLoadingConnections, isError: isErrorConnections } = useUserMarketplaceConnections(user?.id);
+  const activeConnectionsCount = connections?.filter(c => c.is_active).length || 0;
+
   // --- STATE ---
   const [activeTab, setActiveTab] = useState<'products' | 'campaigns' | 'coupons'>('products');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -380,6 +386,40 @@ export default function RadarOfertasPage() {
   return (
     <LayoutContainer type="operational">
       <OperationalAccessBanner />
+      
+      {/* Aviso Obrigatório de Marketplace */}
+      {!isLoadingConnections && activeConnectionsCount === 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between p-6 bg-red-50/50 rounded-2xl border-2 border-red-100 border-dashed animate-in fade-in slide-in-from-top-4 mb-6 mt-2">
+          <div className="flex gap-4 items-start sm:items-center">
+            <div className="p-3 bg-red-100 rounded-full text-red-600 shrink-0">
+              <AlertCircle size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-red-800">Conecte pelo menos um marketplace para o SYNCO funcionar corretamente.</h3>
+              <p className="text-sm text-red-600 max-w-2xl mt-1">
+                O SYNCO precisa das suas credenciais de afiliado para buscar produtos, gerar ofertas e montar campanhas automaticamente.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 sm:mt-0 shrink-0">
+            <Link href="/marketplaces">
+              <Button variant="default" className="bg-red-600 hover:bg-red-700 text-white gap-2 shadow-skeuo-flat border-none">
+                <Store size={16} /> Conectar marketplace
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {isErrorConnections && (
+        <div className="flex items-center gap-3 p-4 bg-red-50/50 rounded-xl border border-red-100/50 mb-6 mt-2">
+          <AlertCircle size={20} className="text-red-500 shrink-0" />
+          <p className="text-sm text-red-700">
+            Não foi possível carregar os marketplaces. Tente novamente ou contate o suporte.
+          </p>
+        </div>
+      )}
+
       {/* 1. Page Header — Design consistent with "Grupos" */}
       <PageHeader
         title="Radar de Ofertas"
