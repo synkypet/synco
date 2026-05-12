@@ -128,37 +128,84 @@ export const radarDispatcherService = {
         sortType: (source.config as any)?.sortType,
         preset_type: (source.config as any)?.preset_type,
         min_discount_percent: firstRouteFilters.min_discount_percent,
-        only_official_stores: firstRouteFilters.only_official_stores,
-        min_price: firstRouteFilters.min_price,
-        max_price: firstRouteFilters.max_price,
+        only_official_stores: firstRouteFilters.only_official_stores ?? false,
+        min_price: firstRouteFilters.min_price ?? null,
+        max_price: firstRouteFilters.max_price ?? null,
         send_interval_minutes_effective: sendIntervalMinutes,
         raw_interval_minutes: rawInterval,
         raw_send_interval_minutes: rawSendInterval
       });
       
+      // ─── PACING ENFORCEMENT (Cadência Real) ──────────────────────────────
       // Controla o tempo de agendamento em memória para esta fonte durante o loop
       let currentScheduleCursor = new Date();
       let hasExistingSchedule = false;
 
-      if (source.channel_id) {
-        const { data: lastScheduled } = await supabase
-          .from('send_jobs')
-          .select('scheduled_at')
-          .eq('channel_id', source.channel_id)
-          .eq('user_id', source.user_id)
-          .not('scheduled_at', 'is', null)
-          .order('scheduled_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      // 1. Identificar campanhas recentes desta fonte via radar_discovered_products
+      const { data: recentRdp } = await supabase
+        .from('radar_discovered_products')
+        .select('campaign_id')
+        .eq('source_id', source.id)
+        .not('campaign_id', 'is', null)
+        .order('dispatched_at', { ascending: false })
+        .limit(20); // Limite expandido para cobrir backlogs e campanhas paralelas
 
-        if (lastScheduled?.scheduled_at) {
-          const dbTime = new Date(lastScheduled.scheduled_at);
-          if (dbTime > currentScheduleCursor) {
-            currentScheduleCursor = dbTime;
-            hasExistingSchedule = true;
-          }
+      // Deduplicação de IDs de campanha para otimizar query de jobs
+      const campaignIds = [...new Set(recentRdp?.map(r => r.campaign_id).filter(Boolean))];
+      
+      let lastFinishedAt = new Date(0);
+      const now = new Date();
+
+      if (campaignIds.length > 0) {
+        // 2. Verificar se há jobs ainda ATIVOS para estas campanhas
+        const { data: jobs } = await supabase
+          .from('send_jobs')
+          .select('id, status, created_at, scheduled_at, processed_at, campaign_id')
+          .in('campaign_id', campaignIds);
+
+        const activeStatuses = ['pending', 'processing', 'sending', 'running', 'queued'];
+        const activeJobs = jobs?.filter(j => activeStatuses.includes(j.status)) || [];
+
+        if (activeJobs.length > 0) {
+          console.log(`${sourceLogPrefix} [RADAR-PACING-SKIP_ACTIVE_CAMPAIGN]`, {
+            source_id: source.id,
+            active_campaign_id: activeJobs[0].campaign_id,
+            pending_count: activeJobs.filter(j => j.status === 'pending').length,
+            processing_count: activeJobs.filter(j => j.status !== 'pending').length,
+            last_job_created_at: activeJobs[0].created_at,
+            now: now.toISOString()
+          });
+          continue;
+        }
+
+        // 3. Se não há ativos, encontrar o horário do último job processado (ou agendado)
+        const times = (jobs || []).map(j => {
+          const t = j.processed_at || j.scheduled_at || j.created_at;
+          return t ? new Date(t).getTime() : 0;
+        });
+        if (times.length > 0) {
+          lastFinishedAt = new Date(Math.max(...times));
         }
       }
+
+      // 4. Aplicar o intervalo de descanso pós-campanha
+      const nextAllowedAt = new Date(lastFinishedAt.getTime() + sendIntervalMinutes * 60 * 1000);
+
+      if (now < nextAllowedAt) {
+        console.log(`${sourceLogPrefix} [RADAR-PACING-SKIP]`, {
+          source_id: source.id,
+          send_interval_minutes_effective: sendIntervalMinutes,
+          last_finished_at: lastFinishedAt.toISOString(),
+          next_allowed_at: nextAllowedAt.toISOString(),
+          now: now.toISOString(),
+          diff_minutes: ((nextAllowedAt.getTime() - now.getTime()) / 60000).toFixed(1)
+        });
+        continue;
+      }
+
+      // Se passou o skip, podemos agendar. O cursor começa agora.
+      currentScheduleCursor = now;
+      hasExistingSchedule = false; 
 
       // ─── BILLING ENFORCEMENT ───────────────────────────────────────────────
       let access = userAccessCache.get(source.user_id);
