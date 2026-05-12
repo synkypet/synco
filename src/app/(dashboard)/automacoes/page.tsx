@@ -11,6 +11,7 @@ import {
   useUpdateAutomationSource
 } from '@/hooks/use-automations';
 import { useChannels } from '@/hooks/use-channels';
+import { useAccess } from '@/hooks/use-access';
 import { useGroups } from '@/hooks/use-groups';
 import { useDestinations } from '@/hooks/use-destinations';
 import { useQueryClient } from '@tanstack/react-query';
@@ -83,8 +84,10 @@ export default function AutomacoesDashboardPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   
+  const { access, isLoading: isLoadingAccess } = useAccess();
+  
   // Configurações de Limite
-  const MAX_RADAR_SOURCES = Number(process.env.NEXT_PUBLIC_MAX_RADAR_SOURCES_PER_USER || 3);
+  const maxRadars = access?.quotas?.max_radars ?? 0;
   
   // Queries
   const { data: sources, isLoading } = useAutomationSources(user?.id as string);
@@ -121,7 +124,7 @@ export default function AutomacoesDashboardPage() {
 
   // Cálculos de Limite
   const activeRadarCount = sources?.filter(s => s.source_type === 'radar_offers' && s.is_active).length || 0;
-  const isRadarLimitReached = entryType === 'radar_offers' && activeRadarCount >= MAX_RADAR_SOURCES;
+  const isRadarLimitReached = entryType === 'radar_offers' && activeRadarCount >= maxRadars;
 
   // Validação simples
   const isNameValid = newName.trim().length >= 3;
@@ -297,12 +300,16 @@ export default function AutomacoesDashboardPage() {
                        {entryType === 'radar_offers' && (
                          <div className={cn(
                            "flex items-center gap-2 px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest transition-all",
-                           activeRadarCount >= MAX_RADAR_SOURCES 
+                           activeRadarCount >= maxRadars 
                              ? "bg-red-500/10 border-red-500/20 text-red-500" 
                              : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
                          )}>
                            <Activity size={10} />
-                           Radares Ativos: {activeRadarCount}/{MAX_RADAR_SOURCES}
+                           {maxRadars > 0 ? (
+                             `Radares Ativos: ${activeRadarCount}/${maxRadars}`
+                           ) : (
+                             "Seu plano não inclui Radar"
+                           )}
                          </div>
                        )}
                     </DialogTitle>
@@ -538,9 +545,15 @@ export default function AutomacoesDashboardPage() {
                           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 animate-in fade-in zoom-in duration-300">
                              <ShieldAlert size={20} className="text-red-500 shrink-0" />
                              <div className="space-y-0.5">
-                                <p className="text-[10px] font-black uppercase text-red-500 tracking-widest">Limite Atingido</p>
+                                <p className="text-[10px] font-black uppercase text-red-500 tracking-widest">
+                                  {maxRadars === 0 ? "Upgrade Necessário" : "Limite Atingido"}
+                                </p>
                                 <p className="text-[9px] font-medium text-red-400/80 leading-tight">
-                                   Você atingiu o limite de {MAX_RADAR_SOURCES} radares ativos. Desative um radar existente para criar outro.
+                                   {maxRadars === 0 ? (
+                                     "Seu plano atual não inclui Radar. Faça upgrade para usar automações Radar."
+                                   ) : (
+                                     `Você atingiu o limite de ${maxRadars} radares ativos do seu plano. Faça upgrade para criar mais.`
+                                   )}
                                 </p>
                              </div>
                           </div>

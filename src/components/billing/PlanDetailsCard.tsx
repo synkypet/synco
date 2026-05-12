@@ -41,6 +41,7 @@ export function PlanDetailsCard() {
            <div className="space-y-6">
               <QuotaItem label="Canais de Saída" value={quotas?.max_channels} />
               <QuotaItem label="Grupos Sincronizados" value={quotas?.max_groups_sync} />
+              <QuotaItem label="Radares Ativos" value={quotas?.max_radars} />
               <QuotaItem label="Envios Mensais" value={quotas?.max_sends_per_month} />
            </div>
         </Card>
@@ -53,7 +54,7 @@ export function PlanDetailsCard() {
            <div className="grid grid-cols-1 gap-3">
               <FeatureItem label="Radar de Ofertas" active={features?.radar_access} />
               <FeatureItem label="Acesso via API Operacional" active={features?.api_access} />
-              <FeatureItem label="Relatórios Avançados" active={features?.advanced_reports} />
+              <FeatureItem label="Dashboard de Métricas" active={features?.advanced_reports} />
               <FeatureItem label="Assistente IA (M1 Core)" active={true} />
            </div>
         </Card>

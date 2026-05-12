@@ -4,6 +4,7 @@ export const UNLIMITED_QUOTAS: Quotas = {
   max_channels: 999,
   max_groups_sync: 9999,
   max_sends_per_month: 9999999,
+  max_radars: 999,
 };
 
 export const FULL_FEATURES: Features = {
@@ -16,6 +17,7 @@ export const BLOCKED_QUOTAS: Quotas = {
   max_channels: 0,
   max_groups_sync: 0,
   max_sends_per_month: 0,
+  max_radars: 0,
 };
 
 export const NO_FEATURES: Features = {

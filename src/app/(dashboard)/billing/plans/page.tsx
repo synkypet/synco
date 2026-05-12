@@ -10,12 +10,28 @@ import { TactileCard } from "@/components/ui/TactileCard";
 import { KineticButton } from "@/components/ui/KineticButton";
 import { cn } from "@/lib/utils";
 
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 export default function PlansPage() {
   const router = useRouter();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [loadingBase, setLoadingBase] = useState(true);
   const [errorBase, setErrorBase] = useState<string | null>(null);
+  
+  // Estados para Simulação
+  const [simulationEnabled, setSimulationEnabled] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [planToSimulate, setPlanToSimulate] = useState<any>(null);
 
   useEffect(() => {
     async function loadPlans() {
@@ -32,6 +48,13 @@ export default function PlansPage() {
         if (data) {
           setPlans(data);
         }
+
+        // Verificar se simulação está ativa (poderia vir de um config ou env exposta)
+        // Por segurança, vamos apenas tentar detectar se o endpoint responde ou se o usuário quer ver
+        // No Synco, costumamos expor via NEXT_PUBLIC se necessário, mas aqui vamos assumir que o usuário
+        // que ativou a env quer ver o botão.
+        setSimulationEnabled(process.env.NEXT_PUBLIC_BILLING_SIMULATION_ENABLED === 'true');
+
       } catch (err: any) {
         console.error('Erro ao carregar planos:', err);
         setErrorBase('Não foi possível carregar os planos. Tente novamente.');
@@ -42,32 +65,46 @@ export default function PlansPage() {
     loadPlans();
   }, []);
 
-  const handleSubscribe = async (planSlug: string) => {
+  const handleSubscribeKiwify = (plan: any) => {
+    const checkoutUrl = plan.metadata?.kiwify_checkout_url;
+    if (checkoutUrl) {
+      window.open(checkoutUrl, '_blank');
+    } else {
+      toast.info("Checkout da Kiwify ainda não configurado para este plano.");
+    }
+  };
+
+  const handleSimulatePayment = async () => {
+    if (!planToSimulate) return;
+    
     try {
-      setLoadingPlan(planSlug);
-      const res = await fetch("/api/billing/checkout", {
+      setIsSimulating(true);
+      const res = await fetch("/api/billing/simulate-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planSlug })
+        body: JSON.stringify({ planSlug: planToSimulate.slug })
       });
       
       const data = await res.json();
       
       if (!res.ok) {
-        throw new Error(data.error || "Erro ao iniciar checkout");
+        throw new Error(data.message || data.error || "Erro na simulação");
       }
 
-      if (!data.checkoutUrl) {
-        throw new Error("URL de checkout não retornada pelo servidor.");
-      }
-
-      // Redireciona pro Mercado Pago
-      window.location.href = data.checkoutUrl;
+      toast.success(data.message || "Plano ativado com sucesso!");
+      
+      // Refresh total para atualizar estados de acesso
+      setTimeout(() => {
+        router.push('/dashboard');
+        router.refresh();
+      }, 1500);
 
     } catch (err: any) {
-      console.error("[CHECKOUT] Erro:", err);
-      toast.error(err.message || "Não foi possível iniciar o checkout.");
-      setLoadingPlan(null);
+      console.error("[SIMULATION] Erro:", err);
+      toast.error(err.message || "Erro ao simular pagamento.");
+    } finally {
+      setIsSimulating(false);
+      setPlanToSimulate(null);
     }
   };
 
@@ -96,27 +133,22 @@ export default function PlansPage() {
               Tentar Novamente
             </Button>
           </div>
-      ) : plans.length === 0 ? (
-          <div className="p-24 text-center bg-anthracite-surface/40 rounded-[56px] shadow-skeuo-pressed border border-white/[0.01] max-w-4xl mx-auto">
-            <h3 className="text-2xl font-black uppercase tracking-[0.2em] text-white/20 font-headline italic">Nenhum plano disponível</h3>
-            <p className="text-white/10 mt-4 leading-relaxed font-bold uppercase text-[9px] tracking-[0.3em]">No momento não há planos ativos para contratação.</p>
-          </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mt-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto mt-8">
           {plans.map((plan) => (
             <TactileCard 
               key={plan.id}
               className={cn(
-                "relative flex flex-col p-8 transition-all duration-500 overflow-hidden",
-                plan.name === 'Pro' ? "shadow-[0_0_40px_rgba(255,107,0,0.1)] scale-[1.02] z-10" : "opacity-80 hover:opacity-100"
+                "relative flex flex-col p-8 transition-all duration-500 overflow-hidden border border-white/[0.02]",
+                plan.slug === 'lunar' ? "shadow-[0_0_40px_rgba(255,107,0,0.1)] ring-1 ring-kinetic-orange/20 z-10" : "opacity-90 hover:opacity-100"
               )}
             >
               {/* Material Glow for Recommended */}
-              {plan.name === 'Pro' && (
+              {plan.slug === 'lunar' && (
                 <div className="absolute top-0 right-0 w-32 h-32 bg-kinetic-orange/10 blur-[50px] -translate-y-1/2 translate-x-1/2 rounded-full" />
               )}
 
-              {plan.name === 'Pro' && (
+              {plan.slug === 'lunar' && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-kinetic-orange text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-full flex items-center gap-1.5 shadow-glow-orange-intense border-2 border-deep-void">
                   <Sparkles className="w-3 h-3" />
                   RECOMENDADO
@@ -125,64 +157,153 @@ export default function PlansPage() {
               
               <div className="mb-8">
                 <div className="flex items-center gap-3 mb-2">
-                  {plan.name === 'Pro' ? <Rocket className="w-6 h-6 text-kinetic-orange" /> : <PackageSearch className="w-6 h-6 text-white/20" />}
+                  {plan.slug === 'synco-scale' ? <Rocket className="w-6 h-6 text-kinetic-orange" /> : 
+                   plan.slug === 'synco-pro' ? <Zap className="w-6 h-6 text-kinetic-orange" /> :
+                   <PackageSearch className="w-6 h-6 text-white/20" />}
                   <h3 className="text-2xl font-black italic uppercase tracking-widest text-white/90">{plan.name}</h3>
                 </div>
                 <div className="mt-4 flex items-baseline gap-1">
                   <span className="text-xs font-black text-white/20 uppercase tracking-widest">R$</span>
-                  <span className="text-5xl font-black font-headline text-white/90 italic tracking-tighter">{plan.price_monthly}</span>
+                  <span className="text-5xl font-black font-headline text-white/90 italic tracking-tighter">
+                    {typeof plan.price_monthly === 'number' ? plan.price_monthly.toLocaleString('pt-BR', { minimumFractionDigits: 0 }) : plan.price_monthly}
+                  </span>
                   <span className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">/mês</span>
                 </div>
               </div>
 
               <div className="h-px w-full bg-white/[0.03] mb-8" />
 
-              <ul className="flex-1 space-y-5 mb-10">
-                <li className="flex gap-3 items-center group">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shadow-skeuo-pressed">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+              <ul className="flex-1 space-y-4 mb-10">
+                <li className="flex gap-3 items-start group">
+                  <div className="w-5 h-5 mt-0.5 rounded-full bg-emerald-500/10 flex items-center justify-center shadow-skeuo-pressed shrink-0">
+                    <Check className="w-3 h-3 text-emerald-500" />
                   </div>
-                  <span className="text-[11px] font-bold text-white/60 group-hover:text-white transition-colors">Até <b className="text-white/90">{plan.limits.quotas.max_channels}</b> canais de WhatsApp</span>
+                  <span className="text-[11px] font-bold text-white/60 group-hover:text-white transition-colors">
+                    <b className="text-white/90">{plan.limits.quotas.max_channels}</b> {plan.limits.quotas.max_channels === 1 ? 'conexão' : 'conexões'} WhatsApp
+                  </span>
                 </li>
-                <li className="flex gap-3 items-center group">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shadow-skeuo-pressed">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                <li className="flex gap-3 items-start group">
+                  <div className="w-5 h-5 mt-0.5 rounded-full bg-emerald-500/10 flex items-center justify-center shadow-skeuo-pressed shrink-0">
+                    <Check className="w-3 h-3 text-emerald-500" />
                   </div>
-                  <span className="text-[11px] font-bold text-white/60 group-hover:text-white transition-colors">Até <b className="text-white/90">{plan.limits.quotas.max_groups_sync}</b> grupos sincronizados</span>
+                  <span className="text-[11px] font-bold text-white/60 group-hover:text-white transition-colors">
+                    Até <b className="text-white/90">{plan.limits.quotas.max_groups_sync}</b> grupos
+                  </span>
                 </li>
-                <li className="flex gap-3 items-center group">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shadow-skeuo-pressed">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                <li className="flex gap-3 items-start group">
+                  <div className={`w-5 h-5 mt-0.5 rounded-full flex items-center justify-center shrink-0 shadow-skeuo-pressed ${plan.limits.quotas.max_radars > 0 ? 'bg-kinetic-orange/10' : 'bg-white/5'}`}>
+                    <Check className={`w-3 h-3 ${plan.limits.quotas.max_radars > 0 ? 'text-kinetic-orange' : 'text-white/20'}`} />
                   </div>
-                  <span className="text-[11px] font-bold text-white/60 group-hover:text-white transition-colors">Até <b className="text-white/90">{(plan.limits.quotas.max_sends_per_month / 1000).toLocaleString('pt-BR')}k</b> envios/mês</span>
+                  <span className={`text-[11px] font-bold group-hover:text-white transition-colors ${plan.limits.quotas.max_radars > 0 ? 'text-white/80' : 'text-white/30'}`}>
+                    {plan.limits.quotas.max_radars > 0 ? (
+                      <>Até <b className="text-white/90">{plan.limits.quotas.max_radars}</b> Radares ativos</>
+                    ) : (
+                      "Sem Radar automático"
+                    )}
+                  </span>
                 </li>
-                {plan.limits.features.radar_access && (
-                  <li className="flex gap-3 items-center group">
-                    <div className="w-6 h-6 rounded-full bg-kinetic-orange/10 flex items-center justify-center shadow-glow-orange/20">
-                      <Zap className="w-3.5 h-3.5 text-kinetic-orange" />
+                <li className="flex gap-3 items-start group">
+                  <div className="w-5 h-5 mt-0.5 rounded-full bg-emerald-500/10 flex items-center justify-center shadow-skeuo-pressed shrink-0">
+                    <Check className="w-3 h-3 text-emerald-500" />
+                  </div>
+                  <span className="text-[11px] font-bold text-white/60 group-hover:text-white transition-colors">
+                    <b className="text-white/90">{(plan.limits.quotas.max_sends_per_month / 1000).toLocaleString('pt-BR')}k</b> envios mensais
+                  </span>
+                </li>
+
+                <li className="flex gap-3 items-start group">
+                  <div className="w-5 h-5 mt-0.5 rounded-full bg-white/5 flex items-center justify-center shadow-skeuo-pressed shrink-0">
+                    <Check className="w-3 h-3 text-white/40" />
+                  </div>
+                  <span className="text-[11px] font-bold text-white/60 group-hover:text-white transition-colors">
+                    Envio rápido & IA para promoções
+                  </span>
+                </li>
+
+                <li className="flex gap-3 items-start group">
+                  <div className="w-5 h-5 mt-0.5 rounded-full bg-white/5 flex items-center justify-center shadow-skeuo-pressed shrink-0">
+                    <Check className="w-3 h-3 text-white/40" />
+                  </div>
+                  <span className="text-[11px] font-bold text-white/60 group-hover:text-white transition-colors">
+                    Integração Shopee
+                  </span>
+                </li>
+
+                {plan.slug !== 'synco-start' && (
+                  <li className="flex gap-3 items-start group">
+                    <div className="w-5 h-5 mt-0.5 rounded-full bg-white/5 flex items-center justify-center shadow-skeuo-pressed shrink-0">
+                      <Check className="w-3 h-3 text-white/40" />
                     </div>
-                    <span className="text-[11px] font-black uppercase tracking-widest text-kinetic-orange flex items-center gap-1 group-hover:drop-shadow-[0_0_5px_rgba(255,107,0,0.5)] transition-all">
-                      Acesso ao Radar Pro
+                    <span className="text-[11px] font-bold text-white/60 group-hover:text-white transition-colors">
+                      Dashboard de métricas
                     </span>
                   </li>
                 )}
+
+                <li className="flex gap-3 items-start group">
+                  <div className="w-5 h-5 mt-0.5 rounded-full bg-white/5 flex items-center justify-center shadow-skeuo-pressed shrink-0">
+                    <Check className="w-3 h-3 text-white/40" />
+                  </div>
+                  <span className="text-[11px] font-bold text-white/60 group-hover:text-white transition-colors">
+                    Suporte {plan.slug === 'synco-start' ? 'básico' : 'prioritário'}
+                  </span>
+                </li>
               </ul>
  
-              <KineticButton 
-                type="button"
-                onClick={() => handleSubscribe(plan.slug)}
-                disabled={loadingPlan !== null}
-                className={cn(
-                  "w-full h-16 text-[11px] uppercase font-black tracking-[0.2em]",
-                  plan.name !== 'Pro' && "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white shadow-skeuo-flat"
+              <div className="space-y-3">
+                <KineticButton 
+                  type="button"
+                  onClick={() => handleSubscribeKiwify(plan)}
+                  className="w-full h-14 text-[11px] uppercase font-black tracking-[0.2em] shadow-glow-orange/10"
+                >
+                  Assinar pela Kiwify
+                </KineticButton>
+
+                {simulationEnabled && (
+                  <Button 
+                    variant="ghost"
+                    onClick={() => setPlanToSimulate(plan)}
+                    className="w-full h-12 text-[9px] uppercase font-bold tracking-[0.3em] bg-white/5 hover:bg-white/10 text-white/30 hover:text-white/60 border-none rounded-xl"
+                  >
+                    Simular Pagamento
+                  </Button>
                 )}
-              >
-                {loadingPlan === plan.slug ? <Loader2 className="w-5 h-5 animate-spin" /> : 'CONTRATAR AGORA'}
-              </KineticButton>
+              </div>
             </TactileCard>
           ))}
         </div>
       )}
+
+      {/* Modal de Simulação */}
+      <AlertDialog open={!!planToSimulate} onOpenChange={(open) => !open && setPlanToSimulate(null)}>
+        <AlertDialogContent className="bg-anthracite-surface border-white/5 rounded-[32px] shadow-skeuo-elevated">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-black uppercase tracking-widest italic font-headline text-white/90">
+              Confirmar Pagamento Simulado?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-white/40 font-medium text-sm leading-relaxed">
+              Isso vai ativar o plano <b className="text-white/80 uppercase">{planToSimulate?.name}</b> para o seu usuário por 30 dias, 
+              exatamente como se o pagamento real via Kiwify tivesse sido aprovado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6 gap-3">
+            <AlertDialogCancel className="bg-white/5 border-none text-white/40 hover:bg-white/10 hover:text-white rounded-2xl h-12 font-bold uppercase text-[10px] tracking-widest transition-all">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={(e) => {
+                e.preventDefault();
+                handleSimulatePayment();
+              }}
+              disabled={isSimulating}
+              className="bg-kinetic-orange hover:bg-kinetic-orange/80 text-white border-none rounded-2xl h-12 font-black uppercase text-[10px] tracking-[0.2em] shadow-glow-orange/20 transition-all min-w-[140px]"
+            >
+              {isSimulating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar Pagamento"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+

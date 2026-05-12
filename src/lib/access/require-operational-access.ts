@@ -166,3 +166,37 @@ export async function requireGroupLimit(userId: string, incomingGroupsCount: num
 
   return null;
 }
+
+/**
+ * Avalia criação/ativação de Radares.
+ */
+export async function requireRadarLimit(userId: string, quotas: any): Promise<NextResponse | null> {
+  if (quotas.max_radars >= 999) return null;
+
+  const adminClient = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const { count } = await adminClient
+    .from('automation_sources')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('source_type', 'radar_offers')
+    .eq('is_active', true);
+
+  const usedRadars = count || 0;
+
+  if (usedRadars + 1 > quotas.max_radars) {
+    const msg = quotas.max_radars === 0 
+      ? 'Seu plano atual não inclui Radares. Faça upgrade para criar automações Radar.'
+      : 'Você atingiu o limite de Radares ativos do seu plano (' + quotas.max_radars + ').';
+      
+    return NextResponse.json({
+      error: 'plan_limit_exceeded',
+      message: msg
+    }, { status: 422 });
+  }
+
+  return null;
+}

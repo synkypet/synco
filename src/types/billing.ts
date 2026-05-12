@@ -31,6 +31,7 @@ export interface Quotas {
   max_channels: number;
   max_groups_sync: number;
   max_sends_per_month: number;
+  max_radars: number;
 }
 
 export interface Features {

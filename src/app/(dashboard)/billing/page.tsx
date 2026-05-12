@@ -146,6 +146,10 @@ export default function BillingDashboardPage() {
                  <span className="font-headline font-black text-white/90">{quotas.max_groups_sync >= 999 ? 'ILIMITADO' : quotas.max_groups_sync}</span>
               </div>
               <div className="flex justify-between items-center bg-white/[0.02] p-4 rounded-xl shadow-skeuo-pressed">
+                 <span className="text-white/40 text-[10px] uppercase font-black tracking-widest">Radares Ativos</span>
+                 <span className="font-headline font-black text-white/90">{quotas.max_radars >= 99 ? 'ILIMITADO' : quotas.max_radars}</span>
+              </div>
+              <div className="flex justify-between items-center bg-white/[0.02] p-4 rounded-xl shadow-skeuo-pressed">
                  <span className="text-white/40 text-[10px] uppercase font-black tracking-widest">Envios por Mês</span>
                  <span className="font-headline font-black text-white/90 text-kinetic-orange">{quotas.max_sends_per_month >= 99999 ? 'ILIMITADO' : quotas.max_sends_per_month.toLocaleString('pt-BR')}</span>
               </div>
