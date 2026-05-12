@@ -49,11 +49,16 @@ export default function PlansPage() {
           setPlans(data);
         }
 
-        // Verificar se simulação está ativa (poderia vir de um config ou env exposta)
-        // Por segurança, vamos apenas tentar detectar se o endpoint responde ou se o usuário quer ver
-        // No Synco, costumamos expor via NEXT_PUBLIC se necessário, mas aqui vamos assumir que o usuário
-        // que ativou a env quer ver o botão.
-        setSimulationEnabled(process.env.NEXT_PUBLIC_BILLING_SIMULATION_ENABLED === 'true');
+        // Verificar permissão de simulação via API
+        try {
+          const simRes = await fetch('/api/billing/simulation-access');
+          if (simRes.ok) {
+            const simData = await simRes.json();
+            setSimulationEnabled(simData.enabled === true);
+          }
+        } catch (e) {
+          console.error('Erro ao verificar acesso à simulação:', e);
+        }
 
       } catch (err: any) {
         console.error('Erro ao carregar planos:', err);

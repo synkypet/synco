@@ -24,16 +24,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    // 3. Verificar allowlist de emails
-    const allowedEmailsRaw = process.env.BILLING_SIMULATION_ALLOWED_EMAILS || '';
-    if (allowedEmailsRaw) {
-      const allowedEmails = allowedEmailsRaw.split(',').map(e => e.trim().toLowerCase());
-      if (!allowedEmails.includes(user.email?.toLowerCase() || '')) {
-        return NextResponse.json(
-          { error: 'Acesso negado', message: 'Seu email não tem permissão para realizar simulações.' },
-          { status: 403 }
-        );
-      }
+    // 3. Verificar permissão granular do usuário (Tester)
+    const adminSupabase = createAdminClient();
+    const { data: tester, error: testerError } = await adminSupabase
+      .from('billing_simulation_testers')
+      .select('is_enabled')
+      .eq('user_id', user.id)
+      .single();
+
+    if (testerError || !tester || !tester.is_enabled) {
+      return NextResponse.json(
+        { error: 'Acesso negado', message: 'Simulação de pagamento não habilitada para este usuário.' },
+        { status: 403 }
+      );
     }
 
     const { planId, planSlug } = await request.json();
@@ -43,7 +46,7 @@ export async function POST(request: Request) {
     }
 
     // 4. Buscar o plano
-    const adminSupabase = createAdminClient();
+
     const query = adminSupabase.from('plans').select('*').eq('is_active', true);
     
     if (planId) {

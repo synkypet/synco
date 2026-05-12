@@ -57,8 +57,9 @@ SET
 WHERE slug IN ('pro', 'synco-pro') OR name IN ('Pro', 'SYNCO Pro');
 
 -- 4. Inserir SYNCO Start se não existir
-INSERT INTO public.plans (name, slug, price_monthly, billing_cycle, limits, metadata, is_active)
+INSERT INTO public.plans (id, name, slug, price_monthly, billing_cycle, limits, metadata, is_active, created_at, updated_at)
 SELECT 
+    gen_random_uuid(),
     'SYNCO Start', 
     'synco-start', 
     97.00, 
@@ -77,12 +78,15 @@ SELECT
         }
     }'::jsonb,
     '{"kiwify_checkout_url": ""}'::jsonb,
-    true
+    true,
+    now(),
+    now()
 WHERE NOT EXISTS (SELECT 1 FROM public.plans WHERE slug = 'synco-start');
 
 -- 5. Inserir SYNCO Pro se não existir
-INSERT INTO public.plans (name, slug, price_monthly, billing_cycle, limits, metadata, is_active)
+INSERT INTO public.plans (id, name, slug, price_monthly, billing_cycle, limits, metadata, is_active, created_at, updated_at)
 SELECT 
+    gen_random_uuid(),
     'SYNCO Pro', 
     'synco-pro', 
     197.00, 
@@ -101,12 +105,15 @@ SELECT
         }
     }'::jsonb,
     '{"kiwify_checkout_url": ""}'::jsonb,
-    true
+    true,
+    now(),
+    now()
 WHERE NOT EXISTS (SELECT 1 FROM public.plans WHERE slug = 'synco-pro');
 
 -- 6. Inserir SYNCO Scale se não existir
-INSERT INTO public.plans (name, slug, price_monthly, billing_cycle, limits, metadata, is_active)
+INSERT INTO public.plans (id, name, slug, price_monthly, billing_cycle, limits, metadata, is_active, created_at, updated_at)
 SELECT 
+    gen_random_uuid(),
     'SYNCO Scale', 
     'synco-scale', 
     347.00, 
@@ -125,7 +132,9 @@ SELECT
         }
     }'::jsonb,
     '{"kiwify_checkout_url": ""}'::jsonb,
-    true
+    true,
+    now(),
+    now()
 WHERE NOT EXISTS (SELECT 1 FROM public.plans WHERE slug = 'synco-scale');
 
 -- 7. Marcar planos antigos como inativos
