@@ -8,7 +8,7 @@ export type SubscriptionStatus =
   | "none";
 
 // Mantém suporte pra compatibilidade antiga mas alinha o status interno correto
-export type AccessStatus = SubscriptionStatus | 'internal_license' | 'past_due_restricted' | 'expired_blocked' | 'no_subscription';
+export type AccessStatus = SubscriptionStatus | 'internal_license' | 'past_due_restricted' | 'expired_blocked' | 'no_subscription' | 'error';
 
 export function normalizeMercadoPagoSubscriptionStatus(mpStatus: string): SubscriptionStatus {
   switch (mpStatus?.toLowerCase()) {

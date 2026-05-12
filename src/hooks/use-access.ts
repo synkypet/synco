@@ -40,6 +40,7 @@ export function useAccess() {
     isActive: data?.status === 'active',
     isRestricted: data?.status === 'past_due_restricted' || data?.status === 'canceled',
     isBlocked: data?.status === 'expired_blocked' || data?.status === 'none' || data?.status === 'expired',
+    isError: data?.status === 'error',
     
     // Nome amigável do status
     statusLabel: getStatusLabel(data?.status),
@@ -62,6 +63,7 @@ function getStatusLabel(status?: string) {
     case 'expired': return 'Expirada';
     case 'expired_blocked': return 'Assinatura Expirada';
     case 'none': return 'Sem Assinatura';
+    case 'error': return 'Erro de Verificação';
     default: return 'Verificando...';
   }
 }

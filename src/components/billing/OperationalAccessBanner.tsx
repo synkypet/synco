@@ -74,6 +74,8 @@ function getMessageForBanner(status: string) {
       return 'Seu acesso está com pagamento pendente. Você ainda pode navegar pelo sistema, mas não pode criar ou disparar campanhas no momento.';
     case 'expired_blocked':
       return 'Sua assinatura expirou. Reative seu acesso para voltar a operar no SYNCO.';
+    case 'error':
+      return 'Ocorreu um erro técnico ao verificar sua assinatura. Por favor, recarregue a página ou contate o suporte se o problema persistir.';
     case 'no_subscription':
     default:
       return 'Sua conta ainda não possui um plano ativo. Escolha um plano para começar a operar.';
@@ -96,10 +98,11 @@ function getBannerConfig(status: string) {
       };
     case 'expired_blocked':
     case 'no_subscription':
+    case 'error':
     default:
       return {
-        title: 'Operação Bloqueada',
-        icon: Lock,
+        title: status === 'error' ? 'Instabilidade Técnica' : 'Operação Bloqueada',
+        icon: AlertCircle,
         bgColor: 'bg-rose-500/[0.03]',
         borderColor: 'border-rose-500/10',
         glowColor: 'bg-rose-500',

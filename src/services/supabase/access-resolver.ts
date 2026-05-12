@@ -57,7 +57,28 @@ export async function resolveUserAccessCore(userId: string, supabase: any): Prom
     .eq('user_id', userId)
     .single();
 
-  if (!sub || error) {
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // Nenhum registro encontrado - Fluxo normal para novos usuários
+      return {
+        status: 'no_subscription',
+        isOperative: false,
+        quotas: BLOCKED_QUOTAS,
+        features: NO_FEATURES,
+      };
+    }
+    
+    // Erro técnico real (RLS, timeout, etc.)
+    console.error(`[ACCESS-RESOLVER] Erro técnico ao buscar assinatura para ${userId}:`, error.message, error.code);
+    return {
+      status: 'error',
+      isOperative: false,
+      quotas: BLOCKED_QUOTAS,
+      features: NO_FEATURES,
+    };
+  }
+
+  if (!sub) {
     return {
       status: 'no_subscription',
       isOperative: false,
@@ -67,6 +88,9 @@ export async function resolveUserAccessCore(userId: string, supabase: any): Prom
   }
 
   const planLimits = sub.plan?.limits || { quotas: BLOCKED_QUOTAS, features: NO_FEATURES };
+  if (!sub.plan) {
+    console.warn(`[ACCESS-RESOLVER] Assinatura encontrada para ${userId} mas plano está ausente ou inacessível. Usando quotas bloqueadas.`);
+  }
 
   // 3. Resolução de Status Hierárquico
   const now = new Date();
