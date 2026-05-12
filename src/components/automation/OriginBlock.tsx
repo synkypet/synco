@@ -249,7 +249,7 @@ export function OriginBlock({
                           min="1" 
                           max="1440" 
                           placeholder="1" 
-                          value={localConfig.send_interval_minutes || ''} 
+                          value={localConfig.send_interval_minutes ?? localConfig.interval_minutes ?? ''} 
                           onChange={(e) => handleUpdateLocalConfig({ send_interval_minutes: parseInt(e.target.value) || 1 })}
                           className="bg-deep-void border-white/5 h-10 w-full pl-3 pr-20 text-[10px] font-black rounded-xl text-center shadow-skeuo-pressed outline-none focus:border-kinetic-orange/30 transition-colors"
                         />

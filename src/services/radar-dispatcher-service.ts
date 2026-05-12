@@ -114,7 +114,27 @@ export const radarDispatcherService = {
       }
 
       const keyword = (source.config as any)?.searchTerm || source.name;
-      const sendIntervalMinutes = (source.config as any)?.send_interval_minutes ?? 1;
+      
+      // Fix: Suportar ambas as chaves e garantir mínimo de 1 minuto
+      const rawInterval = (source.config as any)?.interval_minutes;
+      const rawSendInterval = (source.config as any)?.send_interval_minutes;
+      const sendIntervalMinutes = Math.max(1, Number(rawSendInterval ?? rawInterval ?? 1));
+
+      // Log de Observabilidade: Confirmação de Filtros e Configuração Efetiva
+      const firstRouteFilters = routes[0]?.filters || {};
+      console.log(`${sourceLogPrefix} [RADAR-CONFIG-EFFECTIVE]`, {
+        source_id: source.id,
+        keywords: (source.config as any)?.keywords?.map((k: any) => k.term) || [],
+        sortType: (source.config as any)?.sortType,
+        preset_type: (source.config as any)?.preset_type,
+        min_discount_percent: firstRouteFilters.min_discount_percent,
+        only_official_stores: firstRouteFilters.only_official_stores,
+        min_price: firstRouteFilters.min_price,
+        max_price: firstRouteFilters.max_price,
+        send_interval_minutes_effective: sendIntervalMinutes,
+        raw_interval_minutes: rawInterval,
+        raw_send_interval_minutes: rawSendInterval
+      });
       
       // Controla o tempo de agendamento em memória para esta fonte durante o loop
       let currentScheduleCursor = new Date();

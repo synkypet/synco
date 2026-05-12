@@ -100,7 +100,7 @@ export async function POST(request: Request) {
           image_url: node.imageUrl,
           current_price: node.currentPrice,
           original_price: node.originalPrice,
-          discount_percent: node.discountPercent,
+          discount_percent: Math.round(Number(node.discountPercent || 0)),
           marketplace: 'Shopee',
           category: node.category,
           commission_percent: commissionPct,

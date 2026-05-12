@@ -79,8 +79,8 @@ export async function GET(request: Request) {
           image_url: node.imageUrl,
           current_price: currentPrice,
           original_price: originalPrice,
-          discount_percent: discountPercent,
-          commission_percent: commissionRate * 100,
+          discount_percent: Math.round(Number(discountPercent || 0)),
+          commission_percent: Math.round(Number(commissionRate || 0) * 100),
           commission_value: (currentPrice * commissionRate),
           opportunity_score: opportunityScore,
           is_favorite: true, // Auto-favorite the top picks of the day

@@ -76,7 +76,7 @@ export async function POST(request: Request) {
         current_price: finalStatus !== 'audit_failed' ? factual.price : product.current_price,
         original_price: finalStatus !== 'audit_failed' ? factual.originalPrice : product.original_price,
         commission_value: finalStatus !== 'audit_failed' ? factual.commissionValueFactual : product.commission_value,
-        commission_percent: (finalStatus !== 'audit_failed' && factual.commissionRate) ? factual.commissionRate * 100 : product.commission_percent,
+        commission_percent: (finalStatus !== 'audit_failed' && factual.commissionRate) ? Math.round(factual.commissionRate * 100) : product.commission_percent,
         status: finalStatus,
         updated_at: new Date().toISOString()
       };

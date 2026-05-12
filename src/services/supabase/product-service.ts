@@ -176,8 +176,9 @@ export const productService = {
         .update({
           current_price: productData.current_price,
           commission_value: productData.commission_value,
-          commission_percent: productData.commission_percent,
-          opportunity_score: productData.opportunity_score,
+          commission_percent: productData.commission_percent !== undefined ? Math.round(Number(productData.commission_percent)) : undefined,
+          discount_percent: productData.discount_percent !== undefined ? Math.round(Number(productData.discount_percent)) : undefined,
+          opportunity_score: productData.opportunity_score !== undefined ? Math.round(Number(productData.opportunity_score)) : undefined,
           updated_at: new Date().toISOString()
         })
         .eq('id', existing.id)
@@ -187,10 +188,18 @@ export const productService = {
       return updated as Product;
     }
 
-    // 2. Inserir novo
+    // 2. Inserir novo (Garantir arredondamento defensivo)
+    const dbPayload = { 
+      ...productData, 
+      original_url: normalizedUrl,
+      commission_percent: productData.commission_percent !== undefined ? Math.round(Number(productData.commission_percent)) : undefined,
+      discount_percent: productData.discount_percent !== undefined ? Math.round(Number(productData.discount_percent)) : undefined,
+      opportunity_score: productData.opportunity_score !== undefined ? Math.round(Number(productData.opportunity_score)) : undefined,
+    };
+
     const { data: inserted, error } = await supabase
       .from('products')
-      .insert([{ ...productData, original_url: normalizedUrl }])
+      .insert([dbPayload])
       .select()
       .single();
 
