@@ -137,8 +137,10 @@ export const campaignService = {
       throw campaignError;
     }
 
-    // 4. Inserir Itens
-    const itemsToInsert = dto.items.map(item => ({
+    // ─── 4. Fluxo de Persistência (Atômico Simulado) ──────────────────────────
+    try {
+      // 4.1 Inserir Itens
+      const itemsToInsert = dto.items.map(item => ({
       campaign_id: campaign.id,
       // Se for um ID temporário (proc_* ou coupon_*) ou não for um UUID válido, enviamos null para evitar erro no banco
       product_id: (item.product_id && typeof item.product_id === 'string' && 
@@ -282,6 +284,21 @@ export const campaignService = {
     }).catch(e => {
       console.error(`[CAMPAIGN-CREATE] [${campaign.id}] Erro inesperado no disparo do worker:`, e);
     });
+
+    } catch (err: any) {
+      console.error(`[CAMPAIGN-SERVICE] Erro fatal na criação da infraestrutura da campanha ${campaign.id}:`, err);
+      
+      // Tentar marcar como falha no banco
+      await supabase
+        .from('campaigns')
+        .update({ 
+          status: 'failed',
+          metadata: { ...campaign.metadata, error: err.message || 'Erro interno na geração de jobs' }
+        })
+        .eq('id', campaign.id);
+      
+      throw err;
+    }
 
     return campaign as Campaign;
   },

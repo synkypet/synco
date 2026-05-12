@@ -126,18 +126,26 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-5 gap-1">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-black text-emerald-500 leading-none">{stats?.completed || 0}</span>
-                  <span className="text-[8px] font-black uppercase text-white/20 tracking-tighter">Envios</span>
+                  <span className="text-[10px] font-black text-white/60 leading-none">{campaign.destinations?.length || 0}</span>
+                  <span className="text-[7px] font-black uppercase text-white/10 tracking-tighter">Dest.</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-black text-blue-400 leading-none">{stats?.pending || 0}</span>
-                  <span className="text-[8px] font-black uppercase text-white/20 tracking-tighter">Proc.</span>
+                  <span className="text-[10px] font-black text-white/60 leading-none">{campaign.items?.length || 0}</span>
+                  <span className="text-[7px] font-black uppercase text-white/10 tracking-tighter">Itens</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-black text-red-500 leading-none">{stats?.failed || 0}</span>
-                  <span className="text-[8px] font-black uppercase text-white/20 tracking-tighter">Erros</span>
+                  <span className="text-[10px] font-black text-emerald-500 leading-none">{stats?.completed || 0}</span>
+                  <span className="text-[7px] font-black uppercase text-white/10 tracking-tighter">Envios</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-black text-blue-400 leading-none">{stats?.pending || 0}</span>
+                  <span className="text-[7px] font-black uppercase text-white/10 tracking-tighter">Proc.</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-black text-red-500 leading-none">{stats?.failed || 0}</span>
+                  <span className="text-[7px] font-black uppercase text-white/10 tracking-tighter">Erros</span>
                 </div>
               </div>
             </div>

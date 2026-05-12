@@ -258,11 +258,16 @@ export async function POST(request: Request) {
         break;
       }
 
-      const { data: hasLock } = await supabase.rpc('claim_channel_lock', {
+      const { data: hasLock, error: lockError } = await supabase.rpc('claim_channel_lock', {
         p_channel_id: channelId,
         p_worker_id: requestId,
         p_lock_timeout: '1 minute'
       });
+
+      if (lockError) {
+        console.error(`[WORKER-LOCK-RPC-MISSING] claim_channel_lock não encontrada ou assinatura incompatível.`, lockError);
+        continue;
+      }
 
       if (!hasLock) {
         lockedSkipCount++;
