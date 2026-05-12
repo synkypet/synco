@@ -57,7 +57,6 @@ import { ProductFilter } from '@/types/product';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import LayoutContainer from '@/components/layout/LayoutContainer';
-import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
 import { SHOPEE_SORT_TYPE, SHOPEE_LIST_TYPE, SHOPEE_SORT_TYPE_LABELS, SHOPEE_LIST_TYPE_LABELS } from '@/lib/constants/shopee';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -385,7 +384,6 @@ export default function RadarOfertasPage() {
 
   return (
     <LayoutContainer type="operational">
-      <OperationalAccessBanner />
       
       {/* Aviso Obrigatório de Marketplace */}
       {!isLoadingConnections && activeConnectionsCount === 0 && (

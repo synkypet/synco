@@ -77,6 +77,36 @@ export async function requireOperationalAccess(): Promise<AccessGateResult> {
 }
 
 /**
+ * Gate que exige apenas que o usuário esteja autenticado.
+ * Usado para recursos que não contam em cotas ou limites operacionais estritos (ex: Radar de Ofertas).
+ */
+export async function requireAuthenticatedUser(): Promise<AccessGateResult> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      ok: false,
+      reason: 'unauthenticated',
+      response: NextResponse.json(
+        { error: 'unauthenticated', message: 'Você precisa estar logado.' }, 
+        { status: 401 }
+      )
+    };
+  }
+
+  // Mesmo que não bloqueemos, resolvemos o acesso para que o chamador tenha os metadados
+  const adminClient = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+  
+  const access = await resolveUserAccessCore(user.id, adminClient);
+
+  return { ok: true, user, access };
+}
+
+/**
  * Checa o consumo real de Envios (Send Jobs criados neste mês). (OPÇÃO A)
  */
 export async function requireSendLimit(userId: string, requestedSends: number, quotas: any): Promise<NextResponse | null> {

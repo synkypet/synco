@@ -98,9 +98,10 @@ export async function POST(request: Request) {
       }, { status: 502 });
     }
 
-    // 3. Persistir no Supabase
+    // 3. Persistir no Supabase (Usamos Admin Client para garantir persistência operacional)
     console.log(`${logPrefix} Persistindo canal no Supabase...`);
-    const { data: channel, error: channelError } = await supabase
+    const supabaseAdmin = createAdminClient();
+    const { data: channel, error: channelError } = await supabaseAdmin
       .from('channels')
       .insert({
         name,
@@ -126,16 +127,19 @@ export async function POST(request: Request) {
         .then(() => console.log(`${logPrefix} ROLLBACK: Sessão remota ${wasenderNumericId} excluída.`))
         .catch(e => console.error(`${logPrefix} ROLLBACK FAILED:`, e.message));
       
+      const isPermissionError = channelError.message?.toLowerCase().includes('permission denied');
       return NextResponse.json({ 
         success: false, 
-        error: 'Erro de banco de dados ao salvar canal local', 
+        error: isPermissionError 
+          ? 'Não foi possível salvar o canal. Verifique as permissões do banco ou contate o suporte.' 
+          : 'Erro de banco de dados ao salvar canal local', 
         details: channelError.message 
       }, { status: 500 });
     }
 
-    // 4. Salvar Segredos
+    // 4. Salvar Segredos (Também via Admin Client)
     if (sessionApiKey) {
-        const { error: secretError } = await supabase
+        const { error: secretError } = await supabaseAdmin
             .from('channel_secrets')
             .upsert({
                 channel_id: channel.id,
