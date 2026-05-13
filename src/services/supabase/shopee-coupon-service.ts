@@ -121,5 +121,50 @@ export const shopeeCouponService = {
       console.error('[SHOPEE-COUPON-SERVICE] Erro crítico na persistência:', err);
       return null;
     }
+  },
+  
+  /**
+   * Lista cupons detectados pelo radar para um usuário específico.
+   */
+  async listDiscoveredCoupons(
+    userId: string,
+    filters: {
+      status?: string;
+      couponType?: string;
+      search?: string;
+      limit?: number;
+    } = {},
+    client?: SupabaseClient
+  ): Promise<any[]> {
+    const supabase = client || createClient();
+    const { status, couponType, search, limit = 50 } = filters;
+
+    let query = supabase
+      .from('discovered_coupons')
+      .select('*')
+      .eq('user_id', userId)
+      .order('last_seen_at', { ascending: false })
+      .limit(Math.min(limit, 100));
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    if (couponType) {
+      query = query.eq('coupon_type', couponType);
+    }
+
+    if (search) {
+      query = query.or(`code.ilike.%${search}%,coupon_label.ilike.%${search}%,redemption_url.ilike.%${search}%`);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('[SHOPEE-COUPON-SERVICE] Erro ao listar cupons:', error);
+      throw error;
+    }
+
+    return data || [];
   }
 };

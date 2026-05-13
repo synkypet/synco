@@ -35,7 +35,9 @@ import {
   Trash2,
   PinOff,
   Eye,
-  Store 
+  Store,
+  Activity,
+  Inbox
 } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -66,8 +68,10 @@ import { useUserMarketplaceConnections } from '@/hooks/use-marketplaces';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useShopeeOffers, ShopeeOffer } from '@/hooks/use-shopee-offers';
 import { useShopeeCouponPages } from '@/hooks/use-shopee-coupon-pages';
+import { useDiscoveredCoupons } from '@/hooks/use-discovered-coupons';
 import { OffersGrid } from '@/components/radar-campanhas/OffersGrid';
 import { CouponCard } from '@/components/radar-campanhas/CouponCard';
+import { DiscoveredCouponCard } from '@/components/radar-ofertas/DiscoveredCouponCard';
 import { CampaignProductsDrawer } from '@/components/radar-campanhas/CampaignProductsDrawer';
 
 interface DiscoveryPage {
@@ -126,6 +130,7 @@ export default function RadarOfertasPage() {
   const [couponActiveKeyword, setCouponActiveKeyword] = useState<string | undefined>(undefined);
   const [couponFilterType, setCouponFilterType] = useState<'all' | 1 | 2>('all');
   const [selectedCouponOffer, setSelectedCouponOffer] = useState<ShopeeOffer | null>(null);
+  const [couponSubTab, setCouponSubTab] = useState<'official' | 'detected'>('official');
   
   const queryClient = useQueryClient();
   const shopeeCache = React.useRef<Record<string, any>>({});
@@ -341,6 +346,14 @@ export default function RadarOfertasPage() {
     isError: curatedError,
     refetch: refetchCurated
   } = useShopeeCouponPages();
+
+  const {
+    data: discoveredCouponsData,
+    isLoading: loadingDiscovered,
+    refetch: refetchDiscovered
+  } = useDiscoveredCoupons({
+    limit: 50
+  });
 
   const filteredOffers = useMemo(() => {
     if (!couponData?.offers) return [];
@@ -874,55 +887,140 @@ export default function RadarOfertasPage() {
           )}
         </>
       ) : activeTab === 'coupons' ? (
-        /* Nova Aba de Cupons Reais (Curadoria) */
+        /* Aba de Cupons (Oficiais + Detectados) */
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8">
-           <div className="bg-anthracite-surface p-8 rounded-[40px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
-             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
-             <div className="flex items-center gap-4 mb-8">
-               <div className="w-12 h-12 bg-kinetic-orange/10 rounded-2xl flex items-center justify-center shadow-skeuo-elevated">
-                 <BadgePercent size={24} className="text-kinetic-orange" />
-               </div>
-               <div>
-                 <h3 className="text-xl font-black uppercase tracking-widest text-white/90 italic font-headline">Central de Resgate</h3>
-                 <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Cupons oficiais e páginas de benefícios da Shopee</p>
-               </div>
-             </div>
-
-             {loadingCurated ? (
-               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                 {[1, 2, 3, 4].map(i => (
-                   <div key={i} className="h-64 bg-white/5 rounded-3xl animate-pulse shadow-skeuo-pressed" />
-                 ))}
-               </div>
-             ) : curatedCoupons && curatedCoupons.length > 0 ? (
-               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                 {curatedCoupons.map((page) => (
-                   <CouponCard 
-                     key={page.id}
-                     hideCommission={true}
-                     showImage={false}
-                     offer={{
-                       offerName: page.name,
-                       offerLink: page.short_link,
-                       imageUrl: page.image_url || '',
-                       commissionPercent: 0,
-                       commissionRate: '0',
-                       periodEndFormatted: 'Disponível',
-                       offerType: 1,
-                       periodStartTime: 0,
-                       periodEndTime: 0,
-                       originalLink: page.original_url,
-                       expiresAt: page.expires_at
-                     }} 
-                   />
-                 ))}
-               </div>
-             ) : (
-               <div className="p-20 text-center bg-deep-void/40 rounded-[32px] border border-white/5 shadow-skeuo-pressed">
-                 <p className="text-[11px] font-black uppercase tracking-widest text-white/20">Nenhum cupom disponível no momento.</p>
-               </div>
-             )}
+           
+           {/* Seletor de Sub-Aba Estilo Tactical */}
+           <div className="flex bg-anthracite-surface/30 p-1.5 rounded-[20px] border border-white/[0.02] shadow-skeuo-pressed w-fit mx-auto mb-2">
+              <button
+                onClick={() => setCouponSubTab('official')}
+                className={cn(
+                  "px-8 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all",
+                  couponSubTab === 'official' 
+                    ? "bg-kinetic-orange text-white shadow-glow-orange" 
+                    : "text-white/30 hover:text-white/60"
+                )}
+              >
+                Cupons Oficiais
+              </button>
+              <button
+                onClick={() => setCouponSubTab('detected')}
+                className={cn(
+                  "px-8 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  couponSubTab === 'detected' 
+                    ? "bg-kinetic-orange text-white shadow-glow-orange" 
+                    : "text-white/30 hover:text-white/60"
+                )}
+              >
+                <Activity size={12} className={cn(couponSubTab === 'detected' ? "animate-pulse" : "")} />
+                Capturados no Radar
+              </button>
            </div>
+
+           {couponSubTab === 'official' ? (
+             <div className="bg-anthracite-surface p-8 rounded-[40px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
+               <div className="flex items-center gap-4 mb-8">
+                 <div className="w-12 h-12 bg-kinetic-orange/10 rounded-2xl flex items-center justify-center shadow-skeuo-elevated">
+                   <BadgePercent size={24} className="text-kinetic-orange" />
+                 </div>
+                 <div>
+                   <h3 className="text-xl font-black uppercase tracking-widest text-white/90 italic font-headline">Central de Resgate</h3>
+                   <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Páginas de benefícios e campanhas fixas da Shopee</p>
+                 </div>
+               </div>
+
+               {loadingCurated ? (
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                   {[1, 2, 3, 4].map(i => (
+                     <div key={i} className="h-64 bg-white/5 rounded-3xl animate-pulse shadow-skeuo-pressed" />
+                   ))}
+                 </div>
+               ) : curatedCoupons && curatedCoupons.length > 0 ? (
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                   {curatedCoupons.map((page) => (
+                     <CouponCard 
+                       key={page.id}
+                       hideCommission={true}
+                       showImage={false}
+                       offer={{
+                         offerName: page.name,
+                         offerLink: page.short_link,
+                         imageUrl: page.image_url || '',
+                         commissionPercent: 0,
+                         commissionRate: '0',
+                         periodEndFormatted: 'Disponível',
+                         offerType: 1,
+                         periodStartTime: 0,
+                         periodEndTime: 0,
+                         originalLink: page.original_url,
+                         expiresAt: page.expires_at
+                       }} 
+                     />
+                   ))}
+                 </div>
+               ) : (
+                 <div className="p-20 text-center bg-deep-void/40 rounded-[32px] border border-white/5 shadow-skeuo-pressed">
+                   <p className="text-[11px] font-black uppercase tracking-widest text-white/20">Nenhum cupom oficial disponível no momento.</p>
+                 </div>
+               )}
+             </div>
+           ) : (
+             <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
+                <div className="bg-anthracite-surface p-8 rounded-[40px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
+                  
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-kinetic-orange/10 rounded-2xl flex items-center justify-center shadow-skeuo-elevated">
+                        <Activity size={24} className="text-kinetic-orange" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black uppercase tracking-widest text-white/90 italic font-headline">Monitoramento Radar</h3>
+                        <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Cupons detectados automaticamente em grupos e webhooks</p>
+                      </div>
+                    </div>
+
+                    <Button 
+                      onClick={() => refetchDiscovered()}
+                      variant="ghost" 
+                      className="h-12 px-6 rounded-xl bg-white/5 border border-white/[0.02] shadow-skeuo-flat hover:bg-white/10 text-kinetic-orange font-black text-[9px] uppercase tracking-widest gap-2"
+                      disabled={loadingDiscovered}
+                    >
+                      <RefreshCw size={14} className={cn(loadingDiscovered && "animate-spin")} />
+                      Sincronizar Radar
+                    </Button>
+                  </div>
+
+                  {loadingDiscovered ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                        <div key={i} className="h-64 bg-white/5 rounded-3xl animate-pulse shadow-skeuo-pressed" />
+                      ))}
+                    </div>
+                  ) : discoveredCouponsData?.data && discoveredCouponsData.data.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {discoveredCouponsData.data.map((coupon) => (
+                        <DiscoveredCouponCard 
+                          key={coupon.id}
+                          coupon={coupon}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-24 text-center bg-deep-void/40 rounded-[48px] border border-dashed border-white/5 shadow-skeuo-pressed">
+                      <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Inbox size={32} className="text-white/10" />
+                      </div>
+                      <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-white/30 mb-2">Radar em Silêncio</h4>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-white/10 max-w-sm mx-auto leading-relaxed">
+                        Quando o Radar encontrar cupons da Shopee, eles aparecerão aqui para revisão manual e cópia segura.
+                      </p>
+                    </div>
+                  )}
+                </div>
+             </div>
+           )}
         </div>
       ) : (
         /* Aba de Campanhas (useShopeeOffers) */
