@@ -42,6 +42,20 @@ export const shopeeCouponService = {
     const supabase = client || createClient();
     const dedupeKey = this.generateDedupeKey(coupon);
 
+    // --- VALIDAÇÕES DE INTEGRIDADE (FASE 2C.1.1) ---
+    if (!coupon.type) return null;
+    
+    if (coupon.type === 'codigo' && (!coupon.code || coupon.code.trim().length === 0)) {
+      console.warn('[SHOPEE-COUPON-SERVICE] Rejeitado: Cupom do tipo "codigo" sem código alfanumérico.');
+      return null;
+    }
+
+    if ((coupon.type === 'link_resgate' || coupon.type === 'pagina_cupons') && 
+        (!coupon.redemptionUrl || coupon.redemptionUrl.trim().length === 0)) {
+      console.warn(`[SHOPEE-COUPON-SERVICE] Rejeitado: Cupom do tipo "${coupon.type}" sem URL de resgate.`);
+      return null;
+    }
+
     console.log(`[SHOPEE-COUPON-SERVICE] Persistindo cupom candidate: ${dedupeKey}`);
 
     try {
@@ -57,13 +71,15 @@ export const shopeeCouponService = {
         source_url: metadata.sourceUrl || null,
         product_url: metadata.productUrl || null,
         raw_text: metadata.rawText || null,
-        confidence: 1.0,
+        confidence: coupon.confidence || 0,
         status: 'candidate',
         dedupe_key: dedupeKey,
+        
+        // FORÇAR TRAVAS DE SEGURANÇA (SOBRESCREVE QUALQUER INPUT)
         dispatchable: false,
         auto_dispatch_blocked: true,
         block_reason: 'coupon_requires_manual_review_or_phase_2c_dispatch',
-        capture_count: 1,
+        
         last_seen_at: new Date().toISOString()
       };
 

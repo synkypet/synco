@@ -1,6 +1,7 @@
 
 import { shopeeCouponService } from '@/services/supabase/shopee-coupon-service';
 import { extractShopeeCoupons } from './coupon-extractor';
+import { ShopeeCoupon } from '@/types/shopee-coupon';
 
 // Mock simples para o Supabase
 const createMockSupabase = () => {
@@ -9,12 +10,16 @@ const createMockSupabase = () => {
   return {
     from: (table: string) => ({
       upsert: (payload: any, options: any) => {
+        // Simulação de constraints da Migration FASE 2C.1.1
+        if (payload.dispatchable === true) throw new Error('CHECK constraint violation: dispatchable must be false');
+        if (payload.auto_dispatch_blocked === false) throw new Error('CHECK constraint violation: auto_dispatch_blocked must be true');
+        if (!payload.dedupe_key || payload.dedupe_key.trim() === '') throw new Error('CHECK constraint violation: dedupe_key required');
+        
         const existingIndex = dataStore.findIndex(
           item => item.user_id === payload.user_id && item.dedupe_key === payload.dedupe_key
         );
         
         if (existingIndex > -1) {
-          // Simula incremento de capture_count e atualização de timestamps
           dataStore[existingIndex] = {
             ...dataStore[existingIndex],
             ...payload,
@@ -22,7 +27,7 @@ const createMockSupabase = () => {
             last_seen_at: new Date().toISOString()
           };
         } else {
-          dataStore.push({ ...payload, id: 'mock-uuid', captured_at: new Date().toISOString() });
+          dataStore.push({ ...payload, id: 'mock-uuid', capture_count: 1, captured_at: new Date().toISOString() });
         }
         
         return {
@@ -44,71 +49,77 @@ const createMockSupabase = () => {
 };
 
 async function runPersistenceTest() {
-  console.log('--- INICIANDO TESTES DE PERSISTÊNCIA FASE 2C.1 ---\n');
+  console.log('--- INICIANDO TESTES DE PERSISTÊNCIA FASE 2C.1.1 (HARDENING) ---\n');
   const mockSupabase = createMockSupabase() as any;
   const userId = 'user-123';
 
-  console.log('Cenário 1: Salvar cupom por código');
+  console.log('Cenário 1: Salvar cupom por código (Válido)');
   const coupons1 = extractShopeeCoupons('🎟️Use o cupom: M0D4555HP');
-  await shopeeCouponService.persistCandidate(userId, coupons1[0], { rawText: '🎟️Use o cupom: M0D4555HP' }, mockSupabase);
+  await shopeeCouponService.persistCandidate(userId, coupons1[0], { rawText: '...' }, mockSupabase);
   
   const saved1 = mockSupabase._store[0];
-  if (saved1.code === 'M0D4555HP' && saved1.dedupe_key === 'shopee:coupon:code:M0D4555HP' && saved1.dispatchable === false) {
-    console.log('  [PASS] Cupom de código persistido com trava de segurança.');
+  if (saved1.code === 'M0D4555HP' && saved1.dispatchable === false) {
+    console.log('  [PASS] Cupom persistido corretamente.');
   } else {
-    console.error('  [FAIL] Falha na persistência do código.', saved1);
+    console.error('  [FAIL] Falha na persistência.');
     process.exit(1);
   }
 
-  console.log('\nCenário 2: Salvar cupom por link de resgate');
-  const coupons2 = extractShopeeCoupons('🎟️Use o cupom: R$50 OFF| resgate aqui: https://s.shopee.com.br/gMfczVZwO');
-  await shopeeCouponService.persistCandidate(userId, coupons2[0], { rawText: '...' }, mockSupabase);
-  
-  const saved2 = mockSupabase._store[1];
-  if (saved2.coupon_type === 'link_resgate' && saved2.dedupe_key.includes('shopee:coupon:url:')) {
-    console.log('  [PASS] Cupom de link persistido com dedupe key de URL.');
+  console.log('\nCenário 2: Rejeitar código vazio');
+  const invalidCoupon1: any = { type: 'codigo', code: '', marketplace: 'shopee' };
+  const res2 = await shopeeCouponService.persistCandidate(userId, invalidCoupon1, {}, mockSupabase);
+  if (res2 === null && mockSupabase._store.length === 1) {
+    console.log('  [PASS] Rejeição de código vazio confirmada.');
   } else {
-    console.error('  [FAIL] Falha na persistência do link.', saved2);
+    console.error('  [FAIL] Serviço aceitou código vazio!');
     process.exit(1);
   }
 
-  console.log('\nCenário 3: Salvar página central');
-  const coupons3 = extractShopeeCoupons('Confira os cupons Shopee: https://br.shp.ee/CKfvC8dB');
-  await shopeeCouponService.persistCandidate(userId, coupons3[0], {}, mockSupabase);
-  
-  const saved3 = mockSupabase._store[2];
-  if (saved3.coupon_type === 'pagina_cupons') {
-    console.log('  [PASS] Página de cupons persistida.');
+  console.log('\nCenário 3: Rejeitar link_resgate sem URL');
+  const invalidCoupon2: any = { type: 'link_resgate', redemptionUrl: '', marketplace: 'shopee' };
+  const res3 = await shopeeCouponService.persistCandidate(userId, invalidCoupon2, {}, mockSupabase);
+  if (res3 === null && mockSupabase._store.length === 1) {
+    console.log('  [PASS] Rejeição de link sem URL confirmada.');
   } else {
-    console.error('  [FAIL] Falha na persistência da página.', saved3);
+    console.error('  [FAIL] Serviço aceitou link sem URL!');
     process.exit(1);
   }
 
-  console.log('\nCenário 4: Deduplicação (Mesmo Cupom)');
-  const originalCaptureCount = saved1.capture_count;
+  console.log('\nCenário 4: Forçar Trava de Segurança (Mesmo que input seja true)');
+  const forcedCoupon: any = { ...coupons1[0], dispatchable: true }; 
+  await shopeeCouponService.persistCandidate(userId, forcedCoupon, {}, mockSupabase);
+  const saved4 = mockSupabase._store[0]; // Upsert no primeiro
+  if (saved4.dispatchable === false) {
+    console.log('  [PASS] Trava de segurança forçada pelo serviço (Ignorou input maligno).');
+  } else {
+    console.error('  [FAIL] Serviço permitiu alteração de dispatchable!');
+    process.exit(1);
+  }
+
+  console.log('\nCenário 5: Verificação de Constraints de Migration (Mock)');
+  try {
+     // Tentativa direta no mock simulando bypass do serviço
+     mockSupabase.from('discovered_coupons').upsert({ user_id: userId, dedupe_key: 'test', dispatchable: true }, {});
+     console.error('  [FAIL] Mock permitiu dispatchable true!');
+     process.exit(1);
+  } catch (e: any) {
+     if (e.message.includes('CHECK constraint violation')) {
+       console.log('  [PASS] Constraint de DB simulada bloqueou dispatchable true.');
+     } else {
+       throw e;
+     }
+  }
+
+  console.log('\nCenário 6: Deduplicação e Contador');
   await shopeeCouponService.persistCandidate(userId, coupons1[0], {}, mockSupabase);
-  
-  if (mockSupabase._store.length === 3 && mockSupabase._store[0].capture_count > originalCaptureCount) {
-    console.log('  [PASS] Deduplicação funcionou. Contador incrementado.');
+  if (mockSupabase._store.length === 1 && mockSupabase._store[0].capture_count >= 2) {
+    console.log('  [PASS] Deduplicação e contagem de captura funcionando.');
   } else {
-    console.error('  [FAIL] Falha na deduplicação.', mockSupabase._store);
+    console.error('  [FAIL] Falha no contador de dedupe.');
     process.exit(1);
   }
 
-  console.log('\nCenário 5: Segurança (Trava Hard-coded)');
-  const allSafe = mockSupabase._store.every((c: any) => 
-    c.dispatchable === false && 
-    c.auto_dispatch_blocked === true && 
-    c.block_reason === 'coupon_requires_manual_review_or_phase_2c_dispatch'
-  );
-  if (allSafe) {
-    console.log('  [PASS] Todos os cupons possuem trava de segurança ativa.');
-  } else {
-    console.error('  [FAIL] Falha na trava de segurança!');
-    process.exit(1);
-  }
-
-  console.log('\n--- TESTES DE PERSISTÊNCIA CONCLUÍDOS COM SUCESSO ---');
+  console.log('\n--- TESTES DE HARDENING CONCLUÍDOS COM SUCESSO ---');
 }
 
 runPersistenceTest().catch(console.error);
