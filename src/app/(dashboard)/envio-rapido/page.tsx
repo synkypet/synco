@@ -339,6 +339,17 @@ export default function EnvioRapidoPage() {
       return;
     }
 
+    // Trava de Segurança Fase 2E.1A: Bloquear envio de cupons
+    const selectedProducts = processedProducts.filter(p => selectedProductIds.includes(p.id));
+    const hasCoupon = selectedProducts.some(p => p.factual.eligibility.offer_type === 'coupon_offer');
+    
+    if (hasCoupon) {
+      toast.error('O envio de cupons está desabilitado na Fase 2E.1A.', {
+        description: 'Use o botão de copiar para enviar manualmente por enquanto.'
+      });
+      return;
+    }
+
     setIsConfirmOpen(true);
   };
 
@@ -546,10 +557,17 @@ export default function EnvioRapidoPage() {
                             {product.metadata.source === 'fallback' || !product.factual.image ? (
                               <div className="flex flex-col items-center justify-center h-full bg-anthracite-surface/40 rounded-xl">
                                 <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center mb-1.5 shadow-skeuo-pressed">
-                                  <AlertCircle className="w-4 h-4 text-red-500/40" />
+                                  {product.factual.eligibility.offer_type === 'coupon_offer' ? (
+                                    <Zap size={16} className="text-kinetic-orange" />
+                                  ) : (
+                                    <AlertCircle size={16} className="text-red-500/40" />
+                                  )}
                                 </div>
-                                <span className="text-[7.5px] font-black uppercase tracking-widest text-red-500/40 text-center px-2 leading-tight">
-                                  IMAGEM AUSENTE OU INVÁLIDA
+                                <span className={cn(
+                                  "text-[7.5px] font-black uppercase tracking-widest text-center px-2 leading-tight",
+                                  product.factual.eligibility.offer_type === 'coupon_offer' ? "text-white/60" : "text-red-500/40"
+                                )}>
+                                  {product.factual.eligibility.offer_type === 'coupon_offer' ? 'CUPOM SHOPEE' : 'IMAGEM AUSENTE'}
                                 </span>
                               </div>
                             ) : (
@@ -729,6 +747,29 @@ export default function EnvioRapidoPage() {
                                     )}
                                     <span className="ml-1">comissão</span>
                                   </Badge>
+                                )}
+
+                                {/* Status de Reafiliação de Cupom */}
+                                {product.factual.eligibility.offer_type === 'coupon_offer' && (
+                                  <div className="flex items-center gap-2">
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        "px-2 h-5 text-[8px] font-black uppercase tracking-widest",
+                                        product.factual.reaffiliation_status === 'reaffiliated'
+                                          ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/30"
+                                          : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                      )}
+                                    >
+                                      {product.factual.reaffiliation_status === 'reaffiliated' ? '🔗 Link Afiliado Gerado' : '⚠️ Link Original (Sem Afiliação)'}
+                                    </Badge>
+                                    
+                                    {product.factual.reaffiliation_status !== 'reaffiliated' && product.factual.cleanUrl && (
+                                      <span className="text-[8px] font-bold text-amber-500/60 uppercase">
+                                        Reafiliação indisponível para este destino
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>

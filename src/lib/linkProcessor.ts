@@ -8,6 +8,7 @@ import { templateService } from '@/services/supabase/template-service';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { extractShopeeCoupons } from './marketplaces/shopee/coupon-extractor';
 import { ShopeeCoupon } from '@/types/shopee-coupon';
+import { formatShopeeCouponMessage } from './marketplaces/shopee/coupon-formatter';
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
 
@@ -100,8 +101,12 @@ const adapters: MarketplaceAdapter[] = [
  * Detecta o marketplace de uma URL.
  */
 export function detectMarketplace(url: string): Marketplace {
+  // 0. Extrair URL se houver texto ao redor
+  const urlMatch = url.match(/https?:\/\/[^\s]+/);
+  const target = urlMatch ? urlMatch[0] : url;
+
   try {
-    const hostname = new URL(url).hostname.toLowerCase();
+    const hostname = new URL(target).hostname.toLowerCase();
     
     if (hostname === 's.shopee.com.br' || hostname === 'shopee.com.br' || hostname.endsWith('.shopee.com.br')) return 'Shopee';
     if (hostname === 'shope.ee' || hostname.endsWith('.shope.ee')) return 'Shopee';
@@ -112,14 +117,16 @@ export function detectMarketplace(url: string): Marketplace {
     if (hostname === 'magazineluiza.com.br' || hostname.endsWith('.magazineluiza.com.br') || hostname === 'magalu.com' || hostname.endsWith('.magalu.com')) return 'Magalu';
   } catch {
     // Fallback para URLs malformadas ou sem protocolo
-    const lower = url.toLowerCase();
+    const lower = target.toLowerCase();
     if (lower.includes('shopee.com.br') || lower.includes('shope.ee') || lower.includes('br.shp.ee')) return 'Shopee';
   }
   return 'Unknown';
 }
 
 function findAdapter(url: string): MarketplaceAdapter | null {
-  return adapters.find(adapter => adapter.canHandle(url)) || null;
+  const urlMatch = url.match(/https?:\/\/[^\s]+/);
+  const target = urlMatch ? urlMatch[0] : url;
+  return adapters.find(adapter => adapter.canHandle(target)) || null;
 }
 
 /**
@@ -132,8 +139,8 @@ export function classifyOffer(text: string, factual: Partial<FactualData>): { ty
   // 1. Uso do novo extrator Shopee (Fase 2B)
   const shopeeCoupons = extractShopeeCoupons(text);
   if (shopeeCoupons.length > 0) {
-    const isCurrentLinkARedemptionUrl = shopeeCoupons.some(c => c.redemptionUrl === factual.originalUrl);
-    const hasProductData = !!(factual.title && factual.price && factual.price > 0);
+    const isCurrentLinkARedemptionUrl = shopeeCoupons.some(c => c.redemptionUrl && (factual.originalUrl === c.redemptionUrl || factual.originalUrl?.includes(c.redemptionUrl)));
+    const hasProductData = !!(factual.title && factual.price && factual.price > 0 && !factual.title.toLowerCase().includes('sem título'));
 
     let type: OfferType = 'product_offer';
 
@@ -143,11 +150,13 @@ export function classifyOffer(text: string, factual: Partial<FactualData>): { ty
     } else if (shopeeCoupons.some(c => c.type === 'codigo')) {
       type = hasProductData ? 'product_with_coupon' : 'coupon_offer';
       reasons.push(`Código de cupom detectado no texto da mensagem`);
+    } else {
+      // Se detectou qualquer cupom e não é um produto forte, tratamos como oferta de cupom
+      type = hasProductData ? 'product_with_coupon' : 'coupon_offer';
+      reasons.push(`Cupom detectado no conteúdo`);
     }
 
-    if (type !== 'product_offer') {
-      return { type, reasons, coupons: shopeeCoupons };
-    }
+    return { type, reasons, coupons: shopeeCoupons };
   }
 
   // 2. Heurísticas Legadas (Fallback/Outros Marketplaces)
@@ -361,15 +370,32 @@ export function buildProductSnapshot(opts: {
 
   // 2. Classificar Oferta (Heurísticas)
   const classification = classifyOffer(originalUrl, factual);
+  
+  if (classification.coupons && classification.coupons.length > 0) {
+    factual.coupons = classification.coupons;
+  }
  
   // 3. Aplicar Validação Real
   factual.eligibility = validateEligibility(factual, classification.type);
+
+  // 4. Gerar Texto da Mensagem (Determinístico ou Templated)
+  let messageText = opts.templatedMessage || buildMessageFromSnapshot(factual);
+  
+  // Refinamento: Se for oferta de cupom Shopee, usar formatador especializado
+  if (!opts.templatedMessage && classification.type === 'coupon_offer' && factual.coupons && factual.coupons.length > 0) {
+    const bestCoupon = factual.coupons.find(c => c.redemptionUrl && originalUrl.includes(c.redemptionUrl)) || factual.coupons[0];
+    const couponToFormat = {
+      ...bestCoupon,
+      redemptionUrl: factual.finalLinkToSend // Usar o link (re)afiliado se existir
+    };
+    messageText = formatShopeeCouponMessage(couponToFormat);
+  }
 
   return {
     id,
     factual,
     copy: {
-      messageText: opts.templatedMessage || buildMessageFromSnapshot(factual),
+      messageText,
       toneUsed: opts.templatedMessage ? 'templated' : 'deterministic',
       generatedAt: new Date().toISOString()
     },
@@ -395,8 +421,13 @@ export async function processLinks(
 
   for (const link of validLinks) {
     const id = `proc_${Date.now()}_${results.length}`;
-    const marketplace = detectMarketplace(link);
-    const adapter = findAdapter(link);
+    
+    // Extração de URL para processamento (suporta texto com link)
+    const urlMatch = link.match(/https?:\/\/[^\s]+/);
+    const targetUrl = urlMatch ? urlMatch[0] : link;
+
+    const marketplace = detectMarketplace(targetUrl);
+    const adapter = findAdapter(targetUrl);
     
     let metadata = null;
     let preResult = null;
@@ -412,17 +443,17 @@ export async function processLinks(
         });
 
         // A. Pré-processamento (Fase 1: Reafiliação)
-        preResult = await adapter.preProcessIncomingLink(link, connection);
+        preResult = await adapter.preProcessIncomingLink(targetUrl, connection);
         
         // B. Enrichment (Metadata) - Somente se não estiver bloqueado/falhado
         const canEnrich = preResult.reaffiliation_status !== 'blocked' && preResult.reaffiliation_status !== 'failed';
         if (canEnrich) {
-            const targetUrl = preResult.canonical_url || link;
-            metadata = await adapter.fetchMetadata(targetUrl, connection);
+            const finalTargetUrl = preResult.canonical_url || targetUrl;
+            metadata = await adapter.fetchMetadata(finalTargetUrl, connection);
             
             // C. Validação de Metadados (Metadata Guardrail)
             if (metadata?.metadata_failed) {
-                console.warn(`[LINK-PROCESSOR] Meta Guardrail: Falha de qualidade para ${link}: ${metadata.metadata_error}`);
+                console.warn(`[LINK-PROCESSOR] Meta Guardrail: Falha de qualidade para ${targetUrl}: ${metadata.metadata_error}`);
                 preResult.reaffiliation_status = 'failed';
                 preResult.reaffiliation_error = metadata.metadata_error || 'Metadados insuficientes';
             }
@@ -482,13 +513,13 @@ export async function processLinks(
         id,
         originalUrl: link,
         metadata: metadata || {},
-        affiliateUrl: preResult?.generated_affiliate_url || link,
+        affiliateUrl: preResult?.generated_affiliate_url || targetUrl,
         tone,
         templatedMessage,
         reaffiliation: {
-          incoming_url: link,
+          incoming_url: targetUrl,
           resolved_url: preResult?.resolved_url,
-          canonical_url: preResult?.canonical_url || link,
+          canonical_url: preResult?.canonical_url || targetUrl,
           generated_affiliate_url: preResult?.generated_affiliate_url,
           redirect_chain: preResult?.redirect_chain,
           reaffiliation_status: preResult?.reaffiliation_status || 'not_needed',

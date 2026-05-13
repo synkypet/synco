@@ -79,8 +79,8 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
     coupons.push(coupon);
   }
 
-  // 3. Extração de Desconto + Link de Resgate
-  const rescuePatterns = /(?:use\s+o\s+)?(?:cupom|código|codigo):\s*([^|]+)\|?\s*(?:resgate\s+aqui|confira|aproveite):\s*(https?:\/\/[^\s]+)/gi;
+  // 3. Extração de Desconto + Link de Resgate (Padrão 1: Explícito)
+  const rescuePatterns = /(?:use\s+o\s+)?(?:cupom|código|codigo):\s*([^|]+)\|?\s*(?:resgate\s+aqui|confira|aproveite|clique aqui):\s*(https?:\/\/[^\s]+)/gi;
   while ((match = rescuePatterns.exec(rawText)) !== null) {
     const label = match[1].trim();
     const url = sanitizeUrl(match[2]);
@@ -93,6 +93,32 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
         couponLabel: label,
         redemptionUrl: url,
         confidence: 0.90,
+        status: 'candidate',
+        dedupeKey: ''
+      };
+      coupon.dedupeKey = generateDedupeKey(coupon);
+      coupons.push(coupon);
+    }
+  }
+
+  // 3.1 Extração de Desconto + Link (Padrão 2: Flexível)
+  // Detecta: R$50 OFF: https://... ou Cupom 50%: https://...
+  const flexiblePatterns = /(?:🎟️)?\s*([^:\n]+OFF|Cupom[^:\n]+):\s*(https?:\/\/[^\s]+)/gi;
+  while ((match = flexiblePatterns.exec(rawText)) !== null) {
+    const label = match[1].trim();
+    const url = sanitizeUrl(match[2]);
+
+    // Evitar duplicar se já foi pego pelo padrão explícito
+    if (coupons.some(c => c.redemptionUrl === url)) continue;
+
+    if (SHOPEE_DOMAINS.some(domain => url.includes(domain))) {
+      const coupon: ShopeeCoupon = {
+        marketplace: 'shopee',
+        type: 'link_resgate',
+        code: null,
+        couponLabel: label,
+        redemptionUrl: url,
+        confidence: 0.85,
         status: 'candidate',
         dedupeKey: ''
       };

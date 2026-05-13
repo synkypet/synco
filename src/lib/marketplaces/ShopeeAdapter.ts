@@ -84,14 +84,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
                               lowerUrl.includes('cupom');
 
       if (isCouponOrPromo) {
-        console.log(`[SHOPEE-PREPROCESS] [${requestId}] Link promocional/cupom identificado.`);
-        return {
-          incoming_url: url,
-          resolved_url: resolvedUrl,
-          canonical_url: canonicalUrl,
-          redirect_chain: redirectChain,
-          reaffiliation_status: 'resolved' // Marcamos como resolvido mas não reafiliado como produto
-        };
+        console.log(`[SHOPEE-PREPROCESS] [${requestId}] Link promocional/cupom identificado. Prosseguindo para reafiliação de landing page.`);
       } else {
         console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link não é de produto nem promoção conhecida.`);
         let reason = 'Link Shopee não é produto (capa/categoria)';
