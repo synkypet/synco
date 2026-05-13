@@ -79,18 +79,6 @@ CREATE POLICY "Users can view own discovered coupons"
     TO authenticated
     USING (auth.uid() = user_id);
 
--- Política de Escrita (Service Role / Server-side via bypass ou política explícita se necessário para authenticated)
--- No SYNCO, geralmente o backend opera via service_role ou o usuário insere via política:
+-- INSERT/UPDATE/DELETE: Bloqueados para usuários autenticados (Server-side Only via Service Role)
 DROP POLICY IF EXISTS "Users can insert own discovered coupons" ON public.discovered_coupons;
-CREATE POLICY "Users can insert own discovered coupons"
-    ON public.discovered_coupons
-    FOR INSERT
-    TO authenticated
-    WITH CHECK (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can update own discovered coupons" ON public.discovered_coupons;
-CREATE POLICY "Users can update own discovered coupons"
-    ON public.discovered_coupons
-    FOR UPDATE
-    TO authenticated
-    USING (auth.uid() = user_id);
