@@ -59,6 +59,23 @@ export const campaignService = {
       }
     }
 
+    // ─── 0.2 Coupon Dispatch Guardrail (Fase 2E.1B) ───────────────────────────
+    const hasCoupon = dto.items.some(item => item.offer_type === 'coupon_offer');
+    if (hasCoupon) {
+      const isManualCoupon = 
+        dto.origin === 'manual' && 
+        dto.metadata?.dispatchOrigin === 'quick_send_manual_coupon' &&
+        dto.metadata?.manualCouponSend === true &&
+        dto.metadata?.confirmedByUser === true;
+
+      if (!isManualCoupon) {
+        console.warn(`[CAMPAIGN-SERVICE] [GUARDRAIL] Bloqueio de cupom: Tentativa de envio sem confirmação manual validada para user ${userId}. Origin: ${dto.origin}`);
+        throw new Error('coupon_manual_confirmation_required');
+      }
+      
+      console.log(`[CAMPAIGN-SERVICE] [GUARDRAIL] Cupom autorizado para envio manual (Envio Rápido) para user ${userId}.`);
+    }
+
     // ─── 1. Validação Prévia ──────────────────────────────────────────────────
     if (!dto.items || dto.items.length === 0) {
       console.warn('[CAMPAIGN-SERVICE] Abortando: Nenhun item fornecido.');
@@ -316,17 +333,24 @@ export const campaignService = {
   async createQuickSendCampaign(userId: string, dto: CreateCampaignDTO, client?: SupabaseClient): Promise<Campaign> {
     console.log(`[CAMPAIGN-SERVICE] [QUICK-SEND] Iniciando criação de despacho manual para user ${userId}...`);
     
-    // Trava de Segurança Fase 2E.1A: Bloqueio total no backend para Envio Rápido de cupons
     const hasCoupon = dto.items.some(item => item.offer_type === 'coupon_offer');
-    if (hasCoupon) {
-      console.warn(`[CAMPAIGN-SERVICE] [QUICK-SEND] Bloqueado: Tentativa de envio de cupom detectada para user ${userId}.`);
-      throw new Error('coupon_quick_send_disabled_until_2e1b');
+    const isConfirmed = dto.metadata?.manualCouponSend === true && dto.metadata?.confirmedByUser === true;
+
+    // Se houver cupom, exige confirmação explícita no metadata (injetada pela UI após modal)
+    if (hasCoupon && !isConfirmed) {
+      console.warn(`[CAMPAIGN-SERVICE] [QUICK-SEND] Bloqueado: Envio de cupom sem flags de confirmação para user ${userId}.`);
+      throw new Error('coupon_manual_confirmation_required');
     }
 
     const manualDto: CreateCampaignDTO = {
       ...dto,
       name: `🚀 [MANUAL] ${dto.name || new Date().toLocaleDateString()}`,
-      origin: 'manual'
+      origin: 'manual',
+      metadata: {
+        ...dto.metadata,
+        // Injetar selo de origem server-side para validação no core .create()
+        dispatchOrigin: hasCoupon ? 'quick_send_manual_coupon' : undefined
+      }
     };
 
     return this.create(userId, manualDto, client);

@@ -339,15 +339,26 @@ export default function EnvioRapidoPage() {
       return;
     }
 
-    // Trava de Segurança Fase 2E.1A: Bloquear envio de cupons
     const selectedProducts = processedProducts.filter(p => selectedProductIds.includes(p.id));
-    const hasCoupon = selectedProducts.some(p => p.factual.eligibility.offer_type === 'coupon_offer');
+    const coupons = selectedProducts.filter(p => p.factual.eligibility.offer_type === 'coupon_offer');
+    const hasCoupon = coupons.length > 0;
     
     if (hasCoupon) {
-      toast.error('O envio de cupons está desabilitado na Fase 2E.1A.', {
-        description: 'Use o botão de copiar para enviar manualmente por enquanto.'
+      // Regra 2E.1B: Bloquear se houver link mas falha de reafiliação
+      const hasReaffiliationFailure = coupons.some(c => {
+        const isLanding = c.factual.canonical_url?.includes('/m/') || c.factual.canonical_url?.includes('cupom');
+        const isRescue = c.factual.resolved_url?.includes('voucher') || c.factual.resolved_url?.includes('api/voucher');
+        const needsLink = isLanding || isRescue;
+        
+        return needsLink && c.factual.reaffiliation_status !== 'reaffiliated';
       });
-      return;
+
+      if (hasReaffiliationFailure) {
+        toast.error('Envio bloqueado: Falha na reafiliação do link de cupom.', {
+          description: 'Não podemos enviar links de cupom sem o seu afiliado. Use o botão de copiar para envio externo.'
+        });
+        return;
+      }
     }
 
     setIsConfirmOpen(true);
@@ -357,6 +368,8 @@ export default function EnvioRapidoPage() {
     setIsConfirmOpen(false);
 
     const selectedProducts = processedProducts.filter(p => selectedProductIds.includes(p.id));
+
+    const hasCoupon = selectedProducts.some(p => p.factual.eligibility.offer_type === 'coupon_offer');
 
     const campaignData = {
       name: `Envio Rápido - ${new Date().toLocaleDateString()}`,
@@ -390,6 +403,10 @@ export default function EnvioRapidoPage() {
       metadata: {
         confirmed_at: new Date().toISOString(),
         confirmed_by: user?.email,
+        // Flags de Segurança Fase 2E.1B
+        manualCouponSend: hasCoupon,
+        confirmedByUser: true,
+        source: 'quick_send',
         audit: {
           products_count: selectedProducts.length,
           destinations_count: selectedDestinations.length,
@@ -1260,6 +1277,11 @@ export default function EnvioRapidoPage() {
         groupsCount={selectedDestinations.length}
         channelNames={[...new Set(groups?.filter(g => selectedDestinations.includes(g.id)).map(g => g.channel_name || 'Desconhecido'))].filter(Boolean) as string[]}
         destinationsNames={groups?.filter(g => selectedDestinations.includes(g.id)).map(g => g.name || 'Grupo sem nome') || []}
+        // Props 2E.1B
+        isCouponMode={processedProducts.some(p => selectedProductIds.includes(p.id) && p.factual.eligibility.offer_type === 'coupon_offer')}
+        couponPreview={processedProducts.find(p => selectedProductIds.includes(p.id) && p.factual.eligibility.offer_type === 'coupon_offer')?.copy.messageText}
+        isLinkAvailable={processedProducts.filter(p => selectedProductIds.includes(p.id) && p.factual.eligibility.offer_type === 'coupon_offer').every(c => c.factual.reaffiliation_status === 'reaffiliated' || (!c.factual.canonical_url?.includes('/m/') && !c.factual.resolved_url?.includes('voucher')))}
+        affiliateLink={processedProducts.find(p => selectedProductIds.includes(p.id) && p.factual.eligibility.offer_type === 'coupon_offer')?.factual.finalLinkToSend}
       />
     </LayoutContainer>
   );
