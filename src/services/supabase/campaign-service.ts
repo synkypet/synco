@@ -197,7 +197,10 @@ export const campaignService = {
 
     const jobsToInsert: any[] = [];
 
-    insertedItems.forEach(item => {
+    insertedItems.forEach((item, index) => {
+      const originalItem = dto.items[index];
+      const isCoupon = originalItem?.offer_type === 'coupon_offer';
+
       uniqueGroups.forEach(group => {
         // Suporte tanto para objeto único quanto para array (formato padrão do Supabase em joins)
         const channelData = Array.isArray(group.channels) ? group.channels[0] : group.channels;
@@ -211,7 +214,7 @@ export const campaignService = {
 
         // --- GUARDIÃO ESTRUTURAL DA FASE 2 ---
         // A geração de job agora depende EXCLUSIVAMENTE da elegibilidade gravada no item.
-        const isEligible = item.eligibility_status === 'eligible' || item.eligibility_status === 'warning';
+        const isEligible = (item.eligibility_status === 'eligible' || item.eligibility_status === 'warning') && !isCoupon;
 
         if (isConnected && isEligible) {
           const fallbackChannel = userChannels?.find(ch => 
@@ -238,7 +241,10 @@ export const campaignService = {
             origin: dto.origin || 'manual'
           });
         } else if (!isEligible) {
-            console.warn(`[CAMPAIGN-SERVICE] Item ${item.id} pulado porque o status de elegibilidade é: ${item.eligibility_status}. Motivos: ${item.eligibility_reasons?.join(' | ') || 'Nenhum reportado'}`);
+            const reason = isCoupon 
+              ? 'Oferta do tipo "coupon_offer" bloqueada para despacho automático (Requer Fase 2C)' 
+              : `Status de elegibilidade: ${item.eligibility_status}`;
+            console.warn(`[CAMPAIGN-SERVICE] Item ${item.id} pulado. Motivo: ${reason}. Motivos originais: ${item.eligibility_reasons?.join(' | ') || 'Nenhum reportado'}`);
         }
       });
     });

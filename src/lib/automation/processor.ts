@@ -358,7 +358,8 @@ export async function processInboundAutomation(payload: InboundPayload) {
               eligibility_status: snapshot.factual.eligibility.status,
               eligibility_reasons: snapshot.factual.eligibility.reasons,
               reaffiliation_status: snapshot.factual.reaffiliation_status,
-              reaffiliation_error: snapshot.factual.reaffiliation_error
+              reaffiliation_error: snapshot.factual.reaffiliation_error,
+              offer_type: snapshot.factual.eligibility.offer_type
             }],
             destinations: [{
               type: route.target_type,

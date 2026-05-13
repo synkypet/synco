@@ -81,6 +81,7 @@ export interface CreateCampaignDTO {
     // Elegibilidade Operacional (Fase 2)
     eligibility_status: 'eligible' | 'warning' | 'ineligible';
     eligibility_reasons: string[];
+    offer_type?: string;
   }[];
   destinations: {
     type: 'list' | 'group';
