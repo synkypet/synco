@@ -113,6 +113,30 @@ async function runTests() {
     }
   }
 
+  // 2.1 Caso B2: Origin 'coupon' (automação legado)
+  console.log('\nTeste B2: Origin "coupon" (automação legado)');
+  const dtoB2: CreateCampaignDTO = {
+    name: 'Automação Legado',
+    origin: 'coupon',
+    items: [{
+      product_name: 'Cupom Automático',
+      eligibility_status: 'eligible',
+      eligibility_reasons: []
+    } as any],
+    destinations: [{ type: 'group', id: 'group_1' }]
+  };
+
+  try {
+    await campaignService.create(userId, dtoB2, mockSupabase);
+    console.error('  [FAIL] Backend deveria ter bloqueado origin "coupon".');
+  } catch (err: any) {
+    if (err.message === 'coupon_manual_confirmation_required') {
+      console.log('  [PASS] Backend bloqueou corretamente origin "coupon".');
+    } else {
+      console.error('  [FAIL] Erro inesperado:', err.message);
+    }
+  }
+
   // 3. Caso C: Coupon_offer confirmado pelo fluxo quick_send
   console.log('\nTeste C: Coupon_offer confirmado via Quick Send (Fluxo Oficial)');
   const dtoC: CreateCampaignDTO = {

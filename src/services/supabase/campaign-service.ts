@@ -60,7 +60,10 @@ export const campaignService = {
     }
 
     // ─── 0.2 Coupon Dispatch Guardrail (Fase 2E.1B) ───────────────────────────
-    const hasCoupon = dto.items.some(item => item.offer_type === 'coupon_offer');
+    const hasCoupon = 
+      dto.origin === 'coupon' || 
+      dto.items.some(item => item.offer_type === 'coupon_offer');
+
     if (hasCoupon) {
       const isManualCoupon = 
         dto.origin === 'manual' && 
