@@ -382,7 +382,32 @@ export class ShopeeAdapter extends MarketplaceAdapter {
       ]);
 
       const allNodes = [...exactNodes, ...keywordNodes];
-      if (allNodes.length === 0) return this.fallback(nameFallback, 'No nodes found in API');
+      if (allNodes.length === 0) {
+        // Se não houver nodes mas for uma landing page conhecida, não falhamos o guardrail
+        const lowerUrl = url.toLowerCase();
+        const isCouponOrPromo = lowerUrl.includes('/m/') || 
+                                lowerUrl.includes('/events/') || 
+                                lowerUrl.includes('/voucher-wallet') || 
+                                lowerUrl.includes('/user/voucher') ||
+                                lowerUrl.includes('cupom');
+        
+        if (isCouponOrPromo) {
+          return {
+            name: nameFallback,
+            originalPrice: 0,
+            currentPrice: 0,
+            currentPriceFactual: 0,
+            currentPriceSource: 'fallback',
+            commissionValueFactual: 0,
+            commissionSource: 'fallback',
+            discountPercent: 0,
+            imageUrl: '',
+            marketplace: 'Shopee',
+            fetchedAt: new Date().toISOString()
+          };
+        }
+        return this.fallback(nameFallback, 'No nodes found in API');
+      }
 
       const ranked = allNodes
         .map(node => ({

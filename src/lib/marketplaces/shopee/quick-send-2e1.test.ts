@@ -135,6 +135,58 @@ async function testQuickSendCoupons() {
     }
   }
 
+  // 7. Bug Fix: Landing Page Shopee (Resolvida) não deve falhar o guardrail
+  console.log('\nTeste 7: Bug Fix - Landing Page Shopee (Sem nodes)');
+  const urlLandingBug = 'https://s.shopee.com.br/1BJ7Xcajwb';
+  
+  // Monkey-patch fetchMetadata para simular "No nodes found" na API de produto para este link
+  const originalFetchInTest = ShopeeAdapter.prototype.fetchMetadata;
+  ShopeeAdapter.prototype.fetchMetadata = async function(url, conn) {
+    if (url.includes('cupom-de-desconto')) {
+       // Simulando o que o Adapter faz internamente para landing pages: 
+       // não deve retornar metadata_failed: true mesmo sem nodes.
+       return {
+         name: 'Página de Cupons',
+         marketplace: 'Shopee',
+         fetchedAt: new Date().toISOString()
+       } as any;
+    }
+    return originalFetchInTest.call(this, url, conn);
+  };
+
+  // Mock preProcess para resolver o link do bug para a landing page
+  const originalPreInTest = ShopeeAdapter.prototype.preProcessIncomingLink;
+  ShopeeAdapter.prototype.preProcessIncomingLink = async function(url, conn) {
+    if (url === urlLandingBug) {
+      return {
+        incoming_url: url,
+        canonical_url: 'https://shopee.com.br/m/cupom-de-desconto',
+        reaffiliation_status: 'reaffiliated',
+        generated_affiliate_url: 'https://s.shopee.com.br/AKXObVvw4n'
+      };
+    }
+    return originalPreInTest.call(this, url, conn);
+  };
+
+  const snapshotsLanding = await processLinks([urlLandingBug], [mockConnection]);
+  const sLanding = snapshotsLanding[0];
+
+  if (sLanding.factual.eligibility.offer_type === 'coupon_offer' && sLanding.factual.reaffiliation_status === 'reaffiliated') {
+    console.log('  [PASS] Landing page detectada como cupom e reafiliada sem falha de nodes.');
+    if (sLanding.factual.finalLinkToSend === 'https://s.shopee.com.br/AKXObVvw4n') {
+      console.log('  [PASS] Link afiliado preservado corretamente.');
+    } else {
+      console.log('  [FAIL] Link afiliado NÃO preservado. Recebido:', sLanding.factual.finalLinkToSend);
+    }
+  } else {
+    console.log('  [FAIL] Landing page falhou ou classificada incorretamente. Status:', sLanding.factual.reaffiliation_status, 'Tipo:', sLanding.factual.eligibility.offer_type);
+    if (sLanding.factual.reaffiliation_error) console.log('  Erro:', sLanding.factual.reaffiliation_error);
+  }
+
+  // Restaurar mocks para não afetar outros testes (se houver)
+  ShopeeAdapter.prototype.fetchMetadata = originalFetchInTest;
+  ShopeeAdapter.prototype.preProcessIncomingLink = originalPreInTest;
+
   console.log('\n--- TESTES DE ENVIO RÁPIDO CONCLUÍDOS ---');
 }
 

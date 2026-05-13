@@ -137,10 +137,31 @@ export function classifyOffer(text: string, factual: Partial<FactualData>): { ty
   const reasons: string[] = [];
 
   // 1. Uso do novo extrator Shopee (Fase 2B)
+  // Analisamos o texto original E a URL canônica (caso já tenha sido resolvida)
   const shopeeCoupons = extractShopeeCoupons(text);
+  
+  // Refinamento: Se não extraiu do texto mas a URL canônica é claramente um cupom/promo
+  if (shopeeCoupons.length === 0 && factual.canonical_url) {
+    const lowerUrl = factual.canonical_url.toLowerCase();
+    const isCentral = lowerUrl.includes('/m/cupom-de-desconto') || lowerUrl.includes('cupom');
+    
+    if (isCentral) {
+      shopeeCoupons.push({
+        marketplace: 'shopee',
+        type: 'pagina_cupons',
+        code: null,
+        couponLabel: 'Cupom de Desconto Shopee',
+        redemptionUrl: factual.canonical_url,
+        confidence: 0.80,
+        status: 'candidate',
+        dedupeKey: `shopee:coupon:url:${factual.canonical_url}`
+      });
+    }
+  }
+
   if (shopeeCoupons.length > 0) {
-    const isCurrentLinkARedemptionUrl = shopeeCoupons.some(c => c.redemptionUrl && (factual.originalUrl === c.redemptionUrl || factual.originalUrl?.includes(c.redemptionUrl)));
-    const hasProductData = !!(factual.title && factual.price && factual.price > 0 && !factual.title.toLowerCase().includes('sem título'));
+    const isCurrentLinkARedemptionUrl = shopeeCoupons.some(c => c.redemptionUrl && (factual.originalUrl === c.redemptionUrl || factual.originalUrl?.includes(c.redemptionUrl) || factual.canonical_url === c.redemptionUrl));
+    const hasProductData = !!(factual.title && factual.price && factual.price > 0 && !factual.title.toLowerCase().includes('sem título') && !factual.title.toLowerCase().includes('produto shopee'));
 
     let type: OfferType = 'product_offer';
 
@@ -452,7 +473,12 @@ export async function processLinks(
             metadata = await adapter.fetchMetadata(finalTargetUrl, connection);
             
             // C. Validação de Metadados (Metadata Guardrail)
-            if (metadata?.metadata_failed) {
+            // Somente falha se NÃO for um cupom identificado (pelo texto ou pela URL canônica)
+            const isCoupon = (extractShopeeCoupons(link).length > 0) || 
+                             (preResult.canonical_url?.toLowerCase().includes('/m/')) ||
+                             (preResult.canonical_url?.toLowerCase().includes('cupom'));
+
+            if (metadata?.metadata_failed && !isCoupon) {
                 console.warn(`[LINK-PROCESSOR] Meta Guardrail: Falha de qualidade para ${targetUrl}: ${metadata.metadata_error}`);
                 preResult.reaffiliation_status = 'failed';
                 preResult.reaffiliation_error = metadata.metadata_error || 'Metadados insuficientes';
