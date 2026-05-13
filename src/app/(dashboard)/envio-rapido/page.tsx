@@ -380,7 +380,8 @@ export default function EnvioRapidoPage() {
         eligibility_reasons: p.factual.eligibility.reasons,
 
         external_product_id: p.factual.itemId?.toString(),
-        installments: p.factual.installments
+        installments: p.factual.installments,
+        offer_type: p.factual.eligibility.offer_type
       })),
       destinations: selectedDestinations.map(id => ({
         id,
@@ -638,18 +639,31 @@ export default function EnvioRapidoPage() {
                                   </Badge>
                                 )}
 
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-3 rounded-lg bg-white/5 hover:bg-kinetic-orange/20 hover:text-kinetic-orange flex items-center gap-2 transition-all opacity-0 group-hover/title:opacity-100 border border-white/5"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(product.factual.finalLinkToSend);
-                                    toast.success('Link original copiado para a área de transferência');
-                                  }}
-                                >
-                                  <Copy className="w-3 h-3 text-kinetic-orange" />
-                                  <span className="text-[8px] font-black uppercase tracking-widest">COPIAR LINK</span>
-                                </Button>
+                                  <Button
+                                   variant="ghost"
+                                   size="sm"
+                                   className="h-7 px-3 rounded-lg bg-white/5 hover:bg-kinetic-orange/20 hover:text-kinetic-orange flex items-center gap-2 transition-all opacity-0 group-hover/title:opacity-100 border border-white/5"
+                                   onClick={() => {
+                                     navigator.clipboard.writeText(product.factual.finalLinkToSend);
+                                     toast.success('Link original copiado!');
+                                   }}
+                                 >
+                                   <Link2 className="w-3 h-3 text-kinetic-orange" />
+                                   <span className="text-[8px] font-black uppercase tracking-widest">COPIAR LINK</span>
+                                 </Button>
+
+                                 <Button
+                                   variant="ghost"
+                                   size="sm"
+                                   className="h-7 px-3 rounded-lg bg-white/5 hover:bg-kinetic-orange/20 hover:text-kinetic-orange flex items-center gap-2 transition-all opacity-0 group-hover/title:opacity-100 border border-white/5"
+                                   onClick={() => {
+                                     navigator.clipboard.writeText(product.copy.messageText);
+                                     toast.success('Mensagem copiada para a área de transferência!');
+                                   }}
+                                 >
+                                   <Copy className="w-3 h-3 text-kinetic-orange" />
+                                   <span className="text-[8px] font-black uppercase tracking-widest">COPIAR MENSAGEM</span>
+                                 </Button>
                               </div>
 
                               {/* Motivos de Ineligibilidade/Aviso */}

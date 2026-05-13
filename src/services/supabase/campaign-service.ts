@@ -316,6 +316,13 @@ export const campaignService = {
   async createQuickSendCampaign(userId: string, dto: CreateCampaignDTO, client?: SupabaseClient): Promise<Campaign> {
     console.log(`[CAMPAIGN-SERVICE] [QUICK-SEND] Iniciando criação de despacho manual para user ${userId}...`);
     
+    // Trava de Segurança Fase 2E.1A: Bloqueio total no backend para Envio Rápido de cupons
+    const hasCoupon = dto.items.some(item => item.offer_type === 'coupon_offer');
+    if (hasCoupon) {
+      console.warn(`[CAMPAIGN-SERVICE] [QUICK-SEND] Bloqueado: Tentativa de envio de cupom detectada para user ${userId}.`);
+      throw new Error('coupon_quick_send_disabled_until_2e1b');
+    }
+
     const manualDto: CreateCampaignDTO = {
       ...dto,
       name: `🚀 [MANUAL] ${dto.name || new Date().toLocaleDateString()}`,

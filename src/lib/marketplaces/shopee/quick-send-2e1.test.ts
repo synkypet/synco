@@ -113,6 +113,28 @@ async function testQuickSendCoupons() {
     console.log('  [FAIL] Produto normal identificado incorretamente como:', sProd.factual.eligibility.offer_type);
   }
 
+  // 6. Segurança Backend: Bloqueio de coupon_offer no Quick Send
+  console.log('\nTeste 6: Segurança Backend (Bloqueio de coupon_offer)');
+  try {
+    const { campaignService } = await import('../../../services/supabase/campaign-service');
+    const mockDto: any = {
+      name: 'Teste Bloqueio',
+      items: [
+        { product_name: 'Cupom Maligno', offer_type: 'coupon_offer', eligibility_status: 'eligible' }
+      ],
+      destinations: [{ type: 'group', id: '123' }]
+    };
+    
+    await campaignService.createQuickSendCampaign('user_123', mockDto, {} as any);
+    console.log('  [FAIL] Backend permitiu criação de campanha de cupom no Quick Send!');
+  } catch (e: any) {
+    if (e.message === 'coupon_quick_send_disabled_until_2e1b') {
+      console.log('  [PASS] Backend bloqueou corretamente o envio de cupom com erro especializado.');
+    } else {
+      console.log('  [FAIL] Backend bloqueou com erro inesperado:', e.message);
+    }
+  }
+
   console.log('\n--- TESTES DE ENVIO RÁPIDO CONCLUÍDOS ---');
 }
 
