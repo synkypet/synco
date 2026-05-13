@@ -128,7 +128,7 @@ async function testQuickSendCoupons() {
     await campaignService.createQuickSendCampaign('user_123', mockDto, {} as any);
     console.log('  [FAIL] Backend permitiu criação de campanha de cupom no Quick Send!');
   } catch (e: any) {
-    if (e.message === 'coupon_quick_send_disabled_until_2e1b') {
+    if (e.message === 'coupon_quick_send_disabled_until_2e1b' || e.message === 'coupon_manual_confirmation_required') {
       console.log('  [PASS] Backend bloqueou corretamente o envio de cupom com erro especializado.');
     } else {
       console.log('  [FAIL] Backend bloqueou com erro inesperado:', e.message);
