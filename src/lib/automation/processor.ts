@@ -8,6 +8,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { fillTemplate } from './template-engine';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Marketplace, UserMarketplaceConnection } from '@/types/marketplace';
+import { extractShopeeCoupons } from '@/lib/marketplaces/shopee/coupon-extractor';
 
 export interface InboundPayload {
   userId: string;
@@ -73,10 +74,14 @@ function applyFilters(snapshot: ProductSnapshot, originalBody: string, filters?:
  * Extrai links da Shopee de um texto.
  */
 function extractShopeeLinks(text: string): string[] {
-  // Regex expandida para incluir br.shp.ee, s.shopee.com.br e shope.ee
-  const shopeeRegex = /https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:shopee\.com\.br|shope\.ee|br\.shp\.ee)\/[^\s]+/gi;
-  const matches = text.match(shopeeRegex);
-  return matches ? [...new Set(matches)] : [];
+  // Regex mais restrita: deve começar com http e ser um domínio Shopee direto, não um parâmetro
+  const shopeeRegex = /(?:^|\s)(https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:shopee\.com\.br|shope\.ee|br\.shp\.ee)\/[^\s]+)/gi;
+  const matches = [];
+  let match;
+  while ((match = shopeeRegex.exec(text)) !== null) {
+    matches.push(match[1].trim());
+  }
+  return [...new Set(matches)];
 }
 
 /**
@@ -166,17 +171,28 @@ export async function processInboundAutomation(payload: InboundPayload) {
       return { skipped: 'channel_not_connected', channelId };
     }
 
+    // ─── NOVO MOTOR DE CUPONS (FASE 2B) ───
+    console.log(`${logPrefix} [STEP] Executando extrator de cupons Shopee...`);
+    const detectedCoupons = extractShopeeCoupons(body);
+    
+    if (detectedCoupons.length > 0) {
+      detectedCoupons.forEach(c => {
+        console.log(`${logPrefix} [CUPOM-DETECTADO] Tipo: ${c.type} | Código: ${c.code || 'N/A'} | Confidence: ${c.confidence} | Key: ${c.dedupeKey}`);
+        console.log(`${logPrefix} [CUPOM-TRACE] Motivo de não envio: Aguardando integração de despacho (Fase 2C).`);
+      });
+    }
+
     // Detecção robusta de links Shopee (incluindo Mobile e texto misto)
     console.log(`${logPrefix} [STEP] Extraindo links do texto...`);
     const links = extractShopeeLinks(body);
     
-    if (links.length === 0) {
-      console.log(`${logPrefix} [SKIP] Motivo: Nenhum link Shopee identificado na mensagem.`);
-      console.log(`${logPrefix} [DEBUG] Texto recebido: "${body.substring(0, 100)}${body.length > 100 ? '...' : ''}"`);
-      return { skipped: 'no_shopee_links', bodyPreview: body?.substring(0, 50) };
+    // Se não há links nem cupons de código, então paramos
+    if (links.length === 0 && detectedCoupons.filter(c => c.type === 'codigo').length === 0) {
+      console.log(`${logPrefix} [SKIP] Motivo: Nenhum link ou código de cupom Shopee identificado.`);
+      return { skipped: 'no_shopee_content', bodyPreview: body?.substring(0, 50) };
     }
 
-    console.log(`${logPrefix} [STEP] ✓ Identificados ${links.length} links Shopee:`, links);
+    console.log(`${logPrefix} [STEP] ✓ Identificados ${links.length} links e ${detectedCoupons.length} cupons.`);
 
     const connections = await marketplaceService.getEnrichedConnections(userId, supabase);
     console.log(`${logPrefix} [STEP] ✓ Conexões recuperadas. Buscando rotas de destino ativas para Source ${source.id}...`);

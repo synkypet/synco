@@ -76,29 +76,36 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     const isProduct = !!(shopId && itemId);
 
     if (!isProduct) {
-      console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link não é de produto.`);
-
-      let reason = 'Link Shopee não é produto (capa/promo/categoria)';
       const lowerUrl = canonicalUrl.toLowerCase();
+      const isCouponOrPromo = lowerUrl.includes('/m/') || 
+                              lowerUrl.includes('/events/') || 
+                              lowerUrl.includes('/voucher-wallet') || 
+                              lowerUrl.includes('/user/voucher') ||
+                              lowerUrl.includes('cupom');
 
-      if (lowerUrl.includes('/cart')) {
-        reason = 'Link Shopee não é produto (carrinho)';
-      } else if (lowerUrl.includes('/voucher-wallet') || lowerUrl.includes('/user/voucher')) {
-        reason = 'Link Shopee não é produto (cupom)';
-      } else if (lowerUrl.includes('/m/')) {
-        reason = 'Link Shopee não é produto (landing promocional)';
-      } else if (lowerUrl.includes('/events/')) {
-        reason = 'Link Shopee não é produto (evento promocional)';
+      if (isCouponOrPromo) {
+        console.log(`[SHOPEE-PREPROCESS] [${requestId}] Link promocional/cupom identificado.`);
+        return {
+          incoming_url: url,
+          resolved_url: resolvedUrl,
+          canonical_url: canonicalUrl,
+          redirect_chain: redirectChain,
+          reaffiliation_status: 'resolved' // Marcamos como resolvido mas não reafiliado como produto
+        };
+      } else {
+        console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Link não é de produto nem promoção conhecida.`);
+        let reason = 'Link Shopee não é produto (capa/categoria)';
+        if (lowerUrl.includes('/cart')) reason = 'Link Shopee não é produto (carrinho)';
+
+        return {
+          incoming_url: url,
+          resolved_url: resolvedUrl,
+          canonical_url: canonicalUrl,
+          redirect_chain: redirectChain,
+          reaffiliation_status: 'blocked',
+          reaffiliation_error: reason
+        };
       }
-
-      return {
-        incoming_url: url,
-        resolved_url: resolvedUrl,
-        canonical_url: canonicalUrl,
-        redirect_chain: redirectChain,
-        reaffiliation_status: 'blocked',
-        reaffiliation_error: reason
-      };
     }
 
     // D. Gerar novo link afiliado (Re-afiliação)

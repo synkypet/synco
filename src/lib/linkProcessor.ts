@@ -6,6 +6,8 @@ import { ShopeeAdapter } from './marketplaces/ShopeeAdapter';
 import { refineOfferCopy } from './ai/refiner';
 import { templateService } from '@/services/supabase/template-service';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { extractShopeeCoupons } from './marketplaces/shopee/coupon-extractor';
+import { ShopeeCoupon } from '@/types/shopee-coupon';
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
 
@@ -68,6 +70,9 @@ export interface FactualData {
 
   // Elegibilidade Operacional
   eligibility: Eligibility;
+
+  // Metadados de Cupom (Fase 2B)
+  coupons?: ShopeeCoupon[];
 }
 
 export interface GeneratedCopy {
@@ -95,15 +100,21 @@ const adapters: MarketplaceAdapter[] = [
  * Detecta o marketplace de uma URL.
  */
 export function detectMarketplace(url: string): Marketplace {
-  const lower = url.toLowerCase();
-  
-  // Priorizar subdomínios específicos de redirecionamento Shopee
-  if (lower.includes('s.shopee.com.br')) return 'Shopee';
-  
-  if (lower.includes('shopee.com.br') || lower.includes('shope.ee') || lower.includes('br.shp.ee')) return 'Shopee';
-  if (lower.includes('amazon.com.br')) return 'Amazon';
-  if (lower.includes('mercadolivre.com.br')) return 'Mercado Livre';
-  if (lower.includes('magazineluiza.com.br') || lower.includes('magalu.com')) return 'Magalu';
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    
+    if (hostname === 's.shopee.com.br' || hostname === 'shopee.com.br' || hostname.endsWith('.shopee.com.br')) return 'Shopee';
+    if (hostname === 'shope.ee' || hostname.endsWith('.shope.ee')) return 'Shopee';
+    if (hostname === 'br.shp.ee' || hostname.endsWith('.br.shp.ee')) return 'Shopee';
+    
+    if (hostname === 'amazon.com.br' || hostname.endsWith('.amazon.com.br')) return 'Amazon';
+    if (hostname === 'mercadolivre.com.br' || hostname.endsWith('.mercadolivre.com.br')) return 'Mercado Livre';
+    if (hostname === 'magazineluiza.com.br' || hostname.endsWith('.magazineluiza.com.br') || hostname === 'magalu.com' || hostname.endsWith('.magalu.com')) return 'Magalu';
+  } catch {
+    // Fallback para URLs malformadas ou sem protocolo
+    const lower = url.toLowerCase();
+    if (lower.includes('shopee.com.br') || lower.includes('shope.ee') || lower.includes('br.shp.ee')) return 'Shopee';
+  }
   return 'Unknown';
 }
 
@@ -114,31 +125,48 @@ function findAdapter(url: string): MarketplaceAdapter | null {
 /**
  * Classifica a oferta com base em heurísticas de texto e links.
  */
-export function classifyOffer(text: string, factual: Partial<FactualData>): { type: OfferType; reasons: string[] } {
+export function classifyOffer(text: string, factual: Partial<FactualData>): { type: OfferType; reasons: string[]; coupons?: ShopeeCoupon[] } {
   const content = (text + ' ' + (factual.title || '')).toLowerCase();
   const reasons: string[] = [];
 
-  // 1. Heurísticas para CUPOM PURO (coupon_offer)
+  // 1. Uso do novo extrator Shopee (Fase 2B)
+  const shopeeCoupons = extractShopeeCoupons(text);
+  if (shopeeCoupons.length > 0) {
+    const isCurrentLinkARedemptionUrl = shopeeCoupons.some(c => c.redemptionUrl === factual.originalUrl);
+    const hasProductData = !!(factual.title && factual.price && factual.price > 0);
+
+    let type: OfferType = 'product_offer';
+
+    if (isCurrentLinkARedemptionUrl) {
+      type = hasProductData ? 'product_with_coupon' : 'coupon_offer';
+      reasons.push(`Link atual identificado como resgate de cupom`);
+    } else if (shopeeCoupons.some(c => c.type === 'codigo')) {
+      type = hasProductData ? 'product_with_coupon' : 'coupon_offer';
+      reasons.push(`Código de cupom detectado no texto da mensagem`);
+    }
+
+    if (type !== 'product_offer') {
+      return { type, reasons, coupons: shopeeCoupons };
+    }
+  }
+
+  // 2. Heurísticas Legadas (Fallback/Outros Marketplaces)
   const couponKeywords = ['cupom', 'off', 'resgate', 'copie e cole', 'link carrinho', 'mínimo', '🎟', 'voucher'];
   const hasCouponKeywords = couponKeywords.some(k => content.includes(k));
-  const hasPromoCode = /[A-Z0-9]{5,15}/.test(text); // Código em maiúsculas/números
   
-  // Se tem palavras de cupom e NÃO tem um card factual de produto sólido (título/preço)
   const isWeakProduct = !factual.title || factual.title.includes('sem título') || !factual.price || factual.price <= 0;
 
   if (hasCouponKeywords && isWeakProduct) {
-    return { type: 'coupon_offer', reasons: ['Oferta de cupom detectada'] };
+    return { type: 'coupon_offer', reasons: ['Oferta de cupom detectada (fallback)'] };
   }
 
-  // 2. Heurísticas para PRODUTO COM CUPOM (product_with_coupon)
   const mixedKeywords = ['com cupom', 'aplique o cupom', 'resgate aqui', 'usar cupom', 'preço com cupom'];
   const hasMixedKeywords = mixedKeywords.some(k => content.includes(k));
   
   if (hasMixedKeywords && !isWeakProduct) {
-    return { type: 'product_with_coupon', reasons: ['Oferta de produto com cupom detectada'] };
+    return { type: 'product_with_coupon', reasons: ['Oferta de produto com cupom detectada (fallback)'] };
   }
 
-  // 3. Padrão: PRODUTO COMUM
   return { type: 'product_offer', reasons: [] };
 }
 
@@ -149,10 +177,10 @@ export function validateEligibility(factual: FactualData, offerType: OfferType =
   const reasons: string[] = [];
   let status: 'eligible' | 'warning' | 'ineligible' = 'eligible';
 
-  // ─── BLOQUEIO DE SEGURANÇA: CUPONS (FASE 1) ───
+  // ─── EVOLUÇÃO: CUPONS (FASE 2B) ───
   if (offerType !== 'product_offer') {
-    reasons.push(`Fluxo de ${offerType === 'coupon_offer' ? 'cupom' : 'produto com cupom'} ainda não suportado para envio automático`);
-    status = 'ineligible';
+    reasons.push(`Oferta de ${offerType === 'coupon_offer' ? 'cupom' : 'produto com cupom'} identificada como candidato (Aguardando Fase 2C)`);
+    status = 'warning'; // Em vez de ineligible, marcamos como warning para passar no fluxo
   }
 
   // 1. Erros Críticos de Afiliação
@@ -164,19 +192,21 @@ export function validateEligibility(factual: FactualData, offerType: OfferType =
     status = 'ineligible';
   }
 
-  // 2. Metadados Essenciais (Regra SYNCO: Sem Título, Sem Preço ou Sem Imagem = Quebrado)
-  if (!factual.title || factual.title === 'Produto sem título' || factual.title === 'PRODUTO BLOQUEADO') {
-    reasons.push('Título ausente ou inválido');
-    status = 'ineligible';
+  // 2. Metadados Essenciais (Regra SYNCO: Sem Título, Sem Preço ou Sem Imagem = Quebrado para produtos)
+  if (offerType === 'product_offer') {
+    if (!factual.title || factual.title === 'Produto sem título' || factual.title === 'PRODUTO BLOQUEADO') {
+      reasons.push('Título ausente ou inválido');
+      status = 'ineligible';
+    }
+
+    if (!factual.price || factual.price <= 0) {
+      reasons.push('Preço factual indisponível ou inválido');
+      status = 'ineligible';
+    }
   }
 
-  if (!factual.price || factual.price <= 0) {
-    reasons.push('Preço factual indisponível ou inválido');
-    status = 'ineligible';
-  }
-
-  if (!factual.image) {
-    reasons.push('Imagem ausente (obrigatória no SYNCO)');
+  if (!factual.image && offerType === 'product_offer') {
+    reasons.push('Imagem ausente (obrigatória no SYNCO para produtos)');
     status = 'ineligible';
   }
 
@@ -323,7 +353,10 @@ export function buildProductSnapshot(opts: {
     reaffiliation_error: reaffiliation?.reaffiliation_error,
 
     // Inicializar temporário para permitir validação
-    eligibility: { isEligible: true, status: 'eligible', reasons: [], offer_type: 'product_offer' }
+    eligibility: { isEligible: true, status: 'eligible', reasons: [], offer_type: 'product_offer' },
+    
+    // Metadados de Cupom (Fase 2B)
+    coupons: metadata.coupons || []
   };
 
   // 2. Classificar Oferta (Heurísticas)
