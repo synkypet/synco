@@ -236,18 +236,17 @@ export const radarDiscoveryService = {
             let rawProducts = radarCacheService.get(kw.term, sortType, listType);
             if (rawProducts) {
               funnelCacheHits++;
-              rawProducts = rawProducts.slice(0, budget);
+              // Não fatiamos mais aqui para permitir o escaneamento profundo até atingir o budget
             } else {
               rawProducts = await adapter.discoverProducts({
                 sortType,
                 listType,
                 keyword: kw.term,
-                limit: Math.max(budget, 30), 
+                limit: 50, // Buscar batch maior para garantir profundidade de triagem
                 page: s.discovery_page || 1,
                 connection: shopeeConnection
               });
               radarCacheService.set(kw.term, sortType, listType, rawProducts);
-              rawProducts = rawProducts.slice(0, budget);
             }
 
             let kwNewLinks = 0;
@@ -258,17 +257,23 @@ export const radarDiscoveryService = {
 
             funnelTotalFetched += rawProducts.length;
 
-            console.log('[PRE-FILTER]', { 
+            console.log(`${logPrefix} [PRE-FILTER]`, { 
               total_bruto: rawProducts.length, 
               source_id: s.id,
-              keyword: kw.term
+              keyword: kw.term,
+              budget_alocado: budget
             });
 
             // Contagem de descartes por keyword (Limites de cardinalidade)
             let skippedMatchCount = 0;
+            let scannedNodes = 0;
 
             // Pipeline por Item (Trace Mode Ativado)
             for (const p of rawProducts) {
+              // 0. CHECK BUDGET (NOVO): Se já atingiu o budget desta keyword, para de escanear o bruto
+              if (kwNewLinks >= budget) break;
+              
+              scannedNodes++;
               const url = p.productLink || p.offerLink;
               
               // 1. PRE-FILTER (Validação básica e Filtros do Usuário)
@@ -467,8 +472,22 @@ export const radarDiscoveryService = {
               }
             }
 
+            // LOG DE PROFUNDIDADE (NOVO)
+            console.log(`${logPrefix} [RADAR-DISCOVERY-DEPTH]`, {
+              source_id: s.id,
+              keyword: kw.term,
+              raw_nodes: rawProducts.length,
+              scanned_nodes: scannedNodes,
+              prefilter_candidates: rawProducts.length,
+              dedupe_skip: kwDeduped,
+              val_skip: kwValidationSkipped,
+              hard_filter_skip: kwHardFilterSkipped,
+              accepted: kwNewLinks,
+              total_budget_remaining: Math.max(0, funnelTotalBudget - (funnelTotalNew + kwNewLinks))
+            });
+
             // LOG POR KEYWORD (TRACE MODE)
-            console.log(`${logPrefix} [RADAR-TRACE] ${kw.term} | fetch:${rawProducts.length} | hard_filter_skip:${kwHardFilterSkipped} | val_skip:${kwValidationSkipped} | dedupe_skip:${kwDeduped} | score_skip:${kwScoreSkipped} | ok:${kwNewLinks}`);
+            console.log(`${logPrefix} [RADAR-TRACE] ${kw.term} | fetch:${rawProducts.length} | scan:${scannedNodes}/${rawProducts.length} | hard_filter_skip:${kwHardFilterSkipped} | val_skip:${kwValidationSkipped} | dedupe_skip:${kwDeduped} | score_skip:${kwScoreSkipped} | ok:${kwNewLinks}`);
           } catch (kwErr: any) {
             console.error(`${logPrefix} [RADAR-FAIL] Erro na keyword "${kw.term}":`, kwErr.message);
             logActivity(supabase, {

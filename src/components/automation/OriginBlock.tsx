@@ -67,7 +67,18 @@ export function OriginBlock({
   };
 
   const handleSave = () => {
-    onUpdate({ config: { ...config, ...localConfig, preset_type: 'custom' } });
+    // Garantir persistência explícita dos filtros no config para auditoria
+    const updatedConfig = { 
+      ...config, 
+      ...localConfig, 
+      min_discount_percent: localFilters.min_discount_percent,
+      only_official_stores: localFilters.only_official_stores,
+      min_price: localFilters.min_price,
+      max_price: localFilters.max_price,
+      preset_type: 'custom' 
+    };
+
+    onUpdate({ config: updatedConfig });
     
     if (source.automation_routes?.[0]) {
       const newRoutes = [...source.automation_routes];
