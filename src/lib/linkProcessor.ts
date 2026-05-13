@@ -141,7 +141,7 @@ export function classifyOffer(text: string, factual: Partial<FactualData>): { ty
   const shopeeCoupons = extractShopeeCoupons(text);
   
   // Refinamento: Se não extraiu do texto mas a URL canônica é claramente um cupom/promo
-  if (shopeeCoupons.length === 0 && factual.canonical_url) {
+  if (shopeeCoupons.length === 0 && factual.canonical_url && factual.canonical_url.startsWith('http')) {
     const lowerUrl = factual.canonical_url.toLowerCase();
     const isCentral = lowerUrl.includes('/m/cupom-de-desconto') || lowerUrl.includes('cupom');
     
@@ -164,6 +164,14 @@ export function classifyOffer(text: string, factual: Partial<FactualData>): { ty
     const hasProductData = !!(factual.title && factual.price && factual.price > 0 && !factual.title.toLowerCase().includes('sem título') && !factual.title.toLowerCase().includes('produto shopee'));
 
     let type: OfferType = 'product_offer';
+    
+    // Ajustar título factual para cupons (evitar slugs técnicos em logs/preview)
+    const isLanding = shopeeCoupons.some(c => c.type === 'pagina_cupons');
+    if (isLanding && (!factual.title || factual.title.includes('M/') || factual.title.includes('Produto Shopee'))) {
+      factual.title = 'Cupons Shopee Liberados';
+    } else if (shopeeCoupons.some(c => c.type === 'codigo') && !hasProductData) {
+      factual.title = `Cupom: ${shopeeCoupons.find(c => c.type === 'codigo')?.code}`;
+    }
 
     if (isCurrentLinkARedemptionUrl) {
       type = hasProductData ? 'product_with_coupon' : 'coupon_offer';
@@ -403,7 +411,8 @@ export function buildProductSnapshot(opts: {
   let messageText = opts.templatedMessage || buildMessageFromSnapshot(factual);
   
   // Refinamento: Se for oferta de cupom Shopee, usar formatador especializado
-  if (!opts.templatedMessage && classification.type === 'coupon_offer' && factual.coupons && factual.coupons.length > 0) {
+  // FASE 2E.1A: Forçamos o uso do formatador especializado para cupons, ignorando templates de DB que possam estar desatualizados
+  if (classification.type === 'coupon_offer' && factual.coupons && factual.coupons.length > 0) {
     const bestCoupon = factual.coupons.find(c => c.redemptionUrl && originalUrl.includes(c.redemptionUrl)) || factual.coupons[0];
     const couponToFormat = {
       ...bestCoupon,

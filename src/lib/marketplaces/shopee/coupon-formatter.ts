@@ -1,14 +1,27 @@
-
 import { ShopeeCoupon } from '@/types/shopee-coupon';
 
 /**
  * Formata um cupom Shopee para mensagem de WhatsApp.
  */
 export function formatShopeeCouponMessage(coupon: ShopeeCoupon): string {
+  const isLandingPageType = coupon.type === 'pagina_cupons';
+  const isLandingUrl = !!(coupon.redemptionUrl && coupon.redemptionUrl.startsWith('http') && (coupon.redemptionUrl.includes('/m/') || coupon.redemptionUrl.includes('cupom')));
+  const isLanding = isLandingPageType || isLandingUrl;
+
+  // Títulos amigáveis (Regra 2E.1A)
+  const title = isLanding ? '🚨 *CUPONS SHOPEE LIBERADOS!* 🚨' : '🔥 *CUPOM DE DESCONTO LIBERADO!*';
+  
+  // Limpeza de label para evitar "R$ OFF" ou valores vazios
+  const rawLabel = (coupon.couponLabel || '').trim();
+  const hasValidLabel = rawLabel.length > 0 && 
+                        !rawLabel.includes('R$  OFF') && 
+                        !rawLabel.includes('undefined') &&
+                        !rawLabel.toLowerCase().includes('produto shopee');
+
   switch (coupon.type) {
     case 'codigo':
       return [
-        '🔥 *CUPOM DE DESCONTO LIBERADO!*',
+        title,
         '',
         '> "Cupom Shopee disponível."',
         '',
@@ -20,30 +33,44 @@ export function formatShopeeCouponMessage(coupon: ShopeeCoupon): string {
       ].join('\n');
 
     case 'link_resgate':
-      return [
-        '🔥 *CUPOM DE DESCONTO LIBERADO!*',
+      const resgateLines = [
+        title,
         '',
         '> "Cupom Shopee disponível para resgate."',
-        '',
-        `🎟️ *Desconto:* ${coupon.couponLabel}`,
-        '',
-        `🔗 Resgate aqui: ${coupon.redemptionUrl}`,
-        '',
-        '⚠️ *Atenção:* Cupom sujeito à disponibilidade e limite de uso na Shopee.'
-      ].join('\n');
+        ''
+      ];
+      
+      if (hasValidLabel) {
+        resgateLines.push(`🎟️ *Desconto:* ${rawLabel}`);
+        resgateLines.push('');
+      }
+
+      resgateLines.push(`🔗 Resgate aqui: ${coupon.redemptionUrl}`);
+      resgateLines.push('');
+      resgateLines.push('⚠️ *Atenção:* Cupom sujeito à disponibilidade e limite de uso na Shopee.');
+      
+      return resgateLines.join('\n');
 
     case 'pagina_cupons':
-      return [
-        '🔥 *CUPONS SHOPEE LIBERADOS!*',
-        '',
-        '> "Confira os cupons disponíveis na Shopee."',
-        '',
-        `🔗 Resgate os cupons aqui: ${coupon.redemptionUrl}`,
-        '',
-        '⚠️ *Atenção:* Os cupons podem acabar ou mudar conforme disponibilidade da Shopee.'
-      ].join('\n');
-
     default:
-      return 'Cupom Shopee disponível!';
+      const landingLines = [
+        '🚨 *CUPONS SHOPEE LIBERADOS!* 🚨',
+        '',
+        '🎟️ Confira os cupons disponíveis na Shopee.',
+        '🚚 Aproveite cupons de desconto e frete grátis quando disponíveis.',
+        ''
+      ];
+
+      if (hasValidLabel) {
+        landingLines.push(`🎟️ *Destaque:* ${rawLabel}`);
+        landingLines.push('');
+      }
+
+      landingLines.push('🔗 *RESGATE OS CUPONS AQUI:*');
+      landingLines.push(coupon.redemptionUrl || 'https://shopee.com.br/m/cupom-de-desconto');
+      landingLines.push('');
+      landingLines.push('⚠️ *Atenção:* Os cupons podem acabar ou mudar conforme disponibilidade da Shopee.');
+
+      return landingLines.join('\n');
   }
 }
