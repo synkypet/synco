@@ -234,7 +234,14 @@ export const campaignService = {
 
         // --- GUARDIÃO ESTRUTURAL DA FASE 2 ---
         // A geração de job agora depende EXCLUSIVAMENTE da elegibilidade gravada no item.
-        const isEligible = (item.eligibility_status === 'eligible' || item.eligibility_status === 'warning') && !isCoupon;
+        const isManualCouponConfirmed = 
+          dto.origin === 'manual' && 
+          dto.metadata?.dispatchOrigin === 'quick_send_manual_coupon' &&
+          dto.metadata?.manualCouponSend === true &&
+          dto.metadata?.confirmedByUser === true;
+
+        const isEligible = (item.eligibility_status === 'eligible' || item.eligibility_status === 'warning') && 
+          (!isCoupon || isManualCouponConfirmed);
 
         if (isConnected && isEligible) {
           const fallbackChannel = userChannels?.find(ch => 
@@ -262,7 +269,7 @@ export const campaignService = {
           });
         } else if (!isEligible) {
             const reason = isCoupon 
-              ? 'Oferta do tipo "coupon_offer" bloqueada para despacho automático (Requer Fase 2C)' 
+              ? 'Oferta do tipo "coupon_offer" bloqueada (Requer confirmação manual via Envio Rápido)' 
               : `Status de elegibilidade: ${item.eligibility_status}`;
             console.warn(`[CAMPAIGN-SERVICE] Item ${item.id} pulado. Motivo: ${reason}. Motivos originais: ${item.eligibility_reasons?.join(' | ') || 'Nenhum reportado'}`);
         }
