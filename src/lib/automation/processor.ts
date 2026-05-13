@@ -9,6 +9,7 @@ import { fillTemplate } from './template-engine';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Marketplace, UserMarketplaceConnection } from '@/types/marketplace';
 import { extractShopeeCoupons } from '@/lib/marketplaces/shopee/coupon-extractor';
+import { shopeeCouponService } from '@/services/supabase/shopee-coupon-service';
 
 export interface InboundPayload {
   userId: string;
@@ -175,11 +176,20 @@ export async function processInboundAutomation(payload: InboundPayload) {
     console.log(`${logPrefix} [STEP] Executando extrator de cupons Shopee...`);
     const detectedCoupons = extractShopeeCoupons(body);
     
+    // --- PERSISTÊNCIA DE CUPONS (FASE 2C.1) ---
     if (detectedCoupons.length > 0) {
-      detectedCoupons.forEach(c => {
-        console.log(`${logPrefix} [CUPOM-DETECTADO] Tipo: ${c.type} | Código: ${c.code || 'N/A'} | Confidence: ${c.confidence} | Key: ${c.dedupeKey}`);
-        console.log(`${logPrefix} [CUPOM-TRACE] Motivo de não envio: Aguardando integração de despacho (Fase 2C).`);
-      });
+      console.log(`${logPrefix} [STEP] Persistindo ${detectedCoupons.length} cupons candidatos...`);
+      for (const coupon of detectedCoupons) {
+        try {
+          await shopeeCouponService.persistCandidate(userId, coupon, {
+            sourceId: source.id,
+            sourceUrl: coupon.redemptionUrl || undefined,
+            rawText: body
+          }, supabase);
+        } catch (err) {
+          console.error(`${logPrefix} [ERROR] Falha ao persistir cupom:`, err);
+        }
+      }
     }
 
     // Detecção robusta de links Shopee (incluindo Mobile e texto misto)
