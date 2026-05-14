@@ -4,11 +4,28 @@ export interface MessageTemplate {
   id: string;
   user_id: string | null;
   name: string;
+  template_key: string | null;
+  template_type: string;
   category: 'product' | 'coupon' | 'campaign';
   content: string;
   is_active: boolean;
-  is_system_default: boolean;
+  is_system: boolean;
+  is_system_default?: boolean; // Legacy compatibility
+  is_default: boolean;
+  is_editable: boolean;
+  is_deletable: boolean;
+  metadata: any;
   created_at: string;
+}
+
+export interface MessageTemplateUserSettings {
+  id: string;
+  user_id: string;
+  template_type: string;
+  system_template_enabled: boolean;
+  active_user_template_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TemplateVariables {
@@ -28,7 +45,7 @@ export interface TemplateVariables {
 
 export const templateService = {
   /**
-   * Busca templates ativos para uma categoria e usuário
+   * Busca templates ativos para uma categoria e usuário (Legado)
    */
   async getActiveTemplates(
     supabase: SupabaseClient,
@@ -42,9 +59,9 @@ export const templateService = {
       .eq('is_active', true);
 
     if (userId) {
-      query = query.or(`user_id.eq.${userId},is_system_default.eq.true`);
+      query = query.or(`user_id.eq.${userId},is_system.eq.true,is_system_default.eq.true`);
     } else {
-      query = query.eq('is_system_default', true);
+      query = query.or('is_system.eq.true,is_system_default.eq.true');
     }
 
     const { data, error } = await query;
@@ -53,40 +70,199 @@ export const templateService = {
   },
 
   /**
-   * Resolve um template aleatório para a categoria.
-   * Retorna o conteúdo renderizado e metadados.
+   * Busca configurações de template de um usuário
    */
-  async resolveTemplate(
+  async getUserSettings(
     supabase: SupabaseClient,
-    category: 'product' | 'coupon' | 'campaign',
-    variables: TemplateVariables,
-    userId?: string,
-    filterName?: string
-  ): Promise<{ content: string; isSystemDefault: boolean } | null> {
-    try {
-      let templates = await this.getActiveTemplates(supabase, category, userId);
-      if (templates.length === 0) return null;
+    userId: string,
+    templateType: string
+  ): Promise<MessageTemplateUserSettings> {
+    const { data, error } = await supabase
+      .from('message_template_user_settings')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('template_type', templateType)
+      .maybeSingle();
 
-      // Se houver um filtro por nome (ex: para distinguir produto com/sem desconto)
-      if (filterName) {
-        const filtered = templates.filter(t => t.name.toLowerCase().includes(filterName.toLowerCase()));
-        if (filtered.length > 0) {
-          templates = filtered;
-        }
-      }
+    if (error) throw error;
+    
+    if (data) return data;
 
-      // Escolher um aleatoriamente entre os disponíveis (ou os filtrados)
-      const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
-      
-      return {
-        content: this.render(randomTemplate.content, variables),
-        isSystemDefault: randomTemplate.is_system_default
-      };
-    } catch (err) {
-      console.error('[TEMPLATE-SERVICE] Error resolving template:', err);
-      return null;
-    }
+    // Se não existir, cria o padrão
+    const { data: newData, error: insertError } = await supabase
+      .from('message_template_user_settings')
+      .insert([{
+        user_id: userId,
+        template_type: templateType,
+        system_template_enabled: true,
+        active_user_template_id: null
+      }])
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+    return newData;
   },
+
+  /**
+   * Lista todos os templates e o estado de ativação para o usuário
+   */
+  async listManagedTemplates(supabase: SupabaseClient, userId: string) {
+    // 1. Buscar todos os templates (sistema + usuário)
+    const { data: templates, error: tError } = await supabase
+      .from('message_templates')
+      .select('*')
+      .or(`user_id.eq.${userId},is_system.eq.true`)
+      .order('is_system', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (tError) throw tError;
+
+    // 2. Buscar todas as configurações do usuário
+    const { data: settings, error: sError } = await supabase
+      .from('message_template_user_settings')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (sError) throw sError;
+
+    return {
+      templates: (templates || []) as MessageTemplate[],
+      settings: (settings || []) as MessageTemplateUserSettings[]
+    };
+  },
+
+  /**
+   * Alterna a ativação do template de sistema para o usuário
+   */
+  async toggleSystemTemplate(
+    supabase: SupabaseClient,
+    userId: string,
+    templateType: string,
+    enabled: boolean
+  ) {
+    if (!enabled) {
+      // Regra: Só pode desativar se houver template customizado ATIVO
+      const { data: userTemplates, error } = await supabase
+        .from('message_templates')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('template_type', templateType)
+        .eq('is_active', true)
+        .limit(1);
+
+      if (error) throw error;
+
+      if (!userTemplates || userTemplates.length === 0) {
+        throw new Error('default_template_requires_active_user_template');
+      }
+    }
+
+    const { error: updateError } = await supabase
+      .from('message_template_user_settings')
+      .upsert({
+        user_id: userId,
+        template_type: templateType,
+        system_template_enabled: enabled
+      }, { onConflict: 'user_id,template_type' });
+
+    if (updateError) throw updateError;
+  },
+
+  /**
+   * Define o template customizado ativo para o usuário
+   */
+  async setActiveUserTemplate(
+    supabase: SupabaseClient,
+    userId: string,
+    templateType: string,
+    templateId: string | null
+  ) {
+    const { error } = await supabase
+      .from('message_template_user_settings')
+      .upsert({
+        user_id: userId,
+        template_type: templateType,
+        active_user_template_id: templateId
+      }, { onConflict: 'user_id,template_type' });
+
+    if (error) throw error;
+  },
+
+  /**
+   * Resolve o template efetivo a ser usado
+   */
+  async resolveEffectiveTemplate(
+    supabase: SupabaseClient,
+    userId: string | undefined,
+    templateType: string
+  ): Promise<{ content: string; isSystem: boolean }> {
+    if (!userId) {
+      // Se não houver usuário (ex: worker global), usa o sistema
+      const { data } = await supabase
+        .from('message_templates')
+        .select('content')
+        .eq('template_type', templateType)
+        .eq('is_system', true)
+        .eq('is_default', true)
+        .maybeSingle();
+      
+      return { content: data?.content || '', isSystem: true };
+    }
+
+    // 1. Buscar configurações do usuário
+    const { data: settings } = await supabase
+      .from('message_template_user_settings')
+      .select('*, active_user_template_id(content, is_active)')
+      .eq('user_id', userId)
+      .eq('template_type', templateType)
+      .maybeSingle();
+
+    const typedSettings = settings as any;
+
+    // A) Se houver template customizado selecionado e ele estiver ativo
+    if (typedSettings?.active_user_template_id && typedSettings.active_user_template_id.is_active) {
+      return { 
+        content: typedSettings.active_user_template_id.content, 
+        isSystem: false 
+      };
+    }
+
+    // B) Se o sistema estiver habilitado
+    if (!typedSettings || typedSettings.system_template_enabled) {
+      const { data: systemTemplate } = await supabase
+        .from('message_templates')
+        .select('content')
+        .eq('template_type', templateType)
+        .eq('is_system', true)
+        .eq('is_default', true)
+        .maybeSingle();
+      
+      if (systemTemplate) {
+        return { content: systemTemplate.content, isSystem: true };
+      }
+    }
+
+    // C) Se nada resolveu (ex: usuário desativou sistema mas excluiu o dele), reativa sistema
+    if (typedSettings && !typedSettings.system_template_enabled) {
+      await this.toggleSystemTemplate(supabase, userId, templateType, true);
+      
+      const { data: systemTemplate } = await supabase
+        .from('message_templates')
+        .select('content')
+        .eq('template_type', templateType)
+        .eq('is_system', true)
+        .eq('is_default', true)
+        .maybeSingle();
+      
+      return { content: systemTemplate?.content || '', isSystem: true };
+    }
+
+    return { content: '', isSystem: true };
+  },
+
+
+
 
   /**
    * Renderiza o conteúdo do template com as variáveis
@@ -123,7 +299,7 @@ export const templateService = {
     const { data, error } = await supabase
       .from('message_templates')
       .select('*')
-      .or(`user_id.eq.${userId},is_system_default.eq.true`)
+      .or(`user_id.eq.${userId},is_system.eq.true`)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -148,6 +324,18 @@ export const templateService = {
    * Exclui um template
    */
   async delete(supabase: SupabaseClient, id: string, userId: string): Promise<void> {
+    // 1. Verificar se é template de sistema
+    const { data: template } = await supabase
+      .from('message_templates')
+      .select('is_system, template_type')
+      .eq('id', id)
+      .single();
+    
+    if (template?.is_system) {
+      throw new Error('system_template_cannot_be_deleted');
+    }
+
+    // 2. Excluir
     const { error } = await supabase
       .from('message_templates')
       .delete()
@@ -155,5 +343,22 @@ export const templateService = {
       .eq('user_id', userId);
 
     if (error) throw error;
+
+    // 3. Verificar se era o template ativo do usuário
+    if (template) {
+      const { data: settings } = await supabase
+        .from('message_template_user_settings')
+        .select('active_user_template_id')
+        .eq('user_id', userId)
+        .eq('template_type', template.template_type)
+        .maybeSingle();
+      
+      if (settings?.active_user_template_id === id) {
+        // Se era o ativo, reativa o sistema
+        await this.toggleSystemTemplate(supabase, userId, template.template_type, true);
+        await this.setActiveUserTemplate(supabase, userId, template.template_type, null);
+      }
+    }
   }
+
 };

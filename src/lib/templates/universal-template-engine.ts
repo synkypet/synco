@@ -3,6 +3,8 @@ import { FactualData, OfferType } from '../linkProcessor';
 import { formatShopeeProductMessage } from '../marketplaces/shopee/product-message-formatter';
 import { formatShopeeCouponMessage } from '../marketplaces/shopee/coupon-formatter';
 import { generatePricingInsight } from '../marketplaces/shopee/pricing-logic';
+import { templateService } from '@/services/supabase/template-service';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export interface SmartTemplateContext {
   product_name: string;
@@ -57,11 +59,13 @@ export const DEFAULT_TEMPLATES = {
   shopee_coupon: `🔥 *CUPOM DE DESCONTO LIBERADO!*
 
 {{coupon_discount_line}}
+🎟️ *Código:* {{coupon_code}}
 
 🔗 Resgate aqui:
 {{coupon_link}}
 
 ⚠️ Cupom sujeito à disponibilidade e limite de uso na Shopee.`,
+
 
   shopee_promo: `🚨 *ACESSO VIP SHOPEE LIBERADO!* 🚨
 
@@ -214,3 +218,58 @@ export function renderSmartTemplate(template: string, context: SmartTemplateCont
   // 5. Normalização de Quebras de Linha
   return result.replace(/\n{3,}/g, '\n\n').trim();
 }
+
+/**
+ * Normaliza o tipo de oferta para o tipo de template do banco.
+ */
+export function mapOfferTypeToTemplateType(offerType: OfferType, hasCoupon: boolean): string {
+  switch (offerType) {
+    case 'coupon_offer': return 'shopee_coupon';
+    case 'promo_landing': return 'shopee_promo_landing';
+    case 'product_with_coupon': return 'shopee_product_premium';
+    case 'product_offer':
+      return hasCoupon ? 'shopee_product_premium' : 'shopee_product';
+    default: return 'shopee_product';
+  }
+}
+
+/**
+ * Resolve e renderiza o melhor template para um produto.
+ */
+export async function resolveAndRenderTemplate(
+  supabase: SupabaseClient,
+  data: FactualData,
+  userId?: string
+): Promise<{ content: string; isSystem: boolean }> {
+  const context = buildSmartContext(data);
+  const templateType = mapOfferTypeToTemplateType(
+    data.eligibility?.offer_type || 'product_offer',
+    !!context.coupon_block
+  );
+
+  // 1. Tentar resolver do banco (Gerenciado)
+  try {
+    const { content, isSystem } = await templateService.resolveEffectiveTemplate(supabase, userId, templateType);
+    if (content) {
+      return {
+        content: renderSmartTemplate(content, context),
+        isSystem
+      };
+    }
+  } catch (err) {
+    console.error('[TEMPLATE-ENGINE] Error resolving from DB:', err);
+  }
+
+  // 2. Fallback para Hardcoded
+  const fallbackKey = templateType.includes('premium') ? 'shopee_product_premium' : 
+                     templateType.includes('coupon') ? 'shopee_coupon' :
+                     templateType.includes('promo') ? 'shopee_promo' : 'shopee_product';
+  
+  const fallbackTemplate = (DEFAULT_TEMPLATES as any)[fallbackKey] || DEFAULT_TEMPLATES.shopee_product;
+  
+  return {
+    content: renderSmartTemplate(fallbackTemplate, context),
+    isSystem: true
+  };
+}
+

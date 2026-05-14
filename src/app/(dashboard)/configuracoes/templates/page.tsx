@@ -24,7 +24,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/lib/supabase/client';
-import { MessageTemplate, templateService } from '@/services/supabase/template-service';
+import { MessageTemplate, MessageTemplateUserSettings, templateService } from '@/services/supabase/template-service';
 import PageHeader from '@/components/shared/PageHeader';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -48,6 +48,7 @@ export default function TemplatesPage() {
   const supabase = createClient();
   const [activeTab, setActiveTab] = useState<'product' | 'coupon' | 'campaign'>('product');
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [userSettings, setUserSettings] = useState<MessageTemplateUserSettings[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Partial<MessageTemplate> | null>(null);
@@ -59,15 +60,12 @@ export default function TemplatesPage() {
   }, [user]);
 
   const fetchTemplates = async () => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('message_templates')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setTemplates(data || []);
+      const { templates: tData, settings: sData } = await templateService.listManagedTemplates(supabase, user.id);
+      setTemplates(tData);
+      setUserSettings(sData);
     } catch (err: any) {
       toast.error('Erro ao buscar templates: ' + err.message);
     } finally {
@@ -86,23 +84,12 @@ export default function TemplatesPage() {
         ...editingTemplate,
         user_id: user?.id,
         category: activeTab,
+        template_type: editingTemplate.template_type || (activeTab === 'product' ? 'shopee_product' : activeTab === 'coupon' ? 'shopee_coupon' : 'shopee_promo_landing'),
         is_active: editingTemplate.is_active ?? true,
       };
 
-      if (editingTemplate.id) {
-        const { error } = await supabase
-          .from('message_templates')
-          .update(payload)
-          .eq('id', editingTemplate.id);
-        if (error) throw error;
-        toast.success('Template atualizado!');
-      } else {
-        const { error } = await supabase
-          .from('message_templates')
-          .insert([payload]);
-        if (error) throw error;
-        toast.success('Template criado!');
-      }
+      await templateService.upsert(supabase, payload);
+      toast.success(editingTemplate.id ? 'Template atualizado!' : 'Template criado!');
 
       setIsDialogOpen(false);
       setEditingTemplate(null);
@@ -113,48 +100,90 @@ export default function TemplatesPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!user) return;
     if (!confirm('Tem certeza que deseja excluir este template?')) return;
 
     try {
-      const { error } = await supabase
-        .from('message_templates')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await templateService.delete(supabase, id, user.id);
       toast.success('Template excluído!');
       fetchTemplates();
     } catch (err: any) {
-      toast.error('Erro ao excluir: ' + err.message);
+      if (err.message === 'system_template_cannot_be_deleted') {
+        toast.error('Templates de sistema não podem ser excluídos.');
+      } else {
+        toast.error('Erro ao excluir: ' + err.message);
+      }
     }
   };
 
-  const toggleActive = async (template: MessageTemplate) => {
+  const toggleUserTemplateActive = async (template: MessageTemplate) => {
+    if (!user) return;
     try {
-      const { error } = await supabase
-        .from('message_templates')
-        .update({ is_active: !template.is_active })
-        .eq('id', template.id);
-
-      if (error) throw error;
-      setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, is_active: !t.is_active } : t));
+      const newActive = !template.is_active;
+      await templateService.upsert(supabase, { ...template, is_active: newActive });
+      
+      // Se desativou e era o ativo, o service já deve ter tratado ou trataremos aqui
+      fetchTemplates();
+      toast.success(newActive ? 'Template ativado!' : 'Template pausado');
     } catch (err: any) {
       toast.error('Erro ao alterar status: ' + err.message);
     }
   };
+
+  const toggleSystemTemplate = async (template: MessageTemplate) => {
+    if (!user) return;
+    const setting = userSettings.find(s => s.template_type === template.template_type);
+    const currentlyEnabled = setting?.system_template_enabled ?? true;
+
+    try {
+      await templateService.toggleSystemTemplate(supabase, user.id, template.template_type, !currentlyEnabled);
+      fetchTemplates();
+      toast.success(!currentlyEnabled ? 'Padrão do sistema reativado!' : 'Padrão do sistema desativado');
+    } catch (err: any) {
+      if (err.message === 'default_template_requires_active_user_template') {
+        toast.error('Crie ou ative um template próprio para este tipo antes de desativar o padrão.');
+      } else {
+        toast.error('Erro ao alterar status: ' + err.message);
+      }
+    }
+  };
+
+  const setAsActiveForType = async (template: MessageTemplate) => {
+    if (!user) return;
+    try {
+      await templateService.setActiveUserTemplate(supabase, user.id, template.template_type, template.id);
+      fetchTemplates();
+      toast.success('Este template agora é o preferencial para este tipo!');
+    } catch (err: any) {
+      toast.error('Erro ao definir como ativo: ' + err.message);
+    }
+  };
+
 
   const handleClone = (template: MessageTemplate) => {
     setEditingTemplate({
       name: `${template.name} (Cópia)`,
       content: template.content,
       category: template.category,
+      template_type: template.template_type,
       is_active: true
     });
     setIsDialogOpen(true);
   };
 
-  const userTemplates = templates.filter(t => t.category === activeTab && !t.is_system_default);
-  const systemTemplates = templates.filter(t => t.category === activeTab && t.is_system_default);
+  const userTemplates = templates.filter(t => t.category === activeTab && !t.is_system);
+  const systemTemplates = templates.filter(t => t.category === activeTab && t.is_system);
+
+  const getTemplateStatus = (template: MessageTemplate) => {
+    if (template.is_system) {
+      const setting = userSettings.find(s => s.template_type === template.template_type);
+      return setting?.system_template_enabled !== false;
+    } else {
+      const setting = userSettings.find(s => s.template_type === template.template_type);
+      return setting?.active_user_template_id === template.id;
+    }
+  };
+
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-8 lg:px-12 py-4">
@@ -200,19 +229,21 @@ export default function TemplatesPage() {
               <TemplateCard 
                 key={template.id} 
                 template={template} 
+                isInUse={getTemplateStatus(template)}
                 onEdit={() => {
                   setEditingTemplate(template);
                   setIsDialogOpen(true);
                 }}
                 onDelete={() => handleDelete(template.id)}
-                onToggle={() => toggleActive(template)}
+                onToggle={() => toggleUserTemplateActive(template)}
+                onSetAsActive={() => setAsActiveForType(template)}
               />
             ))
           ) : (
             <div className="lg:col-span-2 p-12 text-center rounded-[32px] border border-dashed border-white/5 bg-white/[0.02]">
               <Sparkles className="w-10 h-10 mx-auto mb-4 text-white/10" />
               <p className="text-[11px] font-black uppercase tracking-widest text-white/20">Você ainda não criou templates personalizados para esta categoria.</p>
-              <p className="text-[9px] text-white/10 mt-2 uppercase">O sistema usará os templates padrão ou o layout determinístico.</p>
+              <p className="text-[9px] text-white/10 mt-2 uppercase">O sistema usará os templates padrão.</p>
             </div>
           )}
         </div>
@@ -225,31 +256,51 @@ export default function TemplatesPage() {
             <div className="h-px bg-white/5 flex-1" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 opacity-60">
-            {systemTemplates.map(template => (
-              <Card key={template.id} className="p-5 border-none bg-anthracite-surface/30 ring-1 ring-white/5 relative overflow-hidden group">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h5 className="font-bold text-xs uppercase tracking-wider text-white/80">{template.name}</h5>
-                    <Badge variant="outline" className="mt-1 border-none bg-white/5 text-[8px] uppercase tracking-tighter">Somente Leitura</Badge>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {systemTemplates.map(template => {
+              const isEnabled = getTemplateStatus(template);
+              return (
+                <Card key={template.id} className={cn(
+                  "p-5 border-none bg-anthracite-surface/30 ring-1 ring-white/5 relative overflow-hidden group transition-all duration-300",
+                  !isEnabled && "opacity-40 grayscale"
+                )}>
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h5 className="font-bold text-xs uppercase tracking-wider text-white/80">{template.name}</h5>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="border-none bg-white/5 text-[8px] uppercase tracking-tighter">Somente Leitura</Badge>
+                        {isEnabled && (
+                          <Badge variant="outline" className="border-none bg-emerald-500/10 text-emerald-500 text-[8px] uppercase tracking-tighter">Em Uso</Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 rounded-lg hover:bg-kinetic-orange/10 hover:text-kinetic-orange"
+                        onClick={() => handleClone(template)}
+                        title="Usar como base (Duplicar)"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 w-8 p-0 rounded-lg hover:bg-kinetic-orange/10 hover:text-kinetic-orange"
-                    onClick={() => handleClone(template)}
-                    title="Usar como base"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
-                <div className="bg-black/40 p-4 rounded-xl text-[10px] font-mono text-white/40 whitespace-pre-wrap leading-relaxed max-h-32 overflow-hidden italic">
-                  {template.content}
-                </div>
-              </Card>
-            ))}
+                  <div className="bg-black/40 p-4 rounded-xl text-[10px] font-mono text-white/40 whitespace-pre-wrap leading-relaxed max-h-32 overflow-hidden italic">
+                    {template.content}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                       <Switch checked={isEnabled} onCheckedChange={() => toggleSystemTemplate(template)} />
+                       <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Ativo</span>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         </div>
+
       </Tabs>
 
       {/* Modal de Criação/Edição */}
@@ -358,11 +409,13 @@ export default function TemplatesPage() {
   );
 }
 
-function TemplateCard({ template, onEdit, onDelete, onToggle }: { 
+function TemplateCard({ template, isInUse, onEdit, onDelete, onToggle, onSetAsActive }: { 
   template: MessageTemplate, 
+  isInUse: boolean,
   onEdit: () => void, 
   onDelete: () => void,
-  onToggle: () => void
+  onToggle: () => void,
+  onSetAsActive: () => void
 }) {
   return (
     <Card className={cn(
@@ -378,7 +431,12 @@ function TemplateCard({ template, onEdit, onDelete, onToggle }: {
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="font-bold text-sm tracking-tight text-white/90">{template.name}</h4>
+            <div className="flex items-center gap-2">
+              <h4 className="font-bold text-sm tracking-tight text-white/90">{template.name}</h4>
+              {isInUse && (
+                <Badge variant="outline" className="border-none bg-emerald-500/10 text-emerald-500 text-[7px] uppercase px-1 py-0 h-4">Em Uso</Badge>
+              )}
+            </div>
             <div className="flex items-center gap-2 mt-1">
               <Badge variant="outline" className={cn(
                 "border-none text-[8px] font-black uppercase tracking-widest px-2 py-0.5",
@@ -410,13 +468,26 @@ function TemplateCard({ template, onEdit, onDelete, onToggle }: {
            <Switch checked={template.is_active} onCheckedChange={onToggle} />
            <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Status Operacional</span>
         </div>
+        
+        {template.is_active && !isInUse && (
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onSetAsActive}
+            className="text-[9px] font-black uppercase tracking-widest h-8 px-3 rounded-lg bg-white/5 hover:bg-kinetic-orange/20 hover:text-kinetic-orange"
+          >
+            Usar este
+          </Button>
+        )}
+
         <Badge variant="outline" className="h-5 bg-white/5 border-none text-[8px] font-black uppercase tracking-widest text-white/20">
-          Random ID: {template.id.slice(0, 8)}
+          Type: {template.template_type}
         </Badge>
       </div>
     </Card>
   );
 }
+
 
 function SaveIcon(props: any) {
   return (

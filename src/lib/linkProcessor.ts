@@ -9,7 +9,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { extractShopeeCoupons } from './marketplaces/shopee/coupon-extractor';
 import { ShopeeCoupon } from '@/types/shopee-coupon';
 import { formatShopeeCouponMessage } from './marketplaces/shopee/coupon-formatter';
-import { buildSmartContext, renderSmartTemplate, DEFAULT_TEMPLATES } from './templates/universal-template-engine';
+import { buildSmartContext, renderSmartTemplate, DEFAULT_TEMPLATES, resolveAndRenderTemplate } from './templates/universal-template-engine';
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
 
@@ -440,37 +440,27 @@ export function buildProductSnapshot(opts: {
   // 4. Gerar Texto da Mensagem (Determinístico ou Templated)
   // FASE 2I.1: Integração com o Motor de Templates Universal
   const isShopee = factual.marketplace === 'Shopee';
-  const context = buildSmartContext(factual);
-  
-  let templateToUse = opts.templatedMessage || '';
   let messageText = '';
 
-  // Regra de Prioridade Segura:
-  // 1. Se for Shopee e NÃO houver template de usuário (Custom): Usa o template padrão inteligente.
-  // 2. Se houver template de usuário: Renderiza o template do usuário via engine inteligente (seguro).
-  // 3. Fallback: Usa o buildMessageFromSnapshot legatário (que já chama o inteligente para Shopee).
   
-  const hasUserTemplate = opts.templateMetadata && !opts.templateMetadata.isSystemDefault;
-
-  if (isShopee) {
-    if (!hasUserTemplate) {
-      // Se não há template de usuário, escolhemos o melhor template padrão do sistema
-      if (classification.type === 'coupon_offer') {
-        templateToUse = DEFAULT_TEMPLATES.shopee_coupon;
-      } else if (classification.type === 'promo_landing') {
-        templateToUse = DEFAULT_TEMPLATES.shopee_promo;
-      } else if (context.coupon_block) {
-        templateToUse = DEFAULT_TEMPLATES.shopee_product_premium;
-      } else {
-        templateToUse = DEFAULT_TEMPLATES.shopee_product;
-      }
+  if (isShopee && !opts.templatedMessage) {
+    // Se não veio com template já renderizado (ex: do processLinks), renderizamos agora
+    // Nota: Aqui não temos o SupabaseClient facilmente disponível se vier de um contexto legado sem ele.
+    // Mas buildProductSnapshot é chamado por processLinks que JÁ faz a resolução se tiver supabase.
+    const context = buildSmartContext(factual);
+    if (classification.type === 'coupon_offer') {
+      messageText = renderSmartTemplate(DEFAULT_TEMPLATES.shopee_coupon, context);
+    } else if (classification.type === 'promo_landing') {
+      messageText = renderSmartTemplate(DEFAULT_TEMPLATES.shopee_promo, context);
+    } else if (context.coupon_block) {
+      messageText = renderSmartTemplate(DEFAULT_TEMPLATES.shopee_product_premium, context);
+    } else {
+      messageText = renderSmartTemplate(DEFAULT_TEMPLATES.shopee_product, context);
     }
-    // Renderização final (sempre segura)
-    messageText = renderSmartTemplate(templateToUse, context);
   } else {
-    // Outros marketplaces continuam como antes (por enquanto)
     messageText = opts.templatedMessage || buildMessageFromSnapshot(factual);
   }
+
 
   return {
     id,
@@ -561,40 +551,19 @@ export async function processLinks(
       let templatedMessage = undefined;
       let templateMetadata = undefined;
       if (supabase && metadata) {
-        const category = classification.type === 'coupon_offer' 
-          ? 'coupon' 
-          : classification.type === 'product_with_coupon' || classification.type === 'product_offer'
-            ? 'product'
-            : 'campaign';
-
-        const originalPriceVal = metadata.originalPrice || null;
-        const currentPriceVal = price;
-        
-        let filterName = undefined;
-        if (category === 'product') {
-          const hasDiscount = originalPriceVal && currentPriceVal && originalPriceVal > currentPriceVal;
-          filterName = hasDiscount ? 'Produto com Desconto' : 'Produto Simples';
-        }
-
-        const variables = {
-          titulo: metadata.name || 'Produto',
-          link: preResult?.generated_affiliate_url || link,
-          preco: formatBRL(currentPriceVal)?.replace('R$ ', '') || undefined,
-          preco_original: formatBRL(originalPriceVal)?.replace('R$ ', '') || undefined,
-          desconto: (metadata.commissionRate !== null && metadata.commissionRate !== undefined) ? (metadata.commissionRate * 100).toFixed(0) : undefined,
-          loja: marketplace,
-          valor: metadata.couponValue || undefined,
-          minimo: metadata.minSpend || undefined,
-          frete_minimo: metadata.freeShippingMinSpend || 19,
-          codigo: metadata.couponCode || undefined
+        // Criar um objeto factual mínimo para a resolução de template
+        const partialFactual: any = {
+          marketplace: marketplace,
+          eligibility: { offer_type: classification.type },
+          title: metadata.name,
+          finalLinkToSend: preResult?.generated_affiliate_url || targetUrl
         };
-
-        const resolved = await templateService.resolveTemplate(supabase, category, variables, userId, filterName);
-        if (resolved) {
-          templatedMessage = resolved.content;
-          templateMetadata = { isSystemDefault: resolved.isSystemDefault };
-        }
+        const { content, isSystem } = await resolveAndRenderTemplate(supabase, partialFactual, userId);
+        templatedMessage = content;
+        templateMetadata = { isSystemDefault: isSystem };
       }
+
+
 
       const snapshot = buildProductSnapshot({
         id,
