@@ -49,8 +49,9 @@ export function QuickSendConfirmationDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="bg-deep-void border-none shadow-skeuo-elevated max-w-md rounded-3xl ring-1 ring-white/5">
-        <AlertDialogHeader>
+      <AlertDialogContent className="bg-deep-void border-none shadow-skeuo-elevated max-w-md w-[95vw] max-h-[90vh] rounded-3xl ring-1 ring-white/5 p-0 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+          <AlertDialogHeader>
           <div className="flex items-center gap-3 mb-2">
             <div className={cn(
               "w-10 h-10 rounded-xl flex items-center justify-center shadow-skeuo-flat ring-1",
@@ -158,9 +159,10 @@ export function QuickSendConfirmationDialog({
               </p>
             </div>
           </div>
+          </div>
         </div>
 
-        <AlertDialogFooter className="gap-3 sm:gap-0">
+        <AlertDialogFooter className="p-6 pt-0 gap-3 sm:gap-0">
           <AlertDialogCancel className="bg-white/5 border-none text-[10px] font-black uppercase tracking-widest h-12 rounded-xl hover:bg-white/10 transition-all">
             Revisar
           </AlertDialogCancel>
