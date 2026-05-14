@@ -10,9 +10,10 @@ ALTER TABLE message_templates ADD COLUMN IF NOT EXISTS is_deletable BOOLEAN DEFA
 ALTER TABLE message_templates ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
 
 -- Create Unique Index for system templates to allow idempotent UPSERTs
+-- Change from partial index to normal index for better ON CONFLICT inference
+DROP INDEX IF EXISTS public.message_templates_template_key_unique;
 CREATE UNIQUE INDEX IF NOT EXISTS message_templates_template_key_unique 
-ON public.message_templates(template_key) 
-WHERE template_key IS NOT NULL;
+ON public.message_templates(template_key);
 
 -- Migrate existing data defensively
 DO $$
@@ -60,39 +61,35 @@ ALTER TABLE message_templates ENABLE ROW LEVEL SECURITY;
 
 DO $$ 
 BEGIN
-    -- Drop legacy policies
+    -- Drop legacy and newly created policies for idempotency
     DROP POLICY IF EXISTS "Users see own and system templates" ON message_templates;
     DROP POLICY IF EXISTS "Users manage own templates" ON message_templates;
+    DROP POLICY IF EXISTS "message_templates_select" ON message_templates;
+    DROP POLICY IF EXISTS "message_templates_insert" ON message_templates;
+    DROP POLICY IF EXISTS "message_templates_update" ON message_templates;
+    DROP POLICY IF EXISTS "message_templates_delete" ON message_templates;
     
-    -- New Harden Policies
+    -- New Harden Policies (Drop and Recreate)
     -- A) SELECT: System templates OR own templates
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'message_templates_select') THEN
-        CREATE POLICY "message_templates_select" ON message_templates
-          FOR SELECT TO authenticated
-          USING (auth.uid() = user_id OR is_system = true);
-    END IF;
+    CREATE POLICY "message_templates_select" ON message_templates
+      FOR SELECT TO authenticated
+      USING (auth.uid() = user_id OR is_system = true);
 
     -- B) INSERT: Only own templates, never system
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'message_templates_insert') THEN
-        CREATE POLICY "message_templates_insert" ON message_templates
-          FOR INSERT TO authenticated
-          WITH CHECK (auth.uid() = user_id AND is_system = false);
-    END IF;
+    CREATE POLICY "message_templates_insert" ON message_templates
+      FOR INSERT TO authenticated
+      WITH CHECK (auth.uid() = user_id AND is_system = false);
 
     -- C) UPDATE: Only own templates, never system
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'message_templates_update') THEN
-        CREATE POLICY "message_templates_update" ON message_templates
-          FOR UPDATE TO authenticated
-          USING (auth.uid() = user_id AND is_system = false)
-          WITH CHECK (auth.uid() = user_id AND is_system = false);
-    END IF;
+    CREATE POLICY "message_templates_update" ON message_templates
+      FOR UPDATE TO authenticated
+      USING (auth.uid() = user_id AND is_system = false)
+      WITH CHECK (auth.uid() = user_id AND is_system = false);
 
     -- D) DELETE: Only own templates, never system
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'message_templates_delete') THEN
-        CREATE POLICY "message_templates_delete" ON message_templates
-          FOR DELETE TO authenticated
-          USING (auth.uid() = user_id AND is_system = false);
-    END IF;
+    CREATE POLICY "message_templates_delete" ON message_templates
+      FOR DELETE TO authenticated
+      USING (auth.uid() = user_id AND is_system = false);
 END $$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.message_templates TO authenticated;
