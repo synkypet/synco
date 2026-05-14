@@ -356,7 +356,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
   // ─── Captura de Metadados Pro ──────────────────────────────────────────
 
-  async fetchMetadata(url: string, connection?: UserMarketplaceConnection): Promise<ProductMetadata | null> {
+  async fetchMetadata(url: string, connection?: UserMarketplaceConnection, sourceText?: string): Promise<ProductMetadata | null> {
     const { shopId, itemId } = this.extractIds(url);
     const keyword = this.extractKeyword(url);
     const nameFallback = keyword ? keyword.charAt(0).toUpperCase() + keyword.slice(1) : 'Produto Shopee';
@@ -506,7 +506,36 @@ export class ShopeeAdapter extends MarketplaceAdapter {
         shopId: String(winner.shopId || shopId || ''),
         productLink: winner.productLink,
         offerLink: winner.offerLink,
-        fetchedAt: new Date().toISOString()
+        fetchedAt: new Date().toISOString(),
+        
+        extraCouponLink: await (async () => {
+          if (!sourceText || !connection) return undefined;
+          
+          // Regex robusta para links Shopee (curtos e longos)
+          const shopeeLinkRegex = /https?:\/\/(?:s\.shopee\.com\.br\/[a-z0-9]+|shopee\.com\.br\/[a-z0-9\-_./]+|shope\.ee\/[a-z0-9]+|br\.shp.ee\/[a-z0-9]+)/gi;
+          const allLinks = sourceText.match(shopeeLinkRegex) || [];
+          
+          // Identificar o link do produto atual para excluir
+          const currentProductId = itemId?.toString();
+          
+          const otherLinks = allLinks.filter(l => {
+            if (l === url) return false;
+            if (currentProductId && l.includes(currentProductId)) return false;
+            return true;
+          });
+
+          if (otherLinks.length > 0) {
+            // Priorizamos links que pareçam de cupons (curtos ou com /m/)
+            const couponUrl = otherLinks.find(l => l.includes('s.shopee.com.br') || l.includes('/m/')) || otherLinks[0];
+            try {
+              console.log(`[SHOPEE-ADAPTER] Reafiliando link extra encontrado no texto: ${couponUrl}`);
+              return await this.generateAffiliateLink(couponUrl, connection);
+            } catch (e) {
+              return undefined;
+            }
+          }
+          return undefined;
+        })()
       };
 
     } catch (error: any) {

@@ -77,6 +77,12 @@ export interface FactualData {
 
   // Metadados de Landing Page (Fase 2F)
   landing_type?: 'super_ofertas' | string | null;
+
+  // Fonte de Texto Original (Fase 2H.1B)
+  source_text?: string;
+
+  // Extra (Fase 2H.1B)
+  extraCouponLink?: string;
 }
 
 export interface GeneratedCopy {
@@ -294,7 +300,7 @@ import { formatShopeeProductMessage } from './marketplaces/shopee/product-messag
  */
 export function buildMessageFromSnapshot(factual: FactualData): string {
   if (factual.marketplace === 'Shopee') {
-    return formatShopeeProductMessage(factual, factual.incoming_url);
+    return formatShopeeProductMessage(factual, factual.source_text || factual.incoming_url);
   }
 
   // Fallback para outros marketplaces (Amazon, ML, etc - a implementar conforme Fase 3)
@@ -336,6 +342,7 @@ export function buildProductSnapshot(opts: {
   affiliateUrl: string;
   tone: string;
   templatedMessage?: string;
+  sourceText?: string;
   reaffiliation?: {
     incoming_url: string;
     resolved_url?: string;
@@ -346,7 +353,7 @@ export function buildProductSnapshot(opts: {
     reaffiliation_error?: string;
   }
 }): ProductSnapshot {
-  const { id, originalUrl, metadata, affiliateUrl, tone, reaffiliation } = opts;
+  const { id, originalUrl, metadata, affiliateUrl, tone, reaffiliation, sourceText } = opts;
   
   const price = metadata.currentPriceFactual || metadata.currentPrice || null;
   const originalPrice = metadata.originalPrice || null;
@@ -407,7 +414,11 @@ export function buildProductSnapshot(opts: {
     eligibility: { isEligible: true, status: 'eligible', reasons: [], offer_type: 'product_offer' },
     
     // Metadados de Cupom (Fase 2B)
-    coupons: metadata.coupons || []
+    coupons: metadata.coupons || [],
+
+    // Fonte de Texto Original (Fase 2H.1B)
+    source_text: sourceText,
+    extraCouponLink: metadata.extraCouponLink
   };
 
   // 2. Classificar Oferta (Heurísticas)
@@ -470,7 +481,8 @@ export async function processLinks(
   userConnections: any[] = [], 
   tone: string = 'auto',
   userId?: string,
-  supabase?: SupabaseClient
+  supabase?: SupabaseClient,
+  sourceText?: string
 ): Promise<ProductSnapshot[]> {
   const validLinks = links.filter(link => link.trim().length > 0);
   const results: ProductSnapshot[] = [];
@@ -577,6 +589,7 @@ export async function processLinks(
         affiliateUrl: preResult?.generated_affiliate_url || targetUrl,
         tone,
         templatedMessage,
+        sourceText,
         reaffiliation: {
           incoming_url: targetUrl,
           resolved_url: preResult?.resolved_url,

@@ -64,9 +64,9 @@ export function formatShopeeProductMessage(factual: FactualData, rawText?: strin
     lines.push('');
     lines.push(`Para chegar nesse valor, resgate aqui e aplique o cupom de R$ ${insight.couponAmount.value} OFF:`);
     // Se houver um cupom na lista com redemptionUrl, usamos ele, senão o link do produto
-    const couponUrl = (factual.coupons && factual.coupons.length > 0) 
+    const couponUrl = factual.extraCouponLink || ((factual.coupons && factual.coupons.length > 0) 
       ? factual.coupons[0].redemptionUrl 
-      : factual.finalLinkToSend;
+      : factual.finalLinkToSend);
     lines.push(couponUrl || factual.finalLinkToSend);
   }
 

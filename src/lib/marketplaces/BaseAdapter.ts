@@ -68,6 +68,9 @@ export interface ProductMetadata {
 
   // Timestamps
   fetchedAt?: string;
+
+  // Extra (Fase 2H.1B)
+  extraCouponLink?: string;
 }
 
 export interface AffiliateResult {
@@ -107,7 +110,7 @@ export abstract class MarketplaceAdapter {
    * Busca metadados do produto (nome, preço, imagem).
    * Retorna null se não conseguir obter.
    */
-  abstract fetchMetadata(url: string, connection?: UserMarketplaceConnection): Promise<ProductMetadata | null>;
+  abstract fetchMetadata(url: string, connection?: UserMarketplaceConnection, sourceText?: string): Promise<ProductMetadata | null>;
 
   /**
    * Gera o link de afiliado a partir da URL limpa.
@@ -136,7 +139,7 @@ export abstract class MarketplaceAdapter {
    * Método de conveniência que executa o pipeline completo:
    * preProcessIncomingLink → fetchMetadata (Enrichment)
    */
-  async process(rawUrl: string, connection?: UserMarketplaceConnection): Promise<AffiliateResult> {
+  async process(rawUrl: string, connection?: UserMarketplaceConnection, sourceText?: string): Promise<AffiliateResult> {
     // 1. Pré-processamento (Classify, Resolve, Canonicalize, Re-affiliate)
     const preResult = await this.preProcessIncomingLink(rawUrl, connection);
     
@@ -157,7 +160,7 @@ export abstract class MarketplaceAdapter {
 
     // 3. Enrichment: Apenas se passou no pré-processamento e re-affiliate.
     // fetchMetadata NUNCA recebe o link curto original.
-    const metadata = await this.fetchMetadata(preResult.canonical_url!, connection);
+    const metadata = await this.fetchMetadata(preResult.canonical_url!, connection, sourceText);
     
     return {
       originalUrl: rawUrl,

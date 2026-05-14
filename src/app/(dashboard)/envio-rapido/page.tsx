@@ -270,7 +270,7 @@ export default function EnvioRapidoPage() {
       const res = await fetch('/api/links/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ links, tone })
+        body: JSON.stringify({ links, tone, sourceText: linksInput })
       });
 
       if (!res.ok) {

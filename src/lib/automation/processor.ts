@@ -247,7 +247,7 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
       
       try {
         console.log(`${logPrefix} [ITEM] Convertendo link e buscando metadados...`);
-        const snapshots = await processLinks([rawUrl], connections, 'auto');
+        const snapshots = await processLinks([rawUrl], connections, 'auto', userId, supabase, body);
         const snapshot = snapshots[0];
 
         if (!snapshot) {

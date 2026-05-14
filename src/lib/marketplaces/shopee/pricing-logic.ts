@@ -42,7 +42,27 @@ export function generatePricingInsight(
   rawText?: string
 ): ShopeePricingInsight {
   const warnings: string[] = [];
-  const text = (rawText || factual.title || '').toLowerCase();
+  
+  // 0. Validação de Entidade (Anti-Mismatch)
+  // Se houver rawText, verificamos se o título do produto na API tem tokens comuns com o texto.
+  const apiTitle = (factual.title || '').toLowerCase();
+  let effectiveRawText = rawText;
+  
+  if (effectiveRawText && apiTitle) {
+    const textLower = effectiveRawText.toLowerCase();
+    // Extraímos tokens significativos (comprimento > 3)
+    const apiTokens = apiTitle.split(/[\s,.-]+/).filter(t => t.length > 3);
+    const matches = apiTokens.filter(t => textLower.includes(t));
+    
+    // Se não houver nenhum token comum significativo, suspeitamos de divergência.
+    if (matches.length === 0 && apiTokens.length > 0) {
+      console.warn(`[PRICING-LOGIC] Divergência de produto detectada. API: "${apiTitle}" vs TEXT: "${textLower.substring(0, 50)}..."`);
+      warnings.push('product_entity_mismatch');
+      effectiveRawText = undefined; // Ignoramos o texto para extração factual
+    }
+  }
+
+  const text = (effectiveRawText || '').toLowerCase();
 
   // 1. Preço Atual (Factual)
   const currentPrice: ShopeePriceEvidence = {
@@ -74,9 +94,9 @@ export function generatePricingInsight(
     const bestCoupon = factual.coupons[0];
     const label = (bestCoupon.couponLabel || '').toLowerCase();
     
-    // Parsing numérico do label
+    // Parsing numérico do label e do texto original
     const amountMatch = label.match(/(?:r\$\s*)?(\d+)\s*(?:off|%)/i);
-    const minSpendMatch = text.match(/(?:acima de|mínimo|min|compra\s+de)\s*(?:r\$\s*)?(\d+)/i);
+    const minSpendMatch = text.match(/(?:acima de|mínimo|min|compra\s+de|a partir de)\s*(?:r\$\s*)?(\d+)/i);
     
     if (amountMatch) {
       const isPercentage = label.includes('%');
@@ -84,8 +104,6 @@ export function generatePricingInsight(
         couponAmount.value = parseInt(amountMatch[1]);
         couponAmount.source = 'factual_text';
         couponAmount.confidence = 0.90;
-      } else {
-        couponAmount.warnings.push('percentage_coupons_not_supported_for_calculation');
       }
     }
 
@@ -95,7 +113,7 @@ export function generatePricingInsight(
       couponMinSpend.confidence = 0.90;
     }
 
-    if (label.includes('todas as lojas') || label.includes('site todo')) {
+    if (label.includes('todas as lojas') || label.includes('site todo') || text.includes('todas as lojas')) {
       couponScope = 'global';
     } else if (label.includes('loja oficial') || label.includes('shopee oficial')) {
       couponScope = 'official_store';
@@ -122,14 +140,23 @@ export function generatePricingInsight(
   const pixPrice: ShopeePriceEvidence = { value: null, source: 'unavailable', field: 'pixPrice', confidence: 0, warnings: [] };
   
   // Tentar achar no texto: "R$ 537,64 no pix"
-  const pixTextMatch = text.match(/(?:r\$\s*)?(\d+(?:[.,]\d{2})?)\s*(?:no\s+)?pix/i);
+  const pixTextMatch = text.match(/(?:por:?\s*)?(?:r\$\s*)?([\d.,]+)\s*(?:no\s+)?pix/i);
   if (pixTextMatch) {
-    const val = parseFloat(pixTextMatch[1].replace(',', '.'));
-    pixPrice.value = val;
-    pixPrice.source = 'factual_text';
-    pixPrice.confidence = 0.95;
+    // Limpamos pontos de milhar e convertemos vírgula decimal
+    const rawVal = pixTextMatch[1];
+    const val = parseFloat(rawVal.replace(/\./g, '').replace(',', '.'));
+    
+    // Validação de Limites (Anti-Absurdo)
+    const minReasonable = (currentPrice.value || 0) * 0.4;
+    if (currentPrice.value && val < minReasonable) {
+      console.warn(`[PRICING-LOGIC] Rejeitado Preço Pix Absurdo: ${val} (API: ${currentPrice.value})`);
+      warnings.push('pix_price_unreasonable');
+    } else {
+      pixPrice.value = val;
+      pixPrice.source = 'factual_text';
+      pixPrice.confidence = 0.95;
+    }
   } else if (factual.estimatedPixPrice && factual.estimatedPixSource === 'heuristic.pix_0_92') {
-    // Mantemos o valor mas marcamos como estimado (não exibível)
     pixPrice.value = factual.estimatedPixPrice;
     pixPrice.source = 'estimated';
     pixPrice.confidence = 0.50;
@@ -140,24 +167,37 @@ export function generatePricingInsight(
   const installmentValue: ShopeePriceEvidence = { value: null, source: 'unavailable', field: 'installmentValue', confidence: 0, warnings: [] };
   let installmentNoInterest = false;
 
-  const instMatch = text.match(/(\d+)x\s*(?:de\s*)?(?:r\$\s*)?(\d+(?:[.,]\d{2})?)\s*(sem\s+juros)?/i);
+  const instMatch = text.match(/(\d+)x\s*(?:de\s*)?(?:r\$\s*)?([\d.,]+)[\s-]*(sem\s+juros)?/i);
   if (instMatch) {
-    installmentCount.value = parseInt(instMatch[1]);
-    installmentValue.value = parseFloat(instMatch[2].replace(',', '.'));
-    installmentNoInterest = !!instMatch[3];
-    installmentCount.source = 'factual_text';
-    installmentValue.source = 'factual_text';
-    installmentCount.confidence = 0.95;
+    const count = parseInt(instMatch[1]);
+    const val = parseFloat(instMatch[2].replace(/\./g, '').replace(',', '.'));
+    const total = count * val;
+    
+    // Validação de Sanidade Matemática (Tolerância 15%)
+    const targetPrice = couponAdjustedPrice.value || currentPrice.value || 0;
+    const diff = Math.abs(total - targetPrice);
+    const maxDiff = targetPrice * 0.15;
+
+    if (targetPrice > 0 && diff > maxDiff) {
+      console.warn(`[PRICING-LOGIC] Rejeitado Parcelamento Inconsistente: ${count}x${val}=${total} (Target: ${targetPrice})`);
+      warnings.push('installments_inconsistent');
+    } else {
+      installmentCount.value = count;
+      installmentValue.value = val;
+      installmentNoInterest = !!instMatch[3];
+      installmentCount.source = 'factual_text';
+      installmentValue.source = 'factual_text';
+      installmentCount.confidence = 0.95;
+    }
   } else if (factual.installments) {
-    // Heurística do adapter (ex: "3x de R$ ...")
     installmentCount.source = 'estimated';
     installmentValue.source = 'estimated';
     installmentCount.confidence = 0.40;
   }
 
   // 7. Decisões de Exibição (Guardrails de Segurança)
-  const canDisplayPix = pixPrice.source === 'factual_api' || pixPrice.source === 'factual_text';
-  const canDisplayInstallments = (installmentCount.source === 'factual_api' || installmentCount.source === 'factual_text') && installmentNoInterest;
+  const canDisplayPix = pixPrice.source === 'factual_text';
+  const canDisplayInstallments = installmentCount.source === 'factual_text' && installmentNoInterest;
   const canDisplayCouponPrice = couponAdjustedPrice.source === 'calculated_verified';
 
   let displayMode: ShopeePricingInsight['displayMode'] = 'base_only';
@@ -199,12 +239,13 @@ export function formatSmartMessage(insight: ShopeePricingInsight, affiliateLink:
   const format = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   if (insight.originalPrice.value) {
-    lines.push(`de ${format(insight.originalPrice.value)}`);
+    lines.push(`~De: ${format(insight.originalPrice.value)}~`);
   }
 
   if (insight.canDisplayPix && insight.canDisplayCouponPrice && insight.pixPrice.value) {
-    // Caso especial: Pix com Cupom (Factual)
     lines.push(`🔥 Por: ${format(insight.pixPrice.value)} NO PIX com cupom`);
+  } else if (insight.canDisplayPix && insight.pixPrice.value) {
+    lines.push(`🔥 Por: ${format(insight.pixPrice.value)} NO PIX`);
   } else if (insight.canDisplayCouponPrice && insight.couponAdjustedPrice.value) {
     lines.push(`🔥 Por: ${format(insight.couponAdjustedPrice.value)} com cupom aplicado`);
     lines.push(`(Preço normal: ${format(insight.currentPrice.value!)})`);
@@ -226,7 +267,7 @@ export function formatSmartMessage(insight: ShopeePricingInsight, affiliateLink:
   // 5. Bloco de Cupom
   if (insight.canDisplayCouponPrice && insight.couponAmount.value) {
     lines.push('');
-    lines.push(`Para chegar nesse valor, resgate aqui e aplique o cupom de R$ ${insight.couponAmount.value} OFF:`);
+    lines.push(`Para chegar nesse valor, resgate aqui e aplique o cupom de R$ ${insight.couponAmount.value} OFF${insight.couponScope === 'global' ? ' em TODAS AS LOJAS' : ''}:`);
     lines.push(couponLink || affiliateLink);
   }
 
