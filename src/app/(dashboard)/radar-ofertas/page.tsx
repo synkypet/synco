@@ -72,7 +72,9 @@ import { useDiscoveredCoupons } from '@/hooks/use-discovered-coupons';
 import { OffersGrid } from '@/components/radar-campanhas/OffersGrid';
 import { CouponCard } from '@/components/radar-campanhas/CouponCard';
 import { DiscoveredCouponCard } from '@/components/radar-ofertas/DiscoveredCouponCard';
+import { DiscoveredPromoCard } from '@/components/radar-ofertas/DiscoveredPromoCard';
 import { CampaignProductsDrawer } from '@/components/radar-campanhas/CampaignProductsDrawer';
+import { useDiscoveredPromoPages } from '@/hooks/use-discovered-promo-pages';
 
 interface DiscoveryPage {
   pageNumber: number;
@@ -130,7 +132,7 @@ export default function RadarOfertasPage() {
   const [couponActiveKeyword, setCouponActiveKeyword] = useState<string | undefined>(undefined);
   const [couponFilterType, setCouponFilterType] = useState<'all' | 1 | 2>('all');
   const [selectedCouponOffer, setSelectedCouponOffer] = useState<ShopeeOffer | null>(null);
-  const [couponSubTab, setCouponSubTab] = useState<'official' | 'detected'>('official');
+  const [couponSubTab, setCouponSubTab] = useState<'official' | 'detected_coupons' | 'detected_pages'>('official');
   
   const queryClient = useQueryClient();
   const shopeeCache = React.useRef<Record<string, any>>({});
@@ -352,6 +354,14 @@ export default function RadarOfertasPage() {
     isLoading: loadingDiscovered,
     refetch: refetchDiscovered
   } = useDiscoveredCoupons({
+    limit: 50
+  });
+
+  const {
+    data: discoveredPromoData,
+    isLoading: loadingPromoPages,
+    refetch: refetchPromoPages
+  } = useDiscoveredPromoPages({
     limit: 50
   });
 
@@ -904,16 +914,28 @@ export default function RadarOfertasPage() {
                 Cupons Oficiais
               </button>
               <button
-                onClick={() => setCouponSubTab('detected')}
+                onClick={() => setCouponSubTab('detected_coupons')}
                 className={cn(
                   "px-8 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                  couponSubTab === 'detected' 
+                  couponSubTab === 'detected_coupons' 
                     ? "bg-kinetic-orange text-white shadow-glow-orange" 
                     : "text-white/30 hover:text-white/60"
                 )}
               >
-                <Activity size={12} className={cn(couponSubTab === 'detected' ? "animate-pulse" : "")} />
-                Capturados no Radar
+                <Activity size={12} className={cn(couponSubTab === 'detected_coupons' ? "animate-pulse" : "")} />
+                Cupons Capturados
+              </button>
+              <button
+                onClick={() => setCouponSubTab('detected_pages')}
+                className={cn(
+                  "px-8 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  couponSubTab === 'detected_pages' 
+                    ? "bg-kinetic-orange text-white shadow-glow-orange" 
+                    : "text-white/30 hover:text-white/60"
+                )}
+              >
+                <Zap size={12} className={cn(couponSubTab === 'detected_pages' ? "animate-pulse" : "")} />
+                Páginas de Ofertas
               </button>
            </div>
 
@@ -965,7 +987,7 @@ export default function RadarOfertasPage() {
                  </div>
                )}
              </div>
-           ) : (
+           ) : couponSubTab === 'detected_coupons' ? (
              <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
                 <div className="bg-anthracite-surface p-8 rounded-[40px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
@@ -1020,7 +1042,62 @@ export default function RadarOfertasPage() {
                   )}
                 </div>
              </div>
-           )}
+            ) : (
+              <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
+                 <div className="bg-anthracite-surface p-8 rounded-[40px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
+                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
+                   
+                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                     <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-kinetic-orange/10 rounded-2xl flex items-center justify-center shadow-skeuo-elevated">
+                         <Zap size={24} className="text-kinetic-orange" />
+                       </div>
+                       <div>
+                         <h3 className="text-xl font-black uppercase tracking-widest text-white/90 italic font-headline">Páginas de Ofertas</h3>
+                         <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Páginas promocionais e eventos Shopee capturados</p>
+                       </div>
+                     </div>
+
+                     <Button 
+                       onClick={() => refetchPromoPages()}
+                       variant="ghost" 
+                       className="h-12 px-6 rounded-xl bg-white/5 border border-white/[0.02] shadow-skeuo-flat hover:bg-white/10 text-kinetic-orange font-black text-[9px] uppercase tracking-widest gap-2"
+                       disabled={loadingPromoPages}
+                     >
+                       <RefreshCw size={14} className={cn(loadingPromoPages && "animate-spin")} />
+                       Sincronizar Radar
+                     </Button>
+                   </div>
+
+                   {loadingPromoPages ? (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                       {[1, 2, 3, 4].map(i => (
+                         <div key={i} className="h-64 bg-white/5 rounded-3xl animate-pulse shadow-skeuo-pressed" />
+                       ))}
+                     </div>
+                   ) : discoveredPromoData?.data && discoveredPromoData.data.length > 0 ? (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                       {discoveredPromoData.data.map((page) => (
+                         <DiscoveredPromoCard 
+                           key={page.id}
+                           page={page}
+                         />
+                       ))}
+                     </div>
+                   ) : (
+                     <div className="p-24 text-center bg-deep-void/40 rounded-[48px] border border-dashed border-white/5 shadow-skeuo-pressed">
+                       <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                         <Inbox size={32} className="text-white/10" />
+                       </div>
+                       <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-white/30 mb-2">Sem Páginas Capturadas</h4>
+                       <p className="text-[9px] font-bold uppercase tracking-widest text-white/10 max-w-sm mx-auto leading-relaxed">
+                         Páginas como /super-ofertas capturadas no Radar aparecerão aqui.
+                       </p>
+                     </div>
+                   )}
+                 </div>
+              </div>
+            )}
         </div>
       ) : (
         /* Aba de Campanhas (useShopeeOffers) */

@@ -10,6 +10,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Marketplace, UserMarketplaceConnection } from '@/types/marketplace';
 import { extractShopeeCoupons } from '@/lib/marketplaces/shopee/coupon-extractor';
 import { shopeeCouponService } from '@/services/supabase/shopee-coupon-service';
+import { shopeePromoPageService } from '@/services/supabase/shopee-promo-page-service';
 
 export interface InboundPayload {
   userId: string;
@@ -98,7 +99,7 @@ function normalizeShopeeUrl(url: string): string {
   }
 }
 
-export async function processInboundAutomation(payload: InboundPayload) {
+export async function processInboundAutomation(payload: InboundPayload, client?: SupabaseClient) {
   const { userId, channelId, externalGroupId, body, isFromMe, messageId } = payload;
   const userTag = `[USER:${userId?.substring(0, 8)}]`;
   const logPrefix = `[PROCESSOR] ${userTag} [MSG:${messageId?.substring(0, 6)}] [GRP:${externalGroupId?.substring(0, 6)}]`;
@@ -106,7 +107,7 @@ export async function processInboundAutomation(payload: InboundPayload) {
   try {
     console.log(`${logPrefix} >>> INICIANDO PROCESSAMENTO E2E...`);
 
-    const supabase: SupabaseClient = createAdminClient();
+    const supabase: SupabaseClient = client || createAdminClient();
 
     // Camada 0: Dedupe de Mensagem (Evita duplo processamento de eventos do provedor)
     console.log(`${logPrefix} [STEP] Verificando duplicidade de mensagem...`);
@@ -349,6 +350,14 @@ export async function processInboundAutomation(payload: InboundPayload) {
             continue;
           }
 
+          // --- TRAVA DE SEGURANÇA (FASE 2G) ---
+          // Promo landings e Cupons nunca são enviados automaticamente pelo Monitor/Radar.
+          // Devem ser apenas persistidos como candidatos.
+          if (snapshot.factual.eligibility.offer_type === 'promo_landing' || snapshot.factual.eligibility.offer_type === 'coupon_offer') {
+            console.log(`${logPrefix} [ITEM] [SAFE-SKIP] Bloqueado: ${snapshot.factual.eligibility.offer_type} exige revisão manual no Radar.`);
+            continue;
+          }
+
           const finalMessage = route.template_config?.body 
             ? fillTemplate(route.template_config.body, snapshot.factual, source.name)
             : snapshot.copy.messageText;
@@ -408,6 +417,25 @@ export async function processInboundAutomation(payload: InboundPayload) {
           }, supabase);
 
           results.push({ url: normalized, routeId: route.id, campaignId: campaign.id });
+        }
+
+        // --- PERSISTÊNCIA DE PROMO LANDINGS (FASE 2G.1A) ---
+        if (snapshot.factual.eligibility.offer_type === 'promo_landing' && snapshot.factual.landing_type) {
+          console.log(`${logPrefix} [ITEM] [STEP] Persistindo promo landing candidata: ${snapshot.factual.landing_type}`);
+          try {
+            await shopeePromoPageService.persistCandidate(userId, {
+              landingType: snapshot.factual.landing_type,
+              title: snapshot.factual.title,
+              rawUrl: rawUrl,
+              canonicalUrl: snapshot.factual.canonical_url,
+              confidence: 1.0, // Detecção via canonical_url é confiável
+              sourceId: source.id,
+              sourceUrl: rawUrl,
+              rawText: body
+            }, supabase);
+          } catch (err) {
+            console.error(`${logPrefix} [ITEM] [ERROR] Falha ao persistir promo landing:`, err);
+          }
         }
 
       } catch (err: any) {
