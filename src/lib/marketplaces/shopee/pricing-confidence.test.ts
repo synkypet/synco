@@ -74,7 +74,7 @@ async function runTests() {
         dedupeKey: 'k1'
       }
     ]
-  }, 'cupom de R$ 30 OFF acima de R$ 299');
+  }, '🛍️ Penteadeira: cupom de R$ 30 OFF acima de R$ 299');
   console.log(`  AdjustedPrice: ${s4.couponAdjustedPrice.value} (Esperado: 587)`);
   console.log(`  Source: ${s4.couponAdjustedPrice.source} (Esperado: calculated_verified)`);
   console.log(`  CanDisplayCouponPrice: ${s4.canDisplayCouponPrice} (Esperado: true)`);
@@ -98,7 +98,7 @@ async function runTests() {
         dedupeKey: 'k2'
       }
     ]
-  }, 'cupom de R$ 30 OFF acima de R$ 299');
+  }, '🛍️ Penteadeira: cupom de R$ 30 OFF acima de R$ 299');
   console.log(`  CanDisplayCouponPrice: ${s5.canDisplayCouponPrice} (Esperado: false)`);
   console.log(`  Warnings: ${JSON.stringify(s5.warnings)} (Esperado: contains coupon_min_spend_not_met)`);
 
@@ -198,8 +198,8 @@ async function runTests() {
   console.log(`  Source: ${s12.originalPrice.source} (Esperado: factual_api)`);
   console.assert(s12.originalPrice.value === 58.50, 'Deve priorizar valor factual da API');
 
-  // --- CENÁRIO 13: Rejeição de Desconto Absurdo (>= 95%) ---
-  console.log('[CENÁRIO 13] Rejeição de Desconto Absurdo (>= 95%)');
+  // --- CENÁRIO 13: Rejeição de Desconto Absurdo (> 98%) ---
+  console.log('[CENÁRIO 13] Rejeição de Desconto Absurdo (> 98%)');
   const s13 = generatePricingInsight({
     ...baseFactual,
     price: 100,

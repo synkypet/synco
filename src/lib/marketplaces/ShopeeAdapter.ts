@@ -471,7 +471,15 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
       return {
         name: cleanTitle,
-        originalPrice: this.normalizeValue(winner.priceMax) || currentPriceFactual,
+        originalPrice: (() => {
+          const discount = parseFloat(winner.priceDiscountRate || "0");
+          if (discount > 0 && discount <= 98) {
+            const calculated = currentPriceFactual / (1 - discount / 100);
+            return Math.round(calculated * 100) / 100;
+          }
+          const pMax = this.normalizeValue(rawPriceMax);
+          return pMax > currentPriceFactual ? pMax : 0;
+        })(),
         currentPrice: currentPriceFactual,
         discountPercent: parseFloat(winner.priceDiscountRate || "0"),
         imageUrl: winner.imageUrl || '',

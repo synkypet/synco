@@ -142,7 +142,8 @@ export function generatePricingInsight(
 
   // Prioridade C: Calculado via Percentual de Desconto (calculated_verified)
   // Fórmula: originalPrice = currentPrice / (1 - discountPercent / 100)
-  if (!opValue && currentPrice.value && factual.discountPercent && factual.discountPercent > 0 && factual.discountPercent < 95) {
+  // AJUSTE: Shopee aceita descontos agressivos. Permitimos até 98% para evitar bloqueio de ofertas reais (-95%).
+  if (!opValue && currentPrice.value && factual.discountPercent && factual.discountPercent > 0 && factual.discountPercent <= 98) {
     const derived = currentPrice.value / (1 - factual.discountPercent / 100);
     // Só aceitamos se o preço original calculado for maior que o atual
     if (derived > currentPrice.value) {
