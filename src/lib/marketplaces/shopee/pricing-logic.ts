@@ -34,6 +34,43 @@ export interface ShopeePricingInsight {
 }
 
 /**
+ * Normaliza títulos em CAIXA ALTA para Title Case de forma inteligente.
+ */
+export function smartTitleCase(text: string): string {
+  if (!text) return text;
+  
+  // Se não estiver tudo em maiúsculas (pelo menos 3 letras maiúsculas e nenhuma minúscula), 
+  // não mexemos para preservar camelCase ou formatos mistos intencionais.
+  const hasMinLetters = (text.match(/[A-Z]/g) || []).length >= 3;
+  const hasNoLower = !/[a-z]/.test(text);
+  
+  if (!hasMinLetters || !hasNoLower) return text;
+  
+  const words = text.toLowerCase().split(' ');
+  const normalized = words.map((word, index) => {
+    // Siglas e medidas comuns - manter maiúsculo
+    const upperCaseWords = ['led', 'off', 'vip', 'rgb', 'usb', 'ssd', 'ram', 'hd', 'bt', '4k', 'uhd'];
+    if (upperCaseWords.includes(word)) return word.toUpperCase();
+    
+    // Números com unidades (45x62cm, 100%algodão)
+    if (/\d+/.test(word)) {
+      // Se for apenas número, ignora. Se tiver letras (unidades), põe em maiúsculo
+      if (/[a-z]/.test(word)) return word.toUpperCase();
+      return word;
+    }
+    
+    // Palavras curtas - manter minúsculo se não for a primeira
+    const shortWords = ['de', 'com', 'em', 'para', 'da', 'do', 'das', 'dos', 'por', 'ou', 'no', 'na', 'nos', 'nas', 'um', 'uma'];
+    if (index > 0 && shortWords.includes(word)) return word;
+    
+    // Primeira letra maiúscula
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  });
+  
+  return normalized.join(' ');
+}
+
+/**
  * Motor de Inteligência de Preço Shopee.
  * Transforma metadados brutos e texto em insights validados e seguros.
  */
@@ -43,27 +80,30 @@ export function generatePricingInsight(
 ): ShopeePricingInsight {
   const warnings: string[] = [];
   
+  // Normalização do Título (Fase 2H.1C - Polish)
+  const productTitle = smartTitleCase(factual.title || 'Produto sem título');
+
   // 0. Validação de Entidade (Anti-Mismatch)
-  // Se houver rawText, verificamos se o título do produto na API tem tokens comuns com o texto.
-  const apiTitle = (factual.title || '').toLowerCase();
+  const apiTitleForMatch = productTitle.toLowerCase();
   let effectiveRawText = rawText;
   
-  if (effectiveRawText && apiTitle) {
+  if (effectiveRawText && apiTitleForMatch) {
     const textLower = effectiveRawText.toLowerCase();
-    // Extraímos tokens significativos (comprimento > 3)
-    const apiTokens = apiTitle.split(/[\s,.-]+/).filter(t => t.length > 3);
+    const apiTokens = apiTitleForMatch.split(/[\s,.-]+/).filter(t => t.length > 3);
     const matches = apiTokens.filter(t => textLower.includes(t));
     
-    // Se não houver nenhum token comum significativo, suspeitamos de divergência.
     if (matches.length === 0 && apiTokens.length > 0) {
-      console.warn(`[PRICING-LOGIC] Divergência de produto detectada. API: "${apiTitle}" vs TEXT: "${textLower.substring(0, 50)}..."`);
+      console.warn(`[PRICING-LOGIC] Divergência de produto detectada. API: "${apiTitleForMatch}" vs TEXT: "${textLower.substring(0, 50)}..."`);
       warnings.push('product_entity_mismatch');
-      effectiveRawText = undefined; // Ignoramos o texto para extração factual
+      effectiveRawText = undefined;
     }
   }
 
   const text = (effectiveRawText || '').toLowerCase();
 
+  // ... (Resto da lógica de currentPrice, originalPrice, coupon, Pix e parcelamento permanece idêntica)
+  // [CÓDIGO OMITIDO PARA PRESERVAR LÓGICA DE PREÇO - SERÁ MANTIDO NO ARQUIVO FINAL]
+  
   // 1. Preço Atual (Factual)
   const currentPrice: ShopeePriceEvidence = {
     value: factual.price || null,
@@ -94,7 +134,6 @@ export function generatePricingInsight(
     const bestCoupon = factual.coupons[0];
     const label = (bestCoupon.couponLabel || '').toLowerCase();
     
-    // Parsing numérico do label e do texto original
     const amountMatch = label.match(/(?:r\$\s*)?(\d+)\s*(?:off|%)/i);
     const minSpendMatch = text.match(/(?:acima de|mínimo|min|compra\s+de|a partir de)\s*(?:r\$\s*)?(\d+)/i);
     
@@ -139,14 +178,11 @@ export function generatePricingInsight(
   // 5. Pix (Factual vs Heurístico)
   const pixPrice: ShopeePriceEvidence = { value: null, source: 'unavailable', field: 'pixPrice', confidence: 0, warnings: [] };
   
-  // Tentar achar no texto: "R$ 537,64 no pix"
   const pixTextMatch = text.match(/(?:por:?\s*)?(?:r\$\s*)?([\d.,]+)\s*(?:no\s+)?pix/i);
   if (pixTextMatch) {
-    // Limpamos pontos de milhar e convertemos vírgula decimal
     const rawVal = pixTextMatch[1];
     const val = parseFloat(rawVal.replace(/\./g, '').replace(',', '.'));
     
-    // Validação de Limites (Anti-Absurdo)
     const minReasonable = (currentPrice.value || 0) * 0.4;
     if (currentPrice.value && val < minReasonable) {
       console.warn(`[PRICING-LOGIC] Rejeitado Preço Pix Absurdo: ${val} (API: ${currentPrice.value})`);
@@ -173,7 +209,6 @@ export function generatePricingInsight(
     const val = parseFloat(instMatch[2].replace(/\./g, '').replace(',', '.'));
     const total = count * val;
     
-    // Validação de Sanidade Matemática (Tolerância 15%)
     const targetPrice = couponAdjustedPrice.value || currentPrice.value || 0;
     const diff = Math.abs(total - targetPrice);
     const maxDiff = targetPrice * 0.15;
@@ -195,7 +230,6 @@ export function generatePricingInsight(
     installmentCount.confidence = 0.40;
   }
 
-  // 7. Decisões de Exibição (Guardrails de Segurança)
   const canDisplayPix = pixPrice.source === 'factual_text';
   const canDisplayInstallments = installmentCount.source === 'factual_text' && installmentNoInterest;
   const canDisplayCouponPrice = couponAdjustedPrice.source === 'calculated_verified';
@@ -206,7 +240,7 @@ export function generatePricingInsight(
   else if (canDisplayCouponPrice) displayMode = 'coupon_verified';
 
   return {
-    productTitle: factual.title,
+    productTitle,
     originalPrice,
     currentPrice,
     couponAmount,
@@ -227,11 +261,12 @@ export function generatePricingInsight(
 
 /**
  * Formata a mensagem final baseada no insight validado.
+ * AJUSTE FASE 2H.1C: Spacing polido e labels limpos.
  */
 export function formatSmartMessage(insight: ShopeePricingInsight, affiliateLink: string, couponLink?: string): string {
   const lines: string[] = [];
 
-  // 1. Header
+  // 1. Header (Espaçamento fixo conforme Task 2)
   lines.push(`🛍️ ${insight.productTitle}`);
   lines.push('');
 
@@ -239,7 +274,8 @@ export function formatSmartMessage(insight: ShopeePricingInsight, affiliateLink:
   const format = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   if (insight.originalPrice.value) {
-    lines.push(`~De: ${format(insight.originalPrice.value)}~`);
+    // FASE 2H.1C: Removido strikethrough (~) para alinhar com o formato base solicitado
+    lines.push(`De: ${format(insight.originalPrice.value)}`);
   }
 
   if (insight.canDisplayPix && insight.canDisplayCouponPrice && insight.pixPrice.value) {

@@ -351,9 +351,12 @@ export function buildProductSnapshot(opts: {
     redirect_chain?: string[];
     reaffiliation_status: string;
     reaffiliation_error?: string;
-  }
+  };
+  templateMetadata?: {
+    isSystemDefault: boolean;
+  };
 }): ProductSnapshot {
-  const { id, originalUrl, metadata, affiliateUrl, tone, reaffiliation, sourceText } = opts;
+  const { id, originalUrl, metadata, affiliateUrl, tone, reaffiliation, sourceText, templateMetadata } = opts;
   
   const price = metadata.currentPriceFactual || metadata.currentPrice || null;
   const originalPrice = metadata.originalPrice || null;
@@ -432,7 +435,14 @@ export function buildProductSnapshot(opts: {
   factual.eligibility = validateEligibility(factual, classification.type);
 
   // 4. Gerar Texto da Mensagem (Determinístico ou Templated)
-  let messageText = opts.templatedMessage || buildMessageFromSnapshot(factual);
+  // FASE 2H.1C: Para Shopee, preferimos o formatador especializado sobre templates de SISTEMA (que são legados/estáticos).
+  // Se houver um template de USUÁRIO (isSystemDefault === false), ele ainda tem prioridade.
+  const isShopee = factual.marketplace === 'Shopee';
+  const hasUserTemplate = opts.templateMetadata && !opts.templateMetadata.isSystemDefault;
+  
+  let messageText = (isShopee && !hasUserTemplate) 
+    ? buildMessageFromSnapshot(factual) 
+    : (opts.templatedMessage || buildMessageFromSnapshot(factual));
   
   // Refinamento: Se for oferta de cupom Shopee, usar formatador especializado
   // FASE 2E.1A: Forçamos o uso do formatador especializado para cupons, ignorando templates de DB que possam estar desatualizados
@@ -544,8 +554,8 @@ export async function processLinks(
 
       const classification = classifyOffer(link, factualForClassification);
       
-      // 1.5. Resolve Template (Randomized)
       let templatedMessage = undefined;
+      let templateMetadata = undefined;
       if (supabase && metadata) {
         const category = classification.type === 'coupon_offer' 
           ? 'coupon' 
@@ -569,16 +579,16 @@ export async function processLinks(
           preco_original: formatBRL(originalPriceVal)?.replace('R$ ', '') || undefined,
           desconto: (metadata.commissionRate !== null && metadata.commissionRate !== undefined) ? (metadata.commissionRate * 100).toFixed(0) : undefined,
           loja: marketplace,
-          // Variáveis extras para cupons (se houver metadados específicos no futuro, por enquanto usamos do metadata se houver)
           valor: metadata.couponValue || undefined,
           minimo: metadata.minSpend || undefined,
-          frete_minimo: metadata.freeShippingMinSpend || 19, // Exemplo Shopee
+          frete_minimo: metadata.freeShippingMinSpend || 19,
           codigo: metadata.couponCode || undefined
         };
 
         const resolved = await templateService.resolveTemplate(supabase, category, variables, userId, filterName);
         if (resolved) {
-          templatedMessage = resolved;
+          templatedMessage = resolved.content;
+          templateMetadata = { isSystemDefault: resolved.isSystemDefault };
         }
       }
 
@@ -589,6 +599,7 @@ export async function processLinks(
         affiliateUrl: preResult?.generated_affiliate_url || targetUrl,
         tone,
         templatedMessage,
+        templateMetadata,
         sourceText,
         reaffiliation: {
           incoming_url: targetUrl,

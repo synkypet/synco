@@ -57,7 +57,8 @@ https://s.shopee.com.br/gMuLCBBjy
   const msgA = formatSmartMessage(insightA, 'https://s.shopee.com.br/product_link', 'https://s.shopee.com.br/coupon_link');
 
   console.log(msgA);
-  console.assert(msgA.includes('R$ 537,64 NO PIX com cupom'), 'Deve exibir preço Pix Penteadeira');
+  console.assert(msgA.includes('De: R$ 630,00'), 'Deve exibir preço original Penteadeira');
+  console.assert(msgA.includes('🔥 Por: R$ 537,64 NO PIX com cupom'), 'Deve exibir preço Pix Penteadeira');
   console.assert(msgA.includes('11x de R$ 53,36 - sem juros'), 'Deve exibir parcelamento Penteadeira');
   console.assert(msgA.includes('R$ 30 OFF em TODAS AS LOJAS'), 'Deve exibir bloco de cupom Penteadeira');
   console.assert(msgA.includes('https://s.shopee.com.br/coupon_link'), 'Deve usar link de cupom re-afiliado');

@@ -28,7 +28,8 @@ export function formatShopeeProductMessage(factual: FactualData, rawText?: strin
 
   // 3. Preço Original "De:"
   if (insight.originalPrice.value) {
-    lines.push(`~De: ${format(insight.originalPrice.value)}~`);
+    // FASE 2H.1C: Removido strikethrough (~) para alinhar com o formato base solicitado
+    lines.push(`De: ${format(insight.originalPrice.value)}`);
   }
 
   // 4. Preço Atual / Com Cupom / Pix

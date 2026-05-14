@@ -53,7 +53,8 @@ export const templateService = {
   },
 
   /**
-   * Resolve um template aleatório para a categoria
+   * Resolve um template aleatório para a categoria.
+   * Retorna o conteúdo renderizado e metadados.
    */
   async resolveTemplate(
     supabase: SupabaseClient,
@@ -61,7 +62,7 @@ export const templateService = {
     variables: TemplateVariables,
     userId?: string,
     filterName?: string
-  ): Promise<string | null> {
+  ): Promise<{ content: string; isSystemDefault: boolean } | null> {
     try {
       let templates = await this.getActiveTemplates(supabase, category, userId);
       if (templates.length === 0) return null;
@@ -77,7 +78,10 @@ export const templateService = {
       // Escolher um aleatoriamente entre os disponíveis (ou os filtrados)
       const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
       
-      return this.render(randomTemplate.content, variables);
+      return {
+        content: this.render(randomTemplate.content, variables),
+        isSystemDefault: randomTemplate.is_system_default
+      };
     } catch (err) {
       console.error('[TEMPLATE-SERVICE] Error resolving template:', err);
       return null;

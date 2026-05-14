@@ -129,7 +129,7 @@ async function runTests() {
     ...baseFactual,
     price: 1066.99,
     currentPriceSource: 'api.priceMin'
-  }, 'compre em 12x de R$ 88,91 sem juros');
+  }, '🛍️ Penteadeira: compre em 12x de R$ 88,91 sem juros');
   console.log(`  InstallmentCount: ${s7.installmentCount.value} (Esperado: 12)`);
   console.log(`  NoInterest: ${s7.installmentNoInterest} (Esperado: true)`);
   console.log(`  CanDisplayInstallments: ${s7.canDisplayInstallments} (Esperado: true)`);
@@ -141,7 +141,7 @@ async function runTests() {
     ...baseFactual,
     price: 537.64,
     currentPriceSource: 'api.priceMin'
-  }, 'Apenas R$ 537,64 no pix hoje');
+  }, '🛍️ Penteadeira: Apenas R$ 537,64 no pix hoje');
   console.log(`  PixPrice: ${s8.pixPrice.value} (Esperado: 537.64)`);
   console.log(`  Source: ${s8.pixPrice.source} (Esperado: factual_text)`);
   console.log(`  CanDisplayPix: ${s8.canDisplayPix} (Esperado: true)`);
@@ -166,7 +166,7 @@ async function runTests() {
     estimatedPixPrice: 981.63,
     estimatedPixSource: 'heuristic.pix_0_92',
     currentPriceSource: 'api.priceMin'
-  }, '12x de R$ 88,91 sem juros');
+  }, '🛍️ Penteadeira: 12x de R$ 88,91 sem juros');
   
   const msg10 = formatSmartMessage(s10, 'http://affiliate');
   console.log(`  Message Preview: \n${msg10}\n`);

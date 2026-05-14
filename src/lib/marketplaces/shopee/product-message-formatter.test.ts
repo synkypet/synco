@@ -30,7 +30,8 @@ async function runTests() {
     originalPriceFormatted: 'R$ 2.000,00'
   });
   console.log(msgA);
-  console.assert(msgA.includes('~De: R$ 2.000,00~'), 'Deve conter De:');
+  console.assert(msgA.includes('De: R$ 2.000,00'), 'Deve conter De: (sem strikethrough)');
+  console.assert(msgA.includes('\n\nDe: R$ 2.000,00'), 'Deve conter linha em branco após título');
   console.assert(msgA.includes('🔥 Por: R$ 1.500,00'), 'Deve conter Por:');
   console.assert(!msgA.includes('NO PIX'), 'Não deve conter NO PIX');
   console.assert(!msgA.includes('sem juros'), 'Não deve conter sem juros');
@@ -123,6 +124,19 @@ async function runTests() {
   }, 'compre em 12x de R$ 88,91 sem juros');
   console.log(msgG);
   console.assert(msgG.includes('12x de R$ 88,91 - sem juros'), 'Deve conter parcelamento e sem juros (Factual)');
+
+  // --- CENÁRIO H: Título em CAIXA ALTA (Normalization) ---
+  console.log('\n[CENÁRIO H] Título em CAIXA ALTA (Normalization)');
+  const msgH = formatShopeeProductMessage({
+    ...baseFactual,
+    title: 'KIT 10PÇS TOALHAS DE SALÃO DE BELEZA 100%ALGODÃO',
+    price: 51.99,
+    originalPrice: 58.50,
+    currentPriceSource: 'api.priceMin'
+  });
+  console.log(msgH);
+  console.assert(msgH.includes('Kit 10PÇS Toalhas de Salão de Beleza 100%ALGODÃO'), 'Deve normalizar título CAIXA ALTA');
+  console.assert(msgH.includes('\n\nDe: R$ 58,50'), 'Deve conter linha em branco após título normalizado');
 
   console.log('\n--- [PRODUCT-MESSAGE-FORMATTER-TEST] CONCLUÍDO ---');
 }
