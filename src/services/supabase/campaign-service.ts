@@ -274,24 +274,37 @@ export const campaignService = {
             ch.config?.status === 'connected'
           );
 
-          jobsToInsert.push({
-            user_id: userId,
-            campaign_id: campaign.id,
-            campaign_item_id: item.id,
-            channel_id: group.channel_id,
-            session_id: sessionId,
-            destination: group.remote_id,
-            destination_name: group.name,
-            message_body: item.custom_text || item.product_name,
-            image_url: item.image_url,
-            installments: item.installments,
-            message_type: item.image_url ? 'image' : 'text',
-            status: 'pending',
-            try_count: 0,
-            fallback_channel_id: fallbackChannel?.id || null,
-            scheduled_at: dto.scheduled_at || null,
-            origin: dto.origin || 'manual'
-          });
+        const messageBody = item.custom_text || item.product_name;
+
+        // --- TRAVA DE SEGURANÇA DE CONTEÚDO (FASE 2I.2) ---
+        // Bloqueio de padrões de erro comuns que indicam falha na captura de metadados
+        const invalidPatterns = [/preço sob consulta/i, /r\$ nan/i, /undefined/i, /"null"/i, /🔥 \*Por: \*/i];
+        const isInvalidContent = invalidPatterns.some(p => p.test(messageBody || ''));
+        
+        if (isInvalidContent) {
+          console.warn(`[CAMPAIGN-SERVICE] [HARD-LOCK] Bloqueio de conteúdo inválido para item ${item.id}. Conteúdo: "${messageBody?.substring(0, 50)}..."`);
+          return; // Skip this destination for this item
+        }
+
+        jobsToInsert.push({
+          user_id: userId,
+          campaign_id: campaign.id,
+          campaign_item_id: item.id,
+          channel_id: group.channel_id,
+          session_id: sessionId,
+          destination: group.remote_id,
+          destination_name: group.name,
+          message_body: messageBody,
+          image_url: item.image_url,
+          installments: item.installments,
+          message_type: item.image_url ? 'image' : 'text',
+          status: 'pending',
+          try_count: 0,
+          fallback_channel_id: fallbackChannel?.id || null,
+          scheduled_at: dto.scheduled_at || null,
+          origin: dto.origin || 'manual'
+        });
+
         } else if (!isEligible) {
             const reason = isCoupon 
               ? 'Oferta do tipo "coupon_offer" bloqueada (Requer confirmação manual via Envio Rápido)' 

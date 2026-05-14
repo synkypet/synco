@@ -111,20 +111,24 @@ export function buildSmartContext(data: FactualData, sourceName?: string): Smart
     }
 
     // O smart_price_block é o "coração" do formatador
-    smartPriceBlock = formatShopeeProductMessage(data, data.source_text || undefined)
-      .split('\n\n')[1] || ''; // Pegar apenas o miolo de preço se possível? 
-      // Na verdade, vamos deixar o formatador gerar o bloco completo de preço e disclaimer.
-    
-    // Ajuste: Vamos extrair as partes do formatador Shopee para não duplicar lógica
     const fullMsg = formatShopeeProductMessage(data, data.source_text || undefined);
-    const lines = fullMsg.split('\n');
     
-    // smart_price_block = tudo entre o título e o link
-    const titleIndex = 0;
-    const linkIndex = lines.findIndex(l => l.includes('📦 Compre aqui'));
-    if (linkIndex > 2) {
-      smartPriceBlock = lines.slice(2, linkIndex).join('\n').trim();
+    // Se o formatador retornou um erro (começa com ⚠️), o smart_price_block deve ser vazio ou o próprio erro
+    if (fullMsg.startsWith('⚠️')) {
+      smartPriceBlock = fullMsg;
+    } else {
+      // Tentar extrair apenas o miolo de preço
+      const lines = fullMsg.split('\n');
+      const linkIndex = lines.findIndex(l => l.includes('📦 Compre aqui'));
+      if (linkIndex > 2) {
+        smartPriceBlock = lines.slice(2, linkIndex).join('\n').trim();
+      }
     }
+
+    
+    // 1. Título
+    const productTitle = insight.productTitle;
+
 
     // coupon_block
     if (insight.canDisplayCouponPrice && insight.couponAmount.value) {

@@ -775,10 +775,11 @@ export default function EnvioRapidoPage() {
                                     </PopoverContent>
                                   </Popover>
                                 ) : (
-                                  <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest bg-white/5 px-2 py-1 rounded-lg">
-                                    Preço sob consulta
+                                  <span className="text-[9px] font-bold text-red-500/60 uppercase tracking-widest bg-red-500/5 px-2 py-1 rounded-lg border border-red-500/10">
+                                    Preço indisponível
                                   </span>
                                 )}
+
 
                                 <Badge
                                   variant="outline"

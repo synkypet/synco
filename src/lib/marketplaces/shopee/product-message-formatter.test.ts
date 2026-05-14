@@ -173,8 +173,40 @@ async function runTests() {
   console.log(msgK);
   console.assert(!msgK.includes('~De:'), 'Não deve conter De: para desconto absurdo');
 
+  // --- CENÁRIO L: Produto sem preço (Bloqueio) ---
+  console.log('\n[CENÁRIO L] Produto sem preço (Bloqueio)');
+  const msgL = formatShopeeProductMessage({
+    ...baseFactual,
+    price: null as any,
+    currentPriceSource: 'unavailable'
+  });
+  console.log(msgL);
+  console.assert(msgL.includes('⚠️ ITEM INVÁLIDO'), 'Deve conter aviso de item inválido');
+  console.assert(!msgL.includes('🔥 *Por:'), 'Não deve conter linha Por:');
+
+  // --- CENÁRIO M: Produto com preço Zero (Bloqueio) ---
+  console.log('\n[CENÁRIO M] Produto com preço Zero (Bloqueio)');
+  const msgM = formatShopeeProductMessage({
+    ...baseFactual,
+    price: 0,
+    currentPriceSource: 'api.priceMin'
+  });
+  console.log(msgM);
+  console.assert(msgM.includes('⚠️ ITEM INVÁLIDO'), 'Deve conter aviso de item inválido');
+
+  // --- CENÁRIO N: Produto com preço NaN (Bloqueio) ---
+  console.log('\n[CENÁRIO N] Produto com preço NaN (Bloqueio)');
+  const msgN = formatShopeeProductMessage({
+    ...baseFactual,
+    price: NaN,
+    currentPriceSource: 'api.priceMin'
+  });
+  console.log(msgN);
+  console.assert(msgN.includes('⚠️ ITEM INVÁLIDO'), 'Deve conter aviso de item inválido');
+
   console.log('\n--- [PRODUCT-MESSAGE-FORMATTER-TEST] CONCLUÍDO ---');
 }
+
 
 runTests().catch(e => {
   console.error('Falha nos testes:', e);

@@ -267,10 +267,14 @@ export function validateEligibility(factual: FactualData, offerType: OfferType =
       status = 'ineligible';
     }
 
-    if (!factual.price || factual.price <= 0) {
-      reasons.push('Preço factual indisponível ou inválido');
+    const isShopee = factual.marketplace === 'Shopee';
+    const hasValidPrice = typeof factual.price === 'number' && factual.price > 0 && !isNaN(factual.price);
+    
+    if (!hasValidPrice) {
+      reasons.push('Preço factual indisponível ou inválido (Obrigatório para Shopee)');
       status = 'ineligible';
     }
+
   }
 
   if (!factual.image && offerType === 'product_offer') {
@@ -319,8 +323,10 @@ export function buildMessageFromSnapshot(factual: FactualData): string {
   if (priceCurrentFormatted) {
     priceLines += `🔥 Por: ${priceCurrentFormatted}`;
   } else {
-    priceLines += `🔥 Por: Preço sob consulta`;
+    // FASE 2I.2: Bloqueio de item sem preço. Não gerar "Preço sob consulta".
+    priceLines += `⚠️ Preço não disponível`;
   }
+
 
   return [
     `${emoji} ${title}`,

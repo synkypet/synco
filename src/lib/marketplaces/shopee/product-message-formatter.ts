@@ -45,8 +45,10 @@ export function formatShopeeProductMessage(factual: FactualData, rawText?: strin
   } else if (insight.currentPrice.value) {
     lines.push(`🔥 *Por: ${format(insight.currentPrice.value)}*`);
   } else {
-    lines.push(`🔥 *Por: Preço sob consulta*`);
+    // FASE 2I.2: Bloqueio de envio sem preço.
+    return `⚠️ ITEM INVÁLIDO: Preço Shopee indisponível para ${factual.title || 'este produto'}.`;
   }
+
 
   // 5. Parcelamento
   if (insight.canDisplayInstallments && insight.installmentCount.value && insight.installmentValue.value) {
