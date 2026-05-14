@@ -1,13 +1,17 @@
 -- migration: 20260514130000_fix_discovered_promo_pages_grants.sql
--- Objetivo: Corrigir erro de permisso na listagem de pginas promocionais.
+-- Objetivo: Ajustar privilgios da tabela discovered_promo_pages para segurança máxima.
 
--- 1. Garantir privilgios de leitura para usurios autenticados
--- Sem isso, mesmo com RLS ativa, o banco retorna "permission denied" antes de avaliar as policies.
+-- 1. Garantir apenas privilgio de LEITURA para usuários autenticados
 GRANT SELECT ON TABLE public.discovered_promo_pages TO authenticated;
 
--- 2. Garantir privilgios para o role anon (se necessrio para o flow de verificação inicial)
--- A RLS ainda impedir acesso annimo real, mas evita erro de negao bruta de privilgio.
-GRANT SELECT ON TABLE public.discovered_promo_pages TO anon;
+-- 2. Revogar explicitamente qualquer privilgio de escrita para usuários autenticados
+REVOKE INSERT ON TABLE public.discovered_promo_pages FROM authenticated;
+REVOKE UPDATE ON TABLE public.discovered_promo_pages FROM authenticated;
+REVOKE DELETE ON TABLE public.discovered_promo_pages FROM authenticated;
 
--- Nota: No concedemos INSERT, UPDATE ou DELETE paraauthenticated/anon.
--- Essas operaes continuam restritas ao service_role via backend.
+-- 3. Revogar TODO e QUALQUER acesso para o role anon
+-- Garante que acessos não autenticados recebam "permission denied" imediatamente.
+REVOKE ALL ON TABLE public.discovered_promo_pages FROM anon;
+
+-- Nota: As operações de escrita (Radar/Automação) e leitura via API 
+-- continuam funcionando via service_role (Admin Client) no backend.
