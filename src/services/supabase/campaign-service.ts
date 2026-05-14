@@ -63,6 +63,13 @@ export const campaignService = {
     const hasCoupon = 
       dto.origin === 'coupon' || 
       dto.items.some(item => item.offer_type === 'coupon_offer');
+    
+    const hasPromoLanding = dto.items.some(item => item.offer_type === 'promo_landing');
+
+    if (hasPromoLanding) {
+      console.warn(`[CAMPAIGN-SERVICE] [GUARDRAIL] Bloqueio de promo_landing: Envio ainda não liberado nesta fase (2F.1A).`);
+      throw new Error('promo_landing_dispatch_not_released_yet');
+    }
 
     if (hasCoupon) {
       const isManualCoupon = 

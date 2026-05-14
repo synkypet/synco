@@ -53,6 +53,25 @@ export function formatShopeeCouponMessage(coupon: ShopeeCoupon): string {
 
     case 'pagina_cupons':
     default:
+      // FASE 2F.1: Especialização para Super Ofertas
+      if (coupon.couponLabel === 'SUPER_OFERTAS') {
+        return [
+          '🚨 *ACESSO VIP SHOPEE LIBERADO!* 🚨',
+          '',
+          '🔥 Uma página especial de ofertas da Shopee acabou de ser liberada com promoções por tempo limitado.',
+          '',
+          '🛒 Produtos com descontos em várias categorias podem aparecer a qualquer momento.',
+          '🎟️ Cupons, frete grátis e ofertas relâmpago ficam disponíveis conforme estoque e disponibilidade.',
+          '',
+          '⚡ Quem entra primeiro tem mais chance de aproveitar antes que os melhores achados acabem.',
+          '',
+          '🔗 *ENTRE NA ÁREA VIP DE OFERTAS:*',
+          coupon.redemptionUrl || 'https://shopee.com.br/m/super-ofertas',
+          '',
+          '⚠️ *Atenção:* Os preços, cupons e descontos podem mudar ou acabar sem aviso prévio.'
+        ].join('\n');
+      }
+
       const landingLines = [
         '🚨 *CUPONS SHOPEE LIBERADOS!* 🚨',
         '',

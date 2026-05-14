@@ -12,7 +12,7 @@ import { formatShopeeCouponMessage } from './marketplaces/shopee/coupon-formatte
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
 
-export type OfferType = 'product_offer' | 'coupon_offer' | 'product_with_coupon';
+export type OfferType = 'product_offer' | 'coupon_offer' | 'product_with_coupon' | 'promo_landing';
 
 export interface Eligibility {
   isEligible: boolean;
@@ -74,6 +74,9 @@ export interface FactualData {
 
   // Metadados de Cupom (Fase 2B)
   coupons?: ShopeeCoupon[];
+
+  // Metadados de Landing Page (Fase 2F)
+  landing_type?: 'super_ofertas' | string | null;
 }
 
 export interface GeneratedCopy {
@@ -188,6 +191,20 @@ export function classifyOffer(text: string, factual: Partial<FactualData>): { ty
     return { type, reasons, coupons: shopeeCoupons };
   }
 
+  // 1.1 Detecção de Landing Pages (Fase 2F.1)
+  if (factual.canonical_url && factual.canonical_url.startsWith('http')) {
+    const lowerUrl = factual.canonical_url.toLowerCase();
+    
+    if (lowerUrl.includes('/m/super-ofertas')) {
+      factual.title = 'Acesso VIP Shopee: Super Ofertas';
+      factual.landing_type = 'super_ofertas';
+      return { 
+        type: 'promo_landing', 
+        reasons: ['Landing page de Super Ofertas Shopee detectada'] 
+      };
+    }
+  }
+
   // 2. Heurísticas Legadas (Fallback/Outros Marketplaces)
   const couponKeywords = ['cupom', 'off', 'resgate', 'copie e cole', 'link carrinho', 'mínimo', '🎟', 'voucher'];
   const hasCouponKeywords = couponKeywords.some(k => content.includes(k));
@@ -216,9 +233,14 @@ export function validateEligibility(factual: FactualData, offerType: OfferType =
   let status: 'eligible' | 'warning' | 'ineligible' = 'eligible';
 
   // ─── EVOLUÇÃO: CUPONS (FASE 2B) ───
-  if (offerType !== 'product_offer') {
+  if (offerType !== 'product_offer' && offerType !== 'promo_landing') {
     reasons.push(`Oferta de ${offerType === 'coupon_offer' ? 'cupom' : 'produto com cupom'} identificada como candidato (Aguardando Fase 2C)`);
     status = 'warning'; // Em vez de ineligible, marcamos como warning para passar no fluxo
+  }
+
+  if (offerType === 'promo_landing') {
+    reasons.push('Página promocional Shopee detectada (Aguardando Fase 2F.1B para envio)');
+    status = 'warning';
   }
 
   // 1. Erros Críticos de Afiliação
@@ -419,6 +441,19 @@ export function buildProductSnapshot(opts: {
       redemptionUrl: factual.finalLinkToSend // Usar o link (re)afiliado se existir
     };
     messageText = formatShopeeCouponMessage(couponToFormat);
+  } else if (classification.type === 'promo_landing') {
+    // FASE 2F.1: Formatação especializada para landing pages
+    const pseudoCoupon: ShopeeCoupon = {
+      marketplace: 'shopee',
+      type: 'pagina_cupons', // Reusar o motor se possível ou estender
+      code: null,
+      couponLabel: factual.landing_type === 'super_ofertas' ? 'SUPER_OFERTAS' : 'Página Promocional',
+      redemptionUrl: factual.finalLinkToSend,
+      confidence: 1.0,
+      status: 'valid',
+      dedupeKey: `shopee:landing:${factual.landing_type}:${factual.finalLinkToSend}`
+    };
+    messageText = formatShopeeCouponMessage(pseudoCoupon);
   }
 
   return {

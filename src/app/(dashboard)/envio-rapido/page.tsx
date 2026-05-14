@@ -361,6 +361,14 @@ export default function EnvioRapidoPage() {
       }
     }
 
+    const hasPromoLanding = selectedProducts.some(p => p.factual.eligibility.offer_type === 'promo_landing');
+    if (hasPromoLanding) {
+      toast.error('Envio bloqueado: Página promocional detectada.', {
+        description: 'Envio de páginas promocionais será liberado após validação da Fase 2F.1B.'
+      });
+      return;
+    }
+
     setIsConfirmOpen(true);
   };
 
@@ -575,7 +583,7 @@ export default function EnvioRapidoPage() {
                             {product.metadata.source === 'fallback' || !product.factual.image ? (
                               <div className="flex flex-col items-center justify-center h-full bg-anthracite-surface/40 rounded-xl">
                                 <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center mb-1.5 shadow-skeuo-pressed">
-                                  {product.factual.eligibility.offer_type === 'coupon_offer' ? (
+                                  {product.factual.eligibility.offer_type === 'coupon_offer' || product.factual.eligibility.offer_type === 'promo_landing' ? (
                                     <Zap size={16} className="text-kinetic-orange" />
                                   ) : (
                                     <AlertCircle size={16} className="text-red-500/40" />
@@ -583,9 +591,9 @@ export default function EnvioRapidoPage() {
                                 </div>
                                 <span className={cn(
                                   "text-[7.5px] font-black uppercase tracking-widest text-center px-2 leading-tight",
-                                  product.factual.eligibility.offer_type === 'coupon_offer' ? "text-white/60" : "text-red-500/40"
+                                  (product.factual.eligibility.offer_type === 'coupon_offer' || product.factual.eligibility.offer_type === 'promo_landing') ? "text-white/60" : "text-red-500/40"
                                 )}>
-                                  {product.factual.eligibility.offer_type === 'coupon_offer' ? 'CUPOM SHOPEE' : 'IMAGEM AUSENTE'}
+                                  {product.factual.eligibility.offer_type === 'promo_landing' ? 'LANDING PAGE' : product.factual.eligibility.offer_type === 'coupon_offer' ? 'CUPOM SHOPEE' : 'IMAGEM AUSENTE'}
                                 </span>
                               </div>
                             ) : (
@@ -643,10 +651,22 @@ export default function EnvioRapidoPage() {
                                   <Badge className={cn(
                                     "border text-[9px] font-black uppercase tracking-widest font-headline italic",
                                     product.factual.eligibility.offer_type === 'coupon_offer' 
-                                      ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
-                                      : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                      ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/30"
+                                      : product.factual.eligibility.offer_type === 'promo_landing'
+                                        ? "bg-orange-500/10 text-orange-400 border-orange-500/30"
+                                        : "bg-blue-500/10 text-blue-400 border-blue-500/30"
                                   )}>
-                                    {product.factual.eligibility.offer_type === 'coupon_offer' ? '🎟 Cupom Detectado' : '🛍 Produto com Cupom'}
+                                    {product.factual.eligibility.offer_type === 'coupon_offer' 
+                                      ? '🎟 Cupom Detectado' 
+                                      : product.factual.eligibility.offer_type === 'promo_landing'
+                                        ? '🚀 Landing Page Shopee detectada'
+                                        : '🛍 Produto com Cupom'}
+                                  </Badge>
+                                )}
+                                
+                                {product.factual.landing_type === 'super_ofertas' && (
+                                  <Badge className="bg-kinetic-orange/10 text-kinetic-orange border border-kinetic-orange/20 text-[9px] font-black uppercase tracking-widest font-headline italic">
+                                    Tipo: Super Ofertas
                                   </Badge>
                                 )}
 

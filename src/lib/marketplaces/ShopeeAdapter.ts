@@ -81,7 +81,8 @@ export class ShopeeAdapter extends MarketplaceAdapter {
                               lowerUrl.includes('/events/') || 
                               lowerUrl.includes('/voucher-wallet') || 
                               lowerUrl.includes('/user/voucher') ||
-                              lowerUrl.includes('cupom');
+                              lowerUrl.includes('cupom') ||
+                              lowerUrl.includes('/m/super-ofertas');
 
       if (isCouponOrPromo) {
         console.log(`[SHOPEE-PREPROCESS] [${requestId}] Link promocional/cupom identificado. Prosseguindo para reafiliação de landing page.`);
@@ -389,7 +390,8 @@ export class ShopeeAdapter extends MarketplaceAdapter {
                                 lowerUrl.includes('/events/') || 
                                 lowerUrl.includes('/voucher-wallet') || 
                                 lowerUrl.includes('/user/voucher') ||
-                                lowerUrl.includes('cupom');
+                                lowerUrl.includes('cupom') ||
+                                lowerUrl.includes('/m/super-ofertas');
         
         if (isCouponOrPromo) {
           return {
