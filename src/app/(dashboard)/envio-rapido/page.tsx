@@ -362,13 +362,8 @@ export default function EnvioRapidoPage() {
     }
 
     const hasPromoLanding = selectedProducts.some(p => p.factual.eligibility.offer_type === 'promo_landing');
-    if (hasPromoLanding) {
-      toast.error('Envio bloqueado: Página promocional detectada.', {
-        description: 'Envio de páginas promocionais será liberado após validação da Fase 2F.1B.'
-      });
-      return;
-    }
-
+    // FASE 2F.1B: Envio manual liberado para promo_landing (Super Ofertas)
+    
     setIsConfirmOpen(true);
   };
 
@@ -378,6 +373,7 @@ export default function EnvioRapidoPage() {
     const selectedProducts = processedProducts.filter(p => selectedProductIds.includes(p.id));
 
     const hasCoupon = selectedProducts.some(p => p.factual.eligibility.offer_type === 'coupon_offer');
+    const hasPromoLanding = selectedProducts.some(p => p.factual.eligibility.offer_type === 'promo_landing');
 
     const campaignData = {
       name: `Envio Rápido - ${new Date().toLocaleDateString()}`,
@@ -411,8 +407,10 @@ export default function EnvioRapidoPage() {
       metadata: {
         confirmed_at: new Date().toISOString(),
         confirmed_by: user?.email,
-        // Flags de Segurança Fase 2E.1B
+        // Flags de Segurança Fase 2E.1B / 2F.1B
         manualCouponSend: hasCoupon,
+        manualPromoLandingSend: hasPromoLanding,
+        dispatchOrigin: hasPromoLanding ? 'quick_send_manual_promo_landing' : (hasCoupon ? 'quick_send_manual_coupon' : undefined),
         confirmedByUser: true,
         source: 'quick_send',
         audit: {
@@ -1297,11 +1295,12 @@ export default function EnvioRapidoPage() {
         groupsCount={selectedDestinations.length}
         channelNames={[...new Set(groups?.filter(g => selectedDestinations.includes(g.id)).map(g => g.channel_name || 'Desconhecido'))].filter(Boolean) as string[]}
         destinationsNames={groups?.filter(g => selectedDestinations.includes(g.id)).map(g => g.name || 'Grupo sem nome') || []}
-        // Props 2E.1B
+        // Props 2E.1B / 2F.1B
         isCouponMode={processedProducts.some(p => selectedProductIds.includes(p.id) && p.factual.eligibility.offer_type === 'coupon_offer')}
-        couponPreview={processedProducts.find(p => selectedProductIds.includes(p.id) && p.factual.eligibility.offer_type === 'coupon_offer')?.copy.messageText}
-        isLinkAvailable={processedProducts.filter(p => selectedProductIds.includes(p.id) && p.factual.eligibility.offer_type === 'coupon_offer').every(c => c.factual.reaffiliation_status === 'reaffiliated' || (!c.factual.canonical_url?.includes('/m/') && !c.factual.resolved_url?.includes('voucher')))}
-        affiliateLink={processedProducts.find(p => selectedProductIds.includes(p.id) && p.factual.eligibility.offer_type === 'coupon_offer')?.factual.finalLinkToSend}
+        isPromoLandingMode={processedProducts.some(p => selectedProductIds.includes(p.id) && p.factual.eligibility.offer_type === 'promo_landing')}
+        couponPreview={processedProducts.find(p => selectedProductIds.includes(p.id) && (p.factual.eligibility.offer_type === 'coupon_offer' || p.factual.eligibility.offer_type === 'promo_landing'))?.copy.messageText}
+        isLinkAvailable={processedProducts.filter(p => selectedProductIds.includes(p.id) && (p.factual.eligibility.offer_type === 'coupon_offer' || p.factual.eligibility.offer_type === 'promo_landing')).every(c => c.factual.reaffiliation_status === 'reaffiliated')}
+        affiliateLink={processedProducts.find(p => selectedProductIds.includes(p.id) && (p.factual.eligibility.offer_type === 'coupon_offer' || p.factual.eligibility.offer_type === 'promo_landing'))?.factual.finalLinkToSend}
       />
     </LayoutContainer>
   );

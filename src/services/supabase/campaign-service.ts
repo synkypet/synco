@@ -67,8 +67,19 @@ export const campaignService = {
     const hasPromoLanding = dto.items.some(item => item.offer_type === 'promo_landing');
 
     if (hasPromoLanding) {
-      console.warn(`[CAMPAIGN-SERVICE] [GUARDRAIL] Bloqueio de promo_landing: Envio ainda não liberado nesta fase (2F.1A).`);
-      throw new Error('promo_landing_dispatch_not_released_yet');
+      const isManualPromo = 
+        dto.origin === 'manual' && 
+        dto.metadata?.dispatchOrigin === 'quick_send_manual_promo_landing' &&
+        dto.metadata?.manualPromoLandingSend === true &&
+        dto.metadata?.confirmedByUser === true &&
+        dto.metadata?.source === 'quick_send';
+
+      if (!isManualPromo) {
+        console.warn(`[CAMPAIGN-SERVICE] [GUARDRAIL] Bloqueio de promo_landing: Tentativa de envio sem confirmação manual validada para user ${userId}. Origin: ${dto.origin}`);
+        throw new Error('promo_landing_manual_confirmation_required');
+      }
+      
+      console.log(`[CAMPAIGN-SERVICE] [GUARDRAIL] Promo Landing autorizada para envio manual (Envio Rápido) para user ${userId}.`);
     }
 
     if (hasCoupon) {
@@ -351,12 +362,21 @@ export const campaignService = {
     console.log(`[CAMPAIGN-SERVICE] [QUICK-SEND] Iniciando criação de despacho manual para user ${userId}...`);
     
     const hasCoupon = dto.items.some(item => item.offer_type === 'coupon_offer');
-    const isConfirmed = dto.metadata?.manualCouponSend === true && dto.metadata?.confirmedByUser === true;
+    const hasPromoLanding = dto.items.some(item => item.offer_type === 'promo_landing');
+    
+    const isCouponConfirmed = dto.metadata?.manualCouponSend === true && dto.metadata?.confirmedByUser === true;
+    const isPromoConfirmed = dto.metadata?.manualPromoLandingSend === true && dto.metadata?.confirmedByUser === true;
 
-    // Se houver cupom, exige confirmação explícita no metadata (injetada pela UI após modal)
-    if (hasCoupon && !isConfirmed) {
+    // Se houver cupom, exige confirmação explícita
+    if (hasCoupon && !isCouponConfirmed) {
       console.warn(`[CAMPAIGN-SERVICE] [QUICK-SEND] Bloqueado: Envio de cupom sem flags de confirmação para user ${userId}.`);
       throw new Error('coupon_manual_confirmation_required');
+    }
+
+    // Se houver promo_landing, exige confirmação explícita
+    if (hasPromoLanding && !isPromoConfirmed) {
+      console.warn(`[CAMPAIGN-SERVICE] [QUICK-SEND] Bloqueado: Envio de landing page sem flags de confirmação para user ${userId}.`);
+      throw new Error('promo_landing_manual_confirmation_required');
     }
 
     const manualDto: CreateCampaignDTO = {
@@ -366,7 +386,7 @@ export const campaignService = {
       metadata: {
         ...dto.metadata,
         // Injetar selo de origem server-side para validação no core .create()
-        dispatchOrigin: hasCoupon ? 'quick_send_manual_coupon' : undefined
+        dispatchOrigin: hasPromoLanding ? 'quick_send_manual_promo_landing' : (hasCoupon ? 'quick_send_manual_coupon' : undefined)
       }
     };
 
