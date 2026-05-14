@@ -8,6 +8,9 @@ ALTER TABLE message_templates ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAUL
 ALTER TABLE message_templates ADD COLUMN IF NOT EXISTS is_editable BOOLEAN DEFAULT true;
 ALTER TABLE message_templates ADD COLUMN IF NOT EXISTS is_deletable BOOLEAN DEFAULT true;
 ALTER TABLE message_templates ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+ALTER TABLE message_templates ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE message_templates ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
 
 -- Create Unique Index for system templates to allow idempotent UPSERTs
 -- Change from partial index to normal index for better ON CONFLICT inference
@@ -112,4 +115,12 @@ BEGIN
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column();
     END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_message_templates_updated_at') THEN
+        CREATE TRIGGER update_message_templates_updated_at
+        BEFORE UPDATE ON message_templates
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
 END $$;
+
