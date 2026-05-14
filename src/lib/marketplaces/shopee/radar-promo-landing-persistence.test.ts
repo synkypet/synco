@@ -106,7 +106,7 @@ async function testRadarPromoLandingPersistence() {
     // --- CENÁRIO A: Captura de /m/super-ofertas ---
     console.log('\n>>> CENÁRIO A: Captura de /m/super-ofertas');
     const bodyA = 'https://shopee.com.br/m/super-ofertas';
-    const payloadA = { userId: mockUserId, body: bodyA, messageId: 'msg-a', externalGroupId: 'grp-1', channelId: 'ch-1' };
+    const payloadA = { userId: mockUserId, body: bodyA, messageId: 'msg-a', externalGroupId: 'grp-1', channelId: 'ch-1', isFromMe: false };
     
     await processInboundAutomation(payloadA, mockSupabase);
 

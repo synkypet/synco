@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuthenticatedUser } from '@/lib/access/require-operational-access';
 import { shopeePromoPageService } from '@/services/supabase/shopee-promo-page-service';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { marketplaceService } from '@/services/supabase/marketplace-service';
 import { ShopeeAdapter } from '@/lib/marketplaces/ShopeeAdapter';
 
 export async function GET(request: Request) {
-  const supabase = createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireAuthenticatedUser();
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status') || undefined;
@@ -18,15 +16,17 @@ export async function GET(request: Request) {
   const limit = parseInt(searchParams.get('limit') || '50');
 
   try {
+    const supabaseAdmin = createAdminClient();
+
     // 1. Buscar promo pages brutas
     const promoPages = await shopeePromoPageService.listDiscoveredPromoPages(user.id, {
       status,
       landingType,
       limit
-    });
+    }, supabaseAdmin);
 
     // 2. Buscar conexão Shopee do usuário para re-afiliação
-    const connections = await marketplaceService.getEnrichedConnections(user.id, supabase);
+    const connections = await marketplaceService.getEnrichedConnections(user.id, supabaseAdmin);
     const shopeeConnection = connections.find(c => c.marketplace_name.toLowerCase().includes('shopee'));
     
     const adapter = new ShopeeAdapter();
