@@ -410,7 +410,9 @@ export default function EnvioRapidoPage() {
         // Flags de Segurança Fase 2E.1B / 2F.1B
         manualCouponSend: hasCoupon,
         manualPromoLandingSend: hasPromoLanding,
-        dispatchOrigin: hasPromoLanding ? 'quick_send_manual_promo_landing' : (hasCoupon ? 'quick_send_manual_coupon' : undefined),
+        dispatchOrigin: (hasPromoLanding && hasCoupon) 
+          ? 'quick_send_manual_mixed' 
+          : (hasPromoLanding ? 'quick_send_manual_promo_landing' : (hasCoupon ? 'quick_send_manual_coupon' : undefined)),
         confirmedByUser: true,
         source: 'quick_send',
         audit: {

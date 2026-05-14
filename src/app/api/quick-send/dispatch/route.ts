@@ -46,9 +46,24 @@ export async function POST(req: Request) {
     return NextResponse.json(campaign);
 
   } catch (error: any) {
-    console.error('[QUICK-SEND-API] Erro crítico no despacho:', error);
+    console.error('[QUICK-SEND-API] Erro no despacho:', error.message);
+
+    // Mapeamento de erros de segurança controlados para 400 Bad Request
+    const controlledErrors = [
+      'coupon_manual_confirmation_required',
+      'promo_landing_manual_confirmation_required',
+      'manual_confirmation_required_for_special_offers'
+    ];
+
+    if (controlledErrors.includes(error.message)) {
+      return NextResponse.json(
+        { error: error.message, message: 'Confirmação manual obrigatória para itens especiais.' },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
-      { error: error.message || 'Erro interno no despacho manual' }, 
+      { error: 'internal_error', message: error.message || 'Erro interno no despacho manual' }, 
       { status: 500 }
     );
   }

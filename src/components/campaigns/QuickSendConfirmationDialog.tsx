@@ -62,10 +62,14 @@ export function QuickSendConfirmationDialog({
             </div>
             <div>
               <AlertDialogTitle className="text-lg font-black uppercase tracking-widest font-headline italic">
-                {isPromoLandingMode ? 'Confirmar Envio de Super Ofertas' : isCouponMode ? 'Confirmar Envio de Cupom' : 'Confirmar Disparo'}
+                {(isPromoLandingMode && isCouponMode) ? 'Confirmar Envio Misto' : 
+                 isPromoLandingMode ? 'Confirmar Envio de Super Ofertas' : 
+                 isCouponMode ? 'Confirmar Envio de Cupom' : 'Confirmar Disparo'}
               </AlertDialogTitle>
               <AlertDialogDescription className="text-[10px] uppercase font-bold text-white/30 tracking-widest">
-                {isPromoLandingMode ? 'Revisão de envio manual de landing page' : isCouponMode ? 'Revisão de envio manual de cupom' : 'Revisão final antes da transmissão'}
+                {(isPromoLandingMode && isCouponMode) ? 'Revisão de itens especiais combinados' :
+                 isPromoLandingMode ? 'Revisão de envio manual de landing page' : 
+                 isCouponMode ? 'Revisão de envio manual de cupom' : 'Revisão final antes da transmissão'}
               </AlertDialogDescription>
             </div>
           </div>
@@ -110,7 +114,12 @@ export function QuickSendConfirmationDialog({
             <div className="bg-white/5 p-4 rounded-2xl border border-white/5 shadow-skeuo-pressed">
               <span className="text-[9px] font-black uppercase tracking-widest text-white/20 block mb-1">Carga Total</span>
               <div className="flex items-baseline gap-1">
-                <span className={cn("text-2xl font-black italic", isPromoLandingMode ? "text-orange-400" : isCouponMode ? "text-indigo-400" : "text-kinetic-orange")}>{totalMessages}</span>
+                <span className={cn(
+                  "text-2xl font-black italic", 
+                  (isPromoLandingMode && isCouponMode) ? "text-amber-400" :
+                  isPromoLandingMode ? "text-orange-400" : 
+                  isCouponMode ? "text-indigo-400" : "text-kinetic-orange"
+                )}>{totalMessages}</span>
                 <span className="text-[9px] font-bold text-white/40 uppercase">Envios</span>
               </div>
             </div>
@@ -150,11 +159,13 @@ export function QuickSendConfirmationDialog({
             <div className="flex items-start gap-3">
               <AlertTriangle className={cn("w-4 h-4 shrink-0 mt-0.5", isPromoLandingMode ? "text-orange-400" : isCouponMode ? "text-indigo-400" : "text-amber-500")} />
               <p className={cn("text-[9px] font-bold leading-relaxed uppercase", isPromoLandingMode ? "text-orange-400/60" : isCouponMode ? "text-indigo-400/60" : "text-amber-500/60")}>
-                {isPromoLandingMode
-                  ? "Este envio é manual. O envio automático de páginas promocionais continua desativado. As ofertas, cupons e descontos podem mudar ou acabar conforme disponibilidade da Shopee."
-                  : isCouponMode 
-                    ? "Este envio é manual. O envio automático de cupons continua desativado. Os cupons podem expirar ou mudar conforme disponibilidade da Shopee."
-                    : "Ao confirmar, o SYNCO iniciará o processamento imediato. Certifique-se de que o conteúdo e os alvos estão corretos."
+                {(isPromoLandingMode && isCouponMode)
+                  ? "Este é um envio manual com itens especiais (cupons e promoções). O envio automático continua desativado. Ofertas podem mudar conforme disponibilidade da Shopee."
+                  : isPromoLandingMode
+                    ? "Este envio é manual. O envio automático de páginas promocionais continua desativado. As ofertas, cupons e descontos podem mudar ou acabar conforme disponibilidade da Shopee."
+                    : isCouponMode 
+                      ? "Este envio é manual. O envio automático de cupons continua desativado. Os cupons podem expirar ou mudar conforme disponibilidade da Shopee."
+                      : "Ao confirmar, o SYNCO iniciará o processamento imediato. Certifique-se de que o conteúdo e os alvos estão corretos."
                 }
               </p>
             </div>
@@ -177,7 +188,9 @@ export function QuickSendConfirmationDialog({
               isCouponMode ? "bg-indigo-500 hover:bg-indigo-600" : "bg-kinetic-orange hover:bg-kinetic-orange/90"
             )}
           >
-            {isPromoLandingMode ? 'Confirmar Envio de Super Ofertas' : isCouponMode ? 'Confirmar Envio Manual' : 'Confirmar e Enviar'}
+            {(isPromoLandingMode && isCouponMode) ? 'Confirmar Envio Misto' :
+             isPromoLandingMode ? 'Confirmar Envio de Super Ofertas' : 
+             isCouponMode ? 'Confirmar Envio Manual' : 'Confirmar e Enviar'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

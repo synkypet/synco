@@ -69,7 +69,7 @@ export const campaignService = {
     if (hasPromoLanding) {
       const isManualPromo = 
         dto.origin === 'manual' && 
-        dto.metadata?.dispatchOrigin === 'quick_send_manual_promo_landing' &&
+        (dto.metadata?.dispatchOrigin === 'quick_send_manual_promo_landing' || dto.metadata?.dispatchOrigin === 'quick_send_manual_mixed') &&
         dto.metadata?.manualPromoLandingSend === true &&
         dto.metadata?.confirmedByUser === true &&
         dto.metadata?.source === 'quick_send';
@@ -85,7 +85,7 @@ export const campaignService = {
     if (hasCoupon) {
       const isManualCoupon = 
         dto.origin === 'manual' && 
-        dto.metadata?.dispatchOrigin === 'quick_send_manual_coupon' &&
+        (dto.metadata?.dispatchOrigin === 'quick_send_manual_coupon' || dto.metadata?.dispatchOrigin === 'quick_send_manual_mixed') &&
         dto.metadata?.manualCouponSend === true &&
         dto.metadata?.confirmedByUser === true;
 
@@ -367,13 +367,19 @@ export const campaignService = {
     const isCouponConfirmed = dto.metadata?.manualCouponSend === true && dto.metadata?.confirmedByUser === true;
     const isPromoConfirmed = dto.metadata?.manualPromoLandingSend === true && dto.metadata?.confirmedByUser === true;
 
-    // Se houver cupom, exige confirmação explícita
+    // Se houver cupom e promo_landing juntos, exige ambas as confirmações
+    if (hasCoupon && hasPromoLanding && (!isCouponConfirmed || !isPromoConfirmed)) {
+      console.warn(`[CAMPAIGN-SERVICE] [QUICK-SEND] Bloqueado: Envio misto sem flags completas de confirmação para user ${userId}.`);
+      throw new Error('manual_confirmation_required_for_special_offers');
+    }
+
+    // Se houver cupom sozinho, exige confirmação explícita
     if (hasCoupon && !isCouponConfirmed) {
       console.warn(`[CAMPAIGN-SERVICE] [QUICK-SEND] Bloqueado: Envio de cupom sem flags de confirmação para user ${userId}.`);
       throw new Error('coupon_manual_confirmation_required');
     }
 
-    // Se houver promo_landing, exige confirmação explícita
+    // Se houver promo_landing sozinha, exige confirmação explícita
     if (hasPromoLanding && !isPromoConfirmed) {
       console.warn(`[CAMPAIGN-SERVICE] [QUICK-SEND] Bloqueado: Envio de landing page sem flags de confirmação para user ${userId}.`);
       throw new Error('promo_landing_manual_confirmation_required');
@@ -386,7 +392,9 @@ export const campaignService = {
       metadata: {
         ...dto.metadata,
         // Injetar selo de origem server-side para validação no core .create()
-        dispatchOrigin: hasPromoLanding ? 'quick_send_manual_promo_landing' : (hasCoupon ? 'quick_send_manual_coupon' : undefined)
+        dispatchOrigin: (hasPromoLanding && hasCoupon) 
+          ? 'quick_send_manual_mixed' 
+          : (hasPromoLanding ? 'quick_send_manual_promo_landing' : (hasCoupon ? 'quick_send_manual_coupon' : undefined))
       }
     };
 
