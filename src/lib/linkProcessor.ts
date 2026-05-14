@@ -286,53 +286,44 @@ export function validateEligibility(factual: FactualData, offerType: OfferType =
   };
 }
 
+import { formatShopeeProductMessage } from './marketplaces/shopee/product-message-formatter';
+
 /**
  * Construtor central de mensagens baseadas no snapshot factual.
- * FOCADO EM PREÇO FACTUAL (DE/POR). TOTALMENTE DETERMINÍSTICO.
+ * INTEGRAÇÃO FASE 2H.1A: Usa o motor de confiança Shopee.
  */
 export function buildMessageFromSnapshot(factual: FactualData): string {
-  // 1. Título
+  if (factual.marketplace === 'Shopee') {
+    return formatShopeeProductMessage(factual, factual.incoming_url);
+  }
+
+  // Fallback para outros marketplaces (Amazon, ML, etc - a implementar conforme Fase 3)
   const title = factual.title;
   const emoji = '🛍️';
-
-  // 2. Extração de Preços (Factual)
-  const priceCurrent = factual.price;
   const priceCurrentFormatted = factual.priceFormatted;
-  
-  const priceOriginal = factual.originalPrice;
   const priceOriginalFormatted = factual.originalPriceFormatted;
+  const showOriginal = !!(factual.originalPrice && priceOriginalFormatted && factual.price && factual.originalPrice > factual.price);
 
-  const showOriginal = !!(priceOriginal && priceOriginalFormatted && priceCurrent && priceOriginal > priceCurrent);
-
-  // 3. Montagem das Linhas de Preço
   let priceLines = '';
-  
   if (showOriginal) {
     priceLines += `~De: ${priceOriginalFormatted}~\n`;
   }
-
   if (priceCurrentFormatted) {
     priceLines += `🔥 Por: ${priceCurrentFormatted}`;
   } else {
     priceLines += `🔥 Por: Preço sob consulta`;
   }
 
-  // 4. Link & CTA
-  const link = factual.finalLinkToSend;
-
-  // 5. Montagem Final (Respeitando linhas em branco e respiro visual)
-  const lines = [
+  return [
     `${emoji} ${title}`,
     '',
     priceLines,
     '',
     '📦 Compre aqui:',
-    link,
+    factual.finalLinkToSend,
     '',
     '⚠️ Promoção sujeita a alteração a qualquer momento.'
-  ];
-
-  return lines.join('\n').trim();
+  ].join('\n').trim();
 }
 
 /**

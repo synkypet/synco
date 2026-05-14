@@ -50,7 +50,7 @@ async function testRadarPromoLandingPersistence() {
       if (table === 'automation_sources') resultData = mockSource;
       if (table === 'automation_routes') resultData = [mockRoute];
       if (table === 'channels') resultData = { config: { wasender_status: 'connected' } };
-      if (table === 'marketplace_connections') resultData = [mockConn];
+      if (table === 'user_marketplaces') resultData = [mockConn];
       if (table === 'groups') resultData = [{ id: '123', remote_id: 'remote-1' }];
       if (table === 'products') resultData = { id: 'prod-1' };
 
