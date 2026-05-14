@@ -9,6 +9,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { extractShopeeCoupons } from './marketplaces/shopee/coupon-extractor';
 import { ShopeeCoupon } from '@/types/shopee-coupon';
 import { formatShopeeCouponMessage } from './marketplaces/shopee/coupon-formatter';
+import { buildSmartContext, renderSmartTemplate, DEFAULT_TEMPLATES } from './templates/universal-template-engine';
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
 
@@ -437,37 +438,38 @@ export function buildProductSnapshot(opts: {
   factual.eligibility = validateEligibility(factual, classification.type);
 
   // 4. Gerar Texto da Mensagem (Determinístico ou Templated)
-  // FASE 2H.1C: Para Shopee, preferimos o formatador especializado sobre templates de SISTEMA (que são legados/estáticos).
-  // Se houver um template de USUÁRIO (isSystemDefault === false), ele ainda tem prioridade.
+  // FASE 2I.1: Integração com o Motor de Templates Universal
   const isShopee = factual.marketplace === 'Shopee';
+  const context = buildSmartContext(factual);
+  
+  let templateToUse = opts.templatedMessage || '';
+  let messageText = '';
+
+  // Regra de Prioridade Segura:
+  // 1. Se for Shopee e NÃO houver template de usuário (Custom): Usa o template padrão inteligente.
+  // 2. Se houver template de usuário: Renderiza o template do usuário via engine inteligente (seguro).
+  // 3. Fallback: Usa o buildMessageFromSnapshot legatário (que já chama o inteligente para Shopee).
+  
   const hasUserTemplate = opts.templateMetadata && !opts.templateMetadata.isSystemDefault;
-  
-  let messageText = (isShopee && !hasUserTemplate) 
-    ? buildMessageFromSnapshot(factual) 
-    : (opts.templatedMessage || buildMessageFromSnapshot(factual));
-  
-  // Refinamento: Se for oferta de cupom Shopee, usar formatador especializado
-  // FASE 2E.1A: Forçamos o uso do formatador especializado para cupons, ignorando templates de DB que possam estar desatualizados
-  if (classification.type === 'coupon_offer' && factual.coupons && factual.coupons.length > 0) {
-    const bestCoupon = factual.coupons.find(c => c.redemptionUrl && originalUrl.includes(c.redemptionUrl)) || factual.coupons[0];
-    const couponToFormat = {
-      ...bestCoupon,
-      redemptionUrl: factual.finalLinkToSend // Usar o link (re)afiliado se existir
-    };
-    messageText = formatShopeeCouponMessage(couponToFormat);
-  } else if (classification.type === 'promo_landing') {
-    // FASE 2F.1: Formatação especializada para landing pages
-    const pseudoCoupon: ShopeeCoupon = {
-      marketplace: 'shopee',
-      type: 'pagina_cupons', // Reusar o motor se possível ou estender
-      code: null,
-      couponLabel: factual.landing_type === 'super_ofertas' ? 'SUPER_OFERTAS' : 'Página Promocional',
-      redemptionUrl: factual.finalLinkToSend,
-      confidence: 1.0,
-      status: 'valid',
-      dedupeKey: `shopee:landing:${factual.landing_type}:${factual.finalLinkToSend}`
-    };
-    messageText = formatShopeeCouponMessage(pseudoCoupon);
+
+  if (isShopee) {
+    if (!hasUserTemplate) {
+      // Se não há template de usuário, escolhemos o melhor template padrão do sistema
+      if (classification.type === 'coupon_offer') {
+        templateToUse = DEFAULT_TEMPLATES.shopee_coupon;
+      } else if (classification.type === 'promo_landing') {
+        templateToUse = DEFAULT_TEMPLATES.shopee_promo;
+      } else if (context.coupon_block) {
+        templateToUse = DEFAULT_TEMPLATES.shopee_product_premium;
+      } else {
+        templateToUse = DEFAULT_TEMPLATES.shopee_product;
+      }
+    }
+    // Renderização final (sempre segura)
+    messageText = renderSmartTemplate(templateToUse, context);
+  } else {
+    // Outros marketplaces continuam como antes (por enquanto)
+    messageText = opts.templatedMessage || buildMessageFromSnapshot(factual);
   }
 
   return {
