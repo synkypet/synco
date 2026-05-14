@@ -112,6 +112,23 @@ de r$ 1000
   const insightJ = generatePricingInsight(baseFactual, rawTextJ);
   console.assert(!insightJ.canDisplayInstallments, 'Deve rejeitar parcelamento inconsistente');
 
+  // --- CENÁRIO K: Prioridade Factual Text sobre Desconto ---
+  console.log('\n[CENÁRIO K] Prioridade Factual Text sobre Desconto');
+  const rawTextK = `
+🛍️ Penteadeira de quarto Luxo
+de R$ 630
+🔥Por: R$ 537,64
+  `;
+  const factualK: FactualData = {
+    ...baseFactual,
+    price: 537.64,
+    discountPercent: 10, // Calculado daria ~597.37
+    currentPriceSource: 'api.price'
+  };
+  const insightK = generatePricingInsight(factualK, rawTextK);
+  console.log(`  OriginalPrice: ${insightK.originalPrice.value} (Esperado: 630)`);
+  console.assert(insightK.originalPrice.value === 630, 'Deve priorizar valor do texto (630) sobre desconto (597)');
+
   console.log('\n--- [PRODUCT-RAW-TEXT-PRICING-TEST] CONCLUÍDO ---');
 }
 

@@ -173,6 +173,42 @@ async function runTests() {
   console.assert(!msg10.includes('NO PIX'), 'Não deve mostrar NO PIX pois é estimado');
   console.assert(msg10.includes('12x'), 'Deve mostrar 12x pois veio do texto (factual_text)');
 
+  // --- CENÁRIO 11: Preço Original derivado de Desconto (calculated_verified) ---
+  console.log('[CENÁRIO 11] Preço Original derivado de Desconto');
+  const s11 = generatePricingInsight({
+    ...baseFactual,
+    price: 29.88,
+    discountPercent: 10,
+    currentPriceSource: 'api.priceMin'
+  });
+  console.log(`  Derived OriginalPrice: ${s11.originalPrice.value} (Esperado: 33.2)`);
+  console.log(`  Source: ${s11.originalPrice.source} (Esperado: calculated_verified)`);
+  console.assert(s11.originalPrice.value === 33.2, 'Deve calcular preço original de 10%');
+
+  // --- CENÁRIO 12: Prioridade Factual API sobre Desconto ---
+  console.log('[CENÁRIO 12] Prioridade Factual API sobre Desconto');
+  const s12 = generatePricingInsight({
+    ...baseFactual,
+    price: 51.99,
+    originalPrice: 58.50,
+    discountPercent: 11,
+    currentPriceSource: 'api.priceMin'
+  });
+  console.log(`  OriginalPrice: ${s12.originalPrice.value} (Esperado: 58.50)`);
+  console.log(`  Source: ${s12.originalPrice.source} (Esperado: factual_api)`);
+  console.assert(s12.originalPrice.value === 58.50, 'Deve priorizar valor factual da API');
+
+  // --- CENÁRIO 13: Rejeição de Desconto Absurdo (>= 95%) ---
+  console.log('[CENÁRIO 13] Rejeição de Desconto Absurdo (>= 95%)');
+  const s13 = generatePricingInsight({
+    ...baseFactual,
+    price: 100,
+    discountPercent: 99,
+    currentPriceSource: 'api.priceMin'
+  });
+  console.log(`  OriginalPrice: ${s13.originalPrice.value} (Esperado: null)`);
+  console.assert(s13.originalPrice.value === null, 'Deve rejeitar percentual absurdo');
+
   console.log('\n--- [PRICING-CONFIDENCE-TEST] CONCLUÍDO ---');
 }
 

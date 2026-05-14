@@ -113,16 +113,51 @@ export function generatePricingInsight(
     warnings: []
   };
 
-  // 2. Preço Original (Factual)
-  const originalPriceValue = factual.originalPrice || null;
-  const isOriginalValid = !!(originalPriceValue && currentPrice.value && originalPriceValue > currentPrice.value);
-  
+  // 2. Preço Original (Factual, Textual ou Calculado via Desconto)
+  let opValue: number | null = null;
+  let opSource: PriceSource = 'unavailable';
+  let opConfidence = 0;
+  const opWarnings: string[] = [];
+
+  // Prioridade A: Factual Text (da mensagem original "De: ...")
+  const deMatch = text.match(/(?:de:?\s*)(?:r\$\s*)?([\d.,]+)/i);
+  if (deMatch) {
+    const val = parseFloat(deMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (currentPrice.value && val > currentPrice.value) {
+      opValue = val;
+      opSource = 'factual_text';
+      opConfidence = 0.95;
+    }
+  }
+
+  // Prioridade B: Factual API (se não tiver no texto)
+  if (!opValue && factual.originalPrice) {
+    const val = factual.originalPrice;
+    if (currentPrice.value && val > currentPrice.value) {
+      opValue = val;
+      opSource = 'factual_api';
+      opConfidence = 1.0;
+    }
+  }
+
+  // Prioridade C: Calculado via Percentual de Desconto (calculated_verified)
+  // Fórmula: originalPrice = currentPrice / (1 - discountPercent / 100)
+  if (!opValue && currentPrice.value && factual.discountPercent && factual.discountPercent > 0 && factual.discountPercent < 95) {
+    const derived = currentPrice.value / (1 - factual.discountPercent / 100);
+    // Só aceitamos se o preço original calculado for maior que o atual
+    if (derived > currentPrice.value) {
+      opValue = Math.round(derived * 100) / 100;
+      opSource = 'calculated_verified';
+      opConfidence = 0.90;
+    }
+  }
+
   const originalPrice: ShopeePriceEvidence = {
-    value: isOriginalValid ? originalPriceValue : null,
-    source: (isOriginalValid && factual.currentPriceSource?.startsWith('api')) ? 'factual_api' : 'unavailable',
+    value: opValue,
+    source: opSource,
     field: 'originalPrice',
-    confidence: isOriginalValid ? 1.0 : 0,
-    warnings: !isOriginalValid && originalPriceValue ? ['original_price_inconsistent_or_equal'] : []
+    confidence: opConfidence,
+    warnings: opWarnings
   };
 
   // 3. Extração de Cupom do Texto

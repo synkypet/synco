@@ -139,6 +139,40 @@ async function runTests() {
   console.assert(msgH.includes('\n\n~De: R$ 58,50~'), 'Deve conter linha em branco após título normalizado');
   console.assert(msgH.includes('🔥 *Por: R$ 51,99*'), 'Deve conter Por: em negrito');
 
+  // --- CENÁRIO I: Produto com preço original derivado de Desconto ---
+  console.log('\n[CENÁRIO I] Produto com preço original derivado de Desconto');
+  const msgI = formatShopeeProductMessage({
+    ...baseFactual,
+    price: 29.88,
+    discountPercent: 10,
+    currentPriceSource: 'api.priceMin'
+  });
+  console.log(msgI);
+  console.assert(msgI.includes('~De: R$ 33,20~'), 'Deve conter De: calculado (10%)');
+  console.assert(msgI.includes('🔥 *Por: R$ 29,88*'), 'Deve conter Por: em negrito');
+
+  // --- CENÁRIO J: Desconto Zero ---
+  console.log('\n[CENÁRIO J] Desconto Zero');
+  const msgJ = formatShopeeProductMessage({
+    ...baseFactual,
+    price: 100,
+    discountPercent: 0,
+    currentPriceSource: 'api.priceMin'
+  });
+  console.log(msgJ);
+  console.assert(!msgJ.includes('~De:'), 'Não deve conter De: para desconto zero');
+
+  // --- CENÁRIO K: Desconto Absurdo ---
+  console.log('\n[CENÁRIO K] Desconto Absurdo');
+  const msgK = formatShopeeProductMessage({
+    ...baseFactual,
+    price: 100,
+    discountPercent: 99,
+    currentPriceSource: 'api.priceMin'
+  });
+  console.log(msgK);
+  console.assert(!msgK.includes('~De:'), 'Não deve conter De: para desconto absurdo');
+
   console.log('\n--- [PRODUCT-MESSAGE-FORMATTER-TEST] CONCLUÍDO ---');
 }
 

@@ -59,6 +59,7 @@ export interface FactualData {
   offerLink?: string | null;
   finalLinkToSend: string;
   fetchedAt: string;
+  discountPercent?: number | null;
 
   // ─── Rastreabilidade e Reafiliação (Fase 1) ──────────────────────────────
   incoming_url: string;
@@ -421,7 +422,8 @@ export function buildProductSnapshot(opts: {
 
     // Fonte de Texto Original (Fase 2H.1B)
     source_text: sourceText,
-    extraCouponLink: metadata.extraCouponLink
+    extraCouponLink: metadata.extraCouponLink,
+    discountPercent: metadata.discountPercent
   };
 
   // 2. Classificar Oferta (Heurísticas)
