@@ -254,12 +254,19 @@ export const campaignService = {
         // A geração de job agora depende EXCLUSIVAMENTE da elegibilidade gravada no item.
         const isManualCouponConfirmed = 
           dto.origin === 'manual' && 
-          dto.metadata?.dispatchOrigin === 'quick_send_manual_coupon' &&
+          (dto.metadata?.dispatchOrigin === 'quick_send_manual_coupon' || dto.metadata?.dispatchOrigin === 'quick_send_manual_mixed') &&
           dto.metadata?.manualCouponSend === true &&
           dto.metadata?.confirmedByUser === true;
 
+        const isManualPromoConfirmed = 
+          dto.origin === 'manual' && 
+          (dto.metadata?.dispatchOrigin === 'quick_send_manual_promo_landing' || dto.metadata?.dispatchOrigin === 'quick_send_manual_mixed') &&
+          dto.metadata?.manualPromoLandingSend === true &&
+          dto.metadata?.confirmedByUser === true;
+
         const isEligible = (item.eligibility_status === 'eligible' || item.eligibility_status === 'warning') && 
-          (!isCoupon || isManualCouponConfirmed);
+          (!isCoupon || isManualCouponConfirmed) &&
+          (originalItem?.offer_type !== 'promo_landing' || isManualPromoConfirmed);
 
         if (isConnected && isEligible) {
           const fallbackChannel = userChannels?.find(ch => 
@@ -288,7 +295,9 @@ export const campaignService = {
         } else if (!isEligible) {
             const reason = isCoupon 
               ? 'Oferta do tipo "coupon_offer" bloqueada (Requer confirmação manual via Envio Rápido)' 
-              : `Status de elegibilidade: ${item.eligibility_status}`;
+              : originalItem?.offer_type === 'promo_landing'
+                ? 'Oferta do tipo "promo_landing" bloqueada (Requer confirmação manual via Envio Rápido)'
+                : `Status de elegibilidade: ${item.eligibility_status}`;
             console.warn(`[CAMPAIGN-SERVICE] Item ${item.id} pulado. Motivo: ${reason}. Motivos originais: ${item.eligibility_reasons?.join(' | ') || 'Nenhum reportado'}`);
         }
       });

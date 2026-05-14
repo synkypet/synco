@@ -19,9 +19,10 @@ const createMockChain = (data: any = null, error: any = null) => {
     catch: (reject: any) => reject(error),
     insert: (d: any) => ({
         select: () => ({
-            single: () => Promise.resolve({ data: { id: 'some_id', ...d }, error: null })
+            single: () => Promise.resolve({ data: Array.isArray(d) ? { id: 'some_id', ...d[0] } : { id: 'some_id', ...d }, error: null }),
+            then: (resolve: any) => resolve({ data: Array.isArray(d) ? d.map((x, i) => ({ id: `item_${i}`, ...x })) : [{ id: 'item_1', ...d }], error: null })
         }),
-        then: (resolve: any) => resolve({ data: { id: 'some_id', ...d }, error: null })
+        then: (resolve: any) => resolve({ data: Array.isArray(d) ? d.map((x, i) => ({ id: `item_${i}`, ...x })) : [{ id: 'item_1', ...d }], error: null })
     }),
     upsert: (d: any) => {
         jobsInserted = jobsInserted.concat(Array.isArray(d) ? d : [d]);
