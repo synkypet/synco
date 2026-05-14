@@ -107,6 +107,7 @@ export default function AutomationDetailPage() {
     try {
       const promises = routes.map(route => upsertRoute.mutateAsync({
         ...route,
+        source_id: id, // Forçar source_id da página
         filters,
         template_config: template
       }));
@@ -185,7 +186,7 @@ export default function AutomationDetailPage() {
           // Se houver updates de automation_routes, usamos a mutation de rota
           if (updates.automation_routes && updates.automation_routes[0]) {
             const r = updates.automation_routes[0];
-            upsertRoute.mutate({ ...r });
+            upsertRoute.mutate({ ...r, source_id: id });
           } else {
             updateSource.mutate({ id, updates });
           }

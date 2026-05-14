@@ -62,8 +62,8 @@ export function useUpdateAutomationSource() {
 export function useUpsertAutomationRoute() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (route: Partial<AutomationRoute> & { source_id: string; target_id: string }) =>
-      automationService.upsertRoute(route),
+    mutationFn: ({ source_id, ...route }: Partial<AutomationRoute> & { source_id: string; target_id: string }) =>
+      automationService.upsertRoute(source_id, route),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['automation-routes', variables.source_id] });
     }

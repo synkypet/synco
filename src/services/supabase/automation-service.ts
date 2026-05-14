@@ -24,6 +24,7 @@ export const automationService = {
         *,
         automation_routes (
           id,
+          source_id,
           target_type,
           target_id,
           template_id,
@@ -249,6 +250,7 @@ export const automationService = {
         *,
         automation_routes (
           id,
+          source_id,
           target_type,
           target_id,
           template_id,
@@ -296,11 +298,21 @@ export const automationService = {
   /**
    * Cria ou atualiza uma rota de destino
    */
-  async upsertRoute(route: Partial<AutomationRoute> & { source_id: string; target_id: string }, client?: SupabaseClient): Promise<AutomationRoute> {
+  async upsertRoute(sourceId: string, route: Partial<AutomationRoute> & { target_id: string }, client?: SupabaseClient): Promise<AutomationRoute> {
     const supabase = client || createClient();
+    
+    if (!sourceId) {
+      throw new Error('sourceId is required for automation_routes operations');
+    }
+
+    const payload = {
+      ...route,
+      source_id: sourceId
+    };
+
     const { data, error } = await supabase
       .from('automation_routes')
-      .upsert(route)
+      .upsert(payload)
       .select()
       .single();
 
