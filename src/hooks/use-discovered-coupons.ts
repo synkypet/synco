@@ -19,6 +19,11 @@ export interface DiscoveredCoupon {
   capture_count: number;
   captured_at: string;
   last_seen_at: string;
+  
+  // Novos campos virtuais injetados pela API
+  effective_redemption_url?: string | null;
+  reaffiliation_status?: 'not_needed' | 'resolved' | 'canonicalized' | 'reaffiliated' | 'blocked' | 'failed' | 'warning';
+  reaffiliation_warning?: string | null;
 }
 
 export interface DiscoveredCouponsResponse {

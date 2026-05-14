@@ -7,6 +7,7 @@ import { ShopeeAffiliateClient } from '@/lib/shopee-affiliate/client';
 import { getCategoryName } from './shopee/categories';
 import { cleanProductName } from './shopee/cleaner';
 import { isBrazilFriendlyProduct } from '@/lib/filters/brazil-friendly';
+import { canonicalizeShopeeUrl as advancedCanonicalize } from './shopee/url-canonicalizer';
 
 export class ShopeeAdapter extends MarketplaceAdapter {
   readonly name = 'Shopee';
@@ -67,7 +68,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
     // C. Canonicalizar a URL final
     const canonicalUrl = await this.canonicalizeShopeeUrl(resolvedUrl);
-    if (status === 'resolved') status = 'canonicalized';
+    if (status === 'resolved' || status === 'not_needed') status = 'canonicalized';
     console.log(`[SHOPEE-PREPROCESS] [${requestId}] Canônico: ${canonicalUrl}`);
 
     // --- CLASSIFICAÇÃO DE TIPO DE LINK (FRENTE 2) ---
@@ -219,28 +220,20 @@ export class ShopeeAdapter extends MarketplaceAdapter {
   }
 
   /**
-   * Limpa a URL e normaliza o formato Shopee.
+   * Limpa a URL e normaliza o formato Shopee usando o utilitário avançado.
    */
   private async canonicalizeShopeeUrl(url: string): Promise<string> {
     try {
-      // 1. Tentar extrair IDs primeiro para canonicalização agressiva
+      // 1. Tentar extrair IDs primeiro para canonicalização agressiva de produtos
       const { shopId, itemId } = this.extractIds(url);
 
       if (shopId && itemId) {
-        // Formato universal e mais robusto para enrichment e persistência
+        // Formato universal e mais robusto para enrichment e persistência de produtos
         return `https://shopee.com.br/product/${shopId}/${itemId}`;
       }
 
-      const parsed = new URL(url);
-
-      // Remover parâmetros de rastreamento comuns
-      const paramsToRemove = ['sp_atk', 'xptdk', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'smtt'];
-      paramsToRemove.forEach(p => parsed.searchParams.delete(p));
-
-      // Limpeza de ancoras e fragmentos desnecessários
-      parsed.hash = '';
-
-      return parsed.toString();
+      // 2. Usar o canonicalizer avançado para outros tipos de links (cupons, promo, etc)
+      return advancedCanonicalize(url);
     } catch {
       return url;
     }

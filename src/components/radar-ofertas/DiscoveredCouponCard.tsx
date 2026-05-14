@@ -38,7 +38,7 @@ export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({ coup
       type: coupon.coupon_type,
       code: coupon.code,
       couponLabel: coupon.coupon_label,
-      redemptionUrl: coupon.redemption_url,
+      redemptionUrl: coupon.effective_redemption_url || coupon.redemption_url,
       confidence: coupon.confidence,
       status: coupon.status,
       dedupeKey: coupon.dedupe_key
@@ -55,8 +55,9 @@ export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({ coup
 
   const handleOpenLink = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (coupon.redemption_url) {
-      window.open(coupon.redemption_url, '_blank');
+    const targetUrl = coupon.effective_redemption_url || coupon.redemption_url;
+    if (targetUrl) {
+      window.open(targetUrl, '_blank');
     } else {
       toast.error('URL de resgate não disponível.');
     }
@@ -136,12 +137,37 @@ export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({ coup
             </div>
           </div>
 
-          {/* Badge de Segurança Obrigatória */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/10 rounded-xl">
-             <ZapOff size={12} className="text-amber-500/50" />
-             <span className="text-[9px] font-black uppercase tracking-widest text-amber-500/60 leading-none">
-               🔒 Envio automático bloqueado
-             </span>
+          {/* Badge de Segurança Obrigatória e Re-afiliação */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/10 rounded-xl">
+               <ZapOff size={12} className="text-amber-500/50" />
+               <span className="text-[9px] font-black uppercase tracking-widest text-amber-500/60 leading-none">
+                 🔒 Envio automático bloqueado
+               </span>
+            </div>
+
+            {coupon.redemption_url && (
+              <div className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-xl border",
+                coupon.reaffiliation_status === 'reaffiliated' 
+                  ? "bg-emerald-500/5 border-emerald-500/10" 
+                  : "bg-red-500/5 border-red-500/10"
+              )}>
+                {coupon.reaffiliation_status === 'reaffiliated' ? (
+                  <CheckCircle2 size={12} className="text-emerald-500/50" />
+                ) : (
+                  <Info size={12} className="text-red-500/50" />
+                )}
+                <span className={cn(
+                  "text-[9px] font-black uppercase tracking-widest leading-none",
+                  coupon.reaffiliation_status === 'reaffiliated' ? "text-emerald-500/60" : "text-red-500/60"
+                )}>
+                  {coupon.reaffiliation_status === 'reaffiliated' 
+                    ? "✓ Link re-afiliado" 
+                    : "⚠ Link ainda não re-afiliado"}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Ações */}
