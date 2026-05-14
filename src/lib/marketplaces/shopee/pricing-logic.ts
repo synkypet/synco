@@ -274,19 +274,18 @@ export function formatSmartMessage(insight: ShopeePricingInsight, affiliateLink:
   const format = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   if (insight.originalPrice.value) {
-    // FASE 2H.1C: Removido strikethrough (~) para alinhar com o formato base solicitado
-    lines.push(`De: ${format(insight.originalPrice.value)}`);
+    lines.push(`~De: ${format(insight.originalPrice.value)}~`);
   }
 
   if (insight.canDisplayPix && insight.canDisplayCouponPrice && insight.pixPrice.value) {
-    lines.push(`🔥 Por: ${format(insight.pixPrice.value)} NO PIX com cupom`);
+    lines.push(`🔥 *Por: ${format(insight.pixPrice.value)} NO PIX com cupom*`);
   } else if (insight.canDisplayPix && insight.pixPrice.value) {
-    lines.push(`🔥 Por: ${format(insight.pixPrice.value)} NO PIX`);
+    lines.push(`🔥 *Por: ${format(insight.pixPrice.value)} NO PIX*`);
   } else if (insight.canDisplayCouponPrice && insight.couponAdjustedPrice.value) {
-    lines.push(`🔥 Por: ${format(insight.couponAdjustedPrice.value)} com cupom aplicado`);
+    lines.push(`🔥 *Por: ${format(insight.couponAdjustedPrice.value)} com cupom aplicado*`);
     lines.push(`(Preço normal: ${format(insight.currentPrice.value!)})`);
   } else if (insight.currentPrice.value) {
-    lines.push(`🔥 Por: ${format(insight.currentPrice.value)}`);
+    lines.push(`🔥 *Por: ${format(insight.currentPrice.value)}*`);
   }
 
   // 3. Parcelamento

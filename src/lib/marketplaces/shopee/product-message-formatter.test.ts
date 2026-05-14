@@ -30,9 +30,9 @@ async function runTests() {
     originalPriceFormatted: 'R$ 2.000,00'
   });
   console.log(msgA);
-  console.assert(msgA.includes('De: R$ 2.000,00'), 'Deve conter De: (sem strikethrough)');
-  console.assert(msgA.includes('\n\nDe: R$ 2.000,00'), 'Deve conter linha em branco após título');
-  console.assert(msgA.includes('🔥 Por: R$ 1.500,00'), 'Deve conter Por:');
+  console.assert(msgA.includes('~De: R$ 2.000,00~'), 'Deve conter De: com strikethrough');
+  console.assert(msgA.includes('\n\n~De: R$ 2.000,00~'), 'Deve conter linha em branco após título');
+  console.assert(msgA.includes('🔥 *Por: R$ 1.500,00*'), 'Deve conter Por: em negrito');
   console.assert(!msgA.includes('NO PIX'), 'Não deve conter NO PIX');
   console.assert(!msgA.includes('sem juros'), 'Não deve conter sem juros');
 
@@ -136,7 +136,8 @@ async function runTests() {
   });
   console.log(msgH);
   console.assert(msgH.includes('Kit 10PÇS Toalhas de Salão de Beleza 100%ALGODÃO'), 'Deve normalizar título CAIXA ALTA');
-  console.assert(msgH.includes('\n\nDe: R$ 58,50'), 'Deve conter linha em branco após título normalizado');
+  console.assert(msgH.includes('\n\n~De: R$ 58,50~'), 'Deve conter linha em branco após título normalizado');
+  console.assert(msgH.includes('🔥 *Por: R$ 51,99*'), 'Deve conter Por: em negrito');
 
   console.log('\n--- [PRODUCT-MESSAGE-FORMATTER-TEST] CONCLUÍDO ---');
 }
