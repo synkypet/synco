@@ -113,9 +113,9 @@ export function buildSmartContext(data: FactualData, sourceName?: string): Smart
     // O smart_price_block é o "coração" do formatador
     const fullMsg = formatShopeeProductMessage(data, data.source_text || undefined);
     
-    // Se o formatador retornou um erro (começa com ⚠️), o smart_price_block deve ser vazio ou o próprio erro
-    if (fullMsg.startsWith('⚠️')) {
-      smartPriceBlock = fullMsg;
+    // Se o formatador retornou um erro, o smart_price_block deve ser o marcador técnico
+    if (fullMsg.includes('[PRODUCT_PRICE_UNAVAILABLE]')) {
+      smartPriceBlock = '[PRODUCT_PRICE_UNAVAILABLE]';
     } else {
       // Tentar extrair apenas o miolo de preço
       const lines = fullMsg.split('\n');
@@ -176,6 +176,15 @@ export function renderSmartTemplate(template: string, context: SmartTemplateCont
   if (!template) return '';
 
   let result = template;
+
+  // 1. Verificação Crítica: Se for um template de produto, o smart_price_block é OBRIGATÓRIO
+  // Se o contexto indica que o preço está indisponível, retornamos vazio para evitar oferta parcial.
+  if (context.smart_price_block === '[PRODUCT_PRICE_UNAVAILABLE]' || !context.smart_price_block) {
+    // Se o template contém smart_price_block, ele é considerado um template de produto.
+    if (template.includes('{{smart_price_block}}')) {
+      return '';
+    }
+  }
 
   // 1. Mapeamento de variáveis novas (Smart)
   const smartMappings: Record<string, string> = {

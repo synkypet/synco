@@ -278,9 +278,28 @@ export const campaignService = {
 
         // --- TRAVA DE SEGURANÇA DE CONTEÚDO (FASE 2I.2) ---
         // Bloqueio de padrões de erro comuns que indicam falha na captura de metadados
-        const invalidPatterns = [/preço sob consulta/i, /r\$ nan/i, /undefined/i, /"null"/i, /🔥 \*Por: \*/i];
-        const isInvalidContent = invalidPatterns.some(p => p.test(messageBody || ''));
+        const invalidPatterns = [
+          /ITEM INVÁLIDO/i, 
+          /Preço Shopee indisponível/i, 
+          /\[PRODUCT_PRICE_UNAVAILABLE\]/i,
+          /preço sob consulta/i, 
+          /r\$ nan/i, 
+          /undefined/i, 
+          /"null"/i, 
+          /🔥 \*Por: \*/i
+        ];
         
+        let isInvalidContent = invalidPatterns.some(p => p.test(messageBody || ''));
+        
+        // Bloqueio Adicional: Produto Shopee deve conter preço numérico válido no bloco "Por"
+        if (!isInvalidContent && item.canonical_url?.includes('shopee.com.br') && !isCoupon && originalItem?.offer_type !== 'promo_landing') {
+          const hasNumericPrice = /Por: R\$ \d+(?:[.,]\d+)?/i.test(messageBody || '');
+          if (!hasNumericPrice) {
+            console.warn(`[CAMPAIGN-SERVICE] [HARD-LOCK] Bloqueio: Produto Shopee sem preço numérico no corpo para item ${item.id}`);
+            isInvalidContent = true;
+          }
+        }
+
         if (isInvalidContent) {
           console.warn(`[CAMPAIGN-SERVICE] [HARD-LOCK] Bloqueio de conteúdo inválido para item ${item.id}. Conteúdo: "${messageBody?.substring(0, 50)}..."`);
           return; // Skip this destination for this item

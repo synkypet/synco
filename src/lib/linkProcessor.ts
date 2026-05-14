@@ -467,6 +467,16 @@ export function buildProductSnapshot(opts: {
     messageText = opts.templatedMessage || buildMessageFromSnapshot(factual);
   }
 
+  // Se a mensagem gerada for vazia ou contiver o marcador de erro, garantimos que o item seja marcado como ineligível
+  if (!messageText || messageText.includes('[PRODUCT_PRICE_UNAVAILABLE]') || messageText.includes('ITEM INVÁLIDO')) {
+    factual.eligibility.isEligible = false;
+    if (!factual.eligibility.reasons.includes('product_price_unavailable')) {
+      factual.eligibility.reasons.push('product_price_unavailable');
+    }
+    factual.eligibility.status = 'ineligible';
+    messageText = ''; // Limpa para evitar envio de lixo
+  }
+
 
   return {
     id,
@@ -562,7 +572,13 @@ export async function processLinks(
           marketplace: marketplace,
           eligibility: { offer_type: classification.type },
           title: metadata.name,
-          finalLinkToSend: preResult?.generated_affiliate_url || targetUrl
+          price: price,
+          originalPrice: metadata?.originalPrice,
+          discountPercent: metadata?.discountPercent,
+          currentPriceFactual: metadata?.currentPriceFactual,
+          currentPriceSource: metadata?.currentPriceSource,
+          finalLinkToSend: preResult?.generated_affiliate_url || targetUrl,
+          source_text: sourceText
         };
         const { content, isSystem } = await resolveAndRenderTemplate(supabase, partialFactual, userId);
         templatedMessage = content;

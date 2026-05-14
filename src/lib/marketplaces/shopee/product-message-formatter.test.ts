@@ -181,7 +181,7 @@ async function runTests() {
     currentPriceSource: 'unavailable'
   });
   console.log(msgL);
-  console.assert(msgL.includes('⚠️ ITEM INVÁLIDO'), 'Deve conter aviso de item inválido');
+  console.assert(msgL.includes('[PRODUCT_PRICE_UNAVAILABLE]'), 'Deve conter marcador de erro técnico');
   console.assert(!msgL.includes('🔥 *Por:'), 'Não deve conter linha Por:');
 
   // --- CENÁRIO M: Produto com preço Zero (Bloqueio) ---
@@ -192,7 +192,7 @@ async function runTests() {
     currentPriceSource: 'api.priceMin'
   });
   console.log(msgM);
-  console.assert(msgM.includes('⚠️ ITEM INVÁLIDO'), 'Deve conter aviso de item inválido');
+  console.assert(msgM.includes('[PRODUCT_PRICE_UNAVAILABLE]'), 'Deve conter marcador de erro técnico');
 
   // --- CENÁRIO N: Produto com preço NaN (Bloqueio) ---
   console.log('\n[CENÁRIO N] Produto com preço NaN (Bloqueio)');
@@ -202,7 +202,7 @@ async function runTests() {
     currentPriceSource: 'api.priceMin'
   });
   console.log(msgN);
-  console.assert(msgN.includes('⚠️ ITEM INVÁLIDO'), 'Deve conter aviso de item inválido');
+  console.assert(msgN.includes('[PRODUCT_PRICE_UNAVAILABLE]'), 'Deve conter marcador de erro técnico');
 
   console.log('\n--- [PRODUCT-MESSAGE-FORMATTER-TEST] CONCLUÍDO ---');
 }

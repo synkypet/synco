@@ -46,7 +46,7 @@ export function formatShopeeProductMessage(factual: FactualData, rawText?: strin
     lines.push(`🔥 *Por: ${format(insight.currentPrice.value)}*`);
   } else {
     // FASE 2I.2: Bloqueio de envio sem preço.
-    return `⚠️ ITEM INVÁLIDO: Preço Shopee indisponível para ${factual.title || 'este produto'}.`;
+    return '[PRODUCT_PRICE_UNAVAILABLE]';
   }
 
 
