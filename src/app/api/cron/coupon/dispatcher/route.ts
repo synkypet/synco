@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { shopeeCouponDispatcher } from '@/services/shopee-coupon-dispatcher';
+import { capturedCouponDispatcher } from '@/services/captured-coupon-dispatcher';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,13 +21,29 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Dispatch
     const supabase = createAdminClient();
-    const result = await shopeeCouponDispatcher.executeDispatch(supabase, { requestId: rid });
+
+    // 2. Dispatch - Fluxo A: Campanhas Oficiais
+    console.log(`[CRON-COUPON] [${rid}] Processando campanhas oficiais Shopee...`);
+    const officialResult = await shopeeCouponDispatcher.executeDispatch(supabase, { requestId: rid });
+
+    // 3. Dispatch - Fluxo B: Cupons Capturados
+    console.log(`[CRON-COUPON] [${rid}] Processando cupons capturados Shopee...`);
+    const capturedResult = await capturedCouponDispatcher.executeDispatch(supabase, { requestId: rid });
 
     return NextResponse.json({
       status: 'SUCCESS',
-      jobsCreated: result.jobsCreated,
+      official: {
+        sourcesProcessed: officialResult.sourcesProcessed,
+        jobsCreated: officialResult.jobsCreated
+      },
+      captured: {
+        sourcesProcessed: capturedResult.sourcesProcessed,
+        couponsProcessed: capturedResult.couponsProcessed,
+        jobsCreated: capturedResult.jobsCreated,
+        skippedByDedupe: capturedResult.skippedByDedupe
+      },
+      totalJobsCreated: officialResult.jobsCreated + capturedResult.jobsCreated,
       requestId: rid,
       timestamp: new Date().toISOString()
     });

@@ -9,6 +9,9 @@ import { buildSmartContext, renderSmartTemplate, DEFAULT_TEMPLATES } from '@/lib
 
 export interface CapturedCouponDispatchResult {
   jobsCreated: number;
+  sourcesProcessed: number;
+  couponsProcessed: number;
+  skippedByDedupe: number;
 }
 
 export const capturedCouponDispatcher = {
@@ -44,10 +47,19 @@ export const capturedCouponDispatcher = {
 
     if (!sources || sources.length === 0) {
       console.log(`${logPrefix} Nenhuma automação de cupons capturados ativa encontrada.`);
-      return { jobsCreated: 0 };
+      return { 
+        jobsCreated: 0, 
+        sourcesProcessed: 0,
+        couponsProcessed: 0,
+        skippedByDedupe: 0
+      };
     }
 
+    console.log(`${logPrefix} Automações ativas encontradas: ${sources.length}`);
+
     let totalCreated = 0;
+    let totalCouponsProcessed = 0;
+    let totalSkippedByDedupe = 0;
     const userAccessCache = new Map<string, any>();
     const userConnectionsCache = new Map<string, any[]>();
     const shopeeAdapter = new ShopeeAdapter();
@@ -57,6 +69,8 @@ export const capturedCouponDispatcher = {
       const sourceLogPrefix = `${logPrefix} ${userTag}`;
 
       const routes = (source.automation_routes || []).filter((r: any) => r.is_active);
+      console.log(`${sourceLogPrefix} [SOURCE:${source.id}] Processando ${routes.length} rotas ativas.`);
+      
       if (routes.length === 0) continue;
 
       // --- 1. BILLING & ACCESS ---
@@ -96,6 +110,8 @@ export const capturedCouponDispatcher = {
         console.log(`${sourceLogPrefix} Nenhum cupom capturado recente encontrado.`);
         continue;
       }
+      
+      console.log(`${sourceLogPrefix} Encontrados ${capturedCoupons.length} cupons candidatos.`);
 
       const config = source.config || {};
       const batchLimit = config.batchLimit || 5;
@@ -116,7 +132,12 @@ export const capturedCouponDispatcher = {
             supabase
           );
 
-          if (isDuplicate) continue;
+          if (isDuplicate) {
+            totalSkippedByDedupe++;
+            continue;
+          }
+          
+          totalCouponsProcessed++;
 
           // --- 5. RE-AFFILIATION & VALIDATION ---
           try {
@@ -235,7 +256,13 @@ export const capturedCouponDispatcher = {
       await triggerWorker({ requestId: rid });
     }
 
-    console.log(`${logPrefix} Ciclo finalizado. Total de campanhas de cupons capturados criadas: ${totalCreated}`);
-    return { jobsCreated: totalCreated };
+    console.log(`${logPrefix} Ciclo finalizado. Total de campanhas criadas: ${totalCreated} | Processados: ${totalCouponsProcessed} | Dedupe: ${totalSkippedByDedupe}`);
+    
+    return { 
+      jobsCreated: totalCreated,
+      sourcesProcessed: sources.length,
+      couponsProcessed: totalCouponsProcessed,
+      skippedByDedupe: totalSkippedByDedupe
+    };
   }
 };

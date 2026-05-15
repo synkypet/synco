@@ -10,20 +10,21 @@ import { resolveUserAccess } from '@/services/supabase/access-service';
 
 export interface CouponDispatchResult {
   jobsCreated: number;
+  sourcesProcessed: number;
 }
 
 export const shopeeCouponDispatcher = {
   /**
-   * Distribui cupons e campanhas ativas da Shopee para os grupos configurados.
+   * Distribui cupons e campanhas ativas da Shopee para os grupos configurados (Campanhas Oficiais).
    */
   async executeDispatch(
     supabase: SupabaseClient,
     options: { requestId?: string } = {}
   ): Promise<CouponDispatchResult> {
     const rid = options.requestId || Math.random().toString(36).substring(7);
-    const logPrefix = `[COUPON-DISPATCHER] [${rid}]`;
+    const logPrefix = `[OFFICIAL-COUPON-DISPATCHER] [${rid}]`;
 
-    console.log(`${logPrefix} Iniciando ciclo de despacho de cupons...`);
+    console.log(`${logPrefix} Iniciando ciclo de despacho de campanhas oficiais...`);
 
     // 1. Buscar todas as fontes de Cupom ativas
     const { data: sources } = await supabase
@@ -42,8 +43,8 @@ export const shopeeCouponDispatcher = {
       .eq('is_active', true);
 
     if (!sources || sources.length === 0) {
-      console.log(`${logPrefix} Nenhuma automação de cupons ativa encontrada.`);
-      return { jobsCreated: 0 };
+      console.log(`${logPrefix} Nenhuma automação de campanhas oficiais ativa encontrada.`);
+      return { jobsCreated: 0, sourcesProcessed: 0 };
     }
 
     let totalCreated = 0;
@@ -199,8 +200,11 @@ export const shopeeCouponDispatcher = {
       await triggerWorker({ requestId: rid });
     }
 
-    console.log(`${logPrefix} Ciclo finalizado. Total de jobs criados: ${totalCreated}`);
-    return { jobsCreated: totalCreated };
+    console.log(`${logPrefix} Ciclo finalizado. Total de campanhas oficiais criadas: ${totalCreated}`);
+    return { 
+      jobsCreated: totalCreated,
+      sourcesProcessed: sources.length
+    };
   },
 
   generateHash(input: string) {

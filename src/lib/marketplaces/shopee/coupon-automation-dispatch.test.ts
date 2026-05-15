@@ -13,11 +13,15 @@ async function runTests() {
     from: jestMockFrom
   } as any;
 
-  // Helpers para Mocks manuais (já que não estamos usando Jest runner)
+  let currentFilters: Record<string, any> = {};
   function jestMockFrom(table: string) {
+    currentFilters = {};
     const chain: any = {
       select: () => chain,
-      eq: () => chain,
+      eq: (col: string, val: any) => {
+        currentFilters[col] = val;
+        return chain;
+      },
       in: () => chain,
       gte: () => chain,
       order: () => chain,
@@ -31,7 +35,13 @@ async function runTests() {
 
   let mockData: any = {};
   function getMockData(table: string, single = false) {
-    const data = mockData[table] || [];
+    let data = mockData[table] || [];
+    
+    // Filtro básico para o teste
+    if (table === 'automation_sources' && currentFilters.source_type) {
+      data = data.filter((d: any) => d.source_type === currentFilters.source_type);
+    }
+    
     return single ? data[0] : data;
   }
 
@@ -84,11 +94,11 @@ async function runTests() {
     });
 
     const resA = await capturedCouponDispatcher.executeDispatch(mockSupabase);
-    if (resA.jobsCreated === 1) {
+    if (resA.jobsCreated === 1 && resA.sourcesProcessed === 1) {
       console.log('  [PASS]');
       passed++;
     } else {
-      console.error('  [FAIL] Deveria ter criado 1 job');
+      console.error('  [FAIL] Deveria ter criado 1 job e processado 1 source');
       failed++;
     }
 
@@ -96,13 +106,27 @@ async function runTests() {
     console.log('Cenário B: Mesmo cupom para mesmo destino');
     automationService.checkCouponDispatch = async () => true;
     const resB = await capturedCouponDispatcher.executeDispatch(mockSupabase);
-    if (resB.jobsCreated === 0) {
+    if (resB.jobsCreated === 0 && resB.skippedByDedupe === 1) {
       console.log('  [PASS]');
       passed++;
     } else {
-      console.error('  [FAIL] Não deveria reenviar');
+      console.error('  [FAIL] Não deveria reenviar (Dedupe falhou)');
       failed++;
     }
+
+    // --- CENÁRIO C: Rota Inativa ---
+    console.log('Cenário C: Rota inativa');
+    automationService.checkCouponDispatch = async () => false;
+    mockData.automation_sources[0].automation_routes[0].is_active = false;
+    const resC = await capturedCouponDispatcher.executeDispatch(mockSupabase);
+    if (resC.jobsCreated === 0 && resC.sourcesProcessed === 1) {
+      console.log('  [PASS]');
+      passed++;
+    } else {
+      console.error('  [FAIL] Rota inativa não deveria ser processada');
+      failed++;
+    }
+    mockData.automation_sources[0].automation_routes[0].is_active = true;
 
     // --- CENÁRIO D: Cupom sem código e sem link ---
     console.log('Cenário D: Cupom sem código e sem link');
@@ -115,6 +139,18 @@ async function runTests() {
       passed++;
     } else {
       console.error('  [FAIL] Deveria bloquear cupom vazio');
+      failed++;
+    }
+
+    // --- CENÁRIO E: Tipo de fonte errado (coupon_shopee não deve ser processado aqui) ---
+    console.log('Cenário E: Tipo de fonte oficial (não capturado)');
+    mockData.automation_sources[0].source_type = 'coupon_shopee';
+    const resE = await capturedCouponDispatcher.executeDispatch(mockSupabase);
+    if (resE.jobsCreated === 0 && resE.sourcesProcessed === 0) {
+      console.log('  [PASS]');
+      passed++;
+    } else {
+      console.error('  [FAIL] Captured dispatcher não deve processar coupon_shopee');
       failed++;
     }
 
