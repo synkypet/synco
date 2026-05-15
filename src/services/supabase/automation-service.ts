@@ -701,22 +701,45 @@ export const automationService = {
   async syncRulesFromCandidates(sourceId: string, routeId: string, userId: string, client?: SupabaseClient) {
     const supabase = client || createClient();
 
+    // 0. Verificar o tipo da fonte para decidir a estratégia de busca
+    const { data: source } = await supabase
+      .from('automation_sources')
+      .select('source_type')
+      .eq('id', sourceId)
+      .single();
+
+    const isGlobalAggregator = source?.source_type === 'captured_coupons_shopee';
+
     // 1. Buscar candidatos recentes para esta fonte (discovered_coupons)
-    const { data: candidates, error: candError } = await supabase
+    let couponQuery = supabase
       .from('discovered_coupons')
       .select('id')
-      .eq('source_id', sourceId)
       .limit(100);
 
+    if (isGlobalAggregator) {
+      // Para agregadores globais, buscamos tudo do usuário para Shopee
+      couponQuery = couponQuery.eq('user_id', userId).eq('marketplace', 'shopee');
+    } else {
+      // Para fontes específicas (Radar, etc), filtramos pela fonte
+      couponQuery = couponQuery.eq('source_id', sourceId);
+    }
+
+    const { data: candidates, error: candError } = await couponQuery;
     if (candError) throw candError;
 
     // 2. Buscar candidatos de promo pages
-    const { data: promoCandidates, error: promoError } = await supabase
+    let promoQuery = supabase
       .from('discovered_promo_pages')
       .select('id')
-      .eq('source_id', sourceId)
       .limit(100);
 
+    if (isGlobalAggregator) {
+      promoQuery = promoQuery.eq('user_id', userId).eq('marketplace', 'shopee');
+    } else {
+      promoQuery = promoQuery.eq('source_id', sourceId);
+    }
+
+    const { data: promoCandidates, error: promoError } = await promoQuery;
     if (promoError) throw promoError;
 
     // 3. Upsert Seguro: Criar rules apenas se não existirem
