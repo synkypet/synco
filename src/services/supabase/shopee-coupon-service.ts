@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/client';
 import { ShopeeCoupon } from '@/types/shopee-coupon';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ShopeeAdapter } from '@/lib/marketplaces/ShopeeAdapter';
+import { classifyShopeeContentForCoupon } from '@/lib/marketplaces/shopee/coupon-classifier';
 
 export const shopeeCouponService = {
   /**
@@ -60,57 +61,46 @@ export const shopeeCouponService = {
     console.log(`[SHOPEE-COUPON-SERVICE] Persistindo cupom candidate: ${dedupeKey}`);
 
     try {
-      // --- VALIDAÇÃO FACTUAL (FASE 2B.1) ---
+      // --- VALIDAÇÃO FACTUAL (RADAR-FACTUAL-V3) ---
       let validationStatus = 'candidate';
       let isVerified = false;
       let resolvedUrl = coupon.redemptionUrl;
 
-      // 1. Se tem código, já é um forte candidato
-      if (coupon.type === 'codigo' && coupon.code) {
-        validationStatus = 'verified';
-        isVerified = true;
-      }
-
-      // 2. Resolver Link se necessário
+      // 1. Resolver Link se necessário para auditoria factual precisa
       if (coupon.redemptionUrl && (coupon.redemptionUrl.includes('s.shopee') || coupon.redemptionUrl.includes('shp.ee'))) {
         try {
           const adapter = new ShopeeAdapter();
           const resolution = await adapter.preProcessIncomingLink(coupon.redemptionUrl);
-          
           if (resolution.canonical_url) {
             resolvedUrl = resolution.canonical_url;
-            const lowerCanonical = resolvedUrl.toLowerCase();
-            
-            // Se o canônico tem shopId e itemId, é um PRODUTO, não um cupom puro
-            const isProduct = lowerCanonical.includes('/product/') || /-i\.\d+\.\d+/.test(lowerCanonical);
-            
-            if (isProduct) {
-              validationStatus = 'product_link';
-              isVerified = false;
-              console.log(`[SHOPEE-COUPON-SERVICE] Link ${coupon.redemptionUrl} resolvido como PRODUTO: ${resolvedUrl}. Rejeitando como cupom.`);
-            } else {
-              // Se não é produto, mas é Shopee, verificamos se é uma landing page conhecida
-              const isCouponPage = lowerCanonical.includes('/m/') || lowerCanonical.includes('cupom') || lowerCanonical.includes('/user/voucher');
-              if (isCouponPage) {
-                validationStatus = 'verified';
-                isVerified = true;
-              }
-            }
           }
         } catch (err) {
           console.error('[SHOPEE-COUPON-SERVICE] Erro ao resolver link para validação:', err);
         }
-      } else if (coupon.redemptionUrl) {
-        // Link longo: validação direta por regex
-        const lowerUrl = coupon.redemptionUrl.toLowerCase();
-        const isProduct = lowerUrl.includes('/product/') || /-i\.\d+\.\d+/.test(lowerUrl);
-        if (isProduct) {
-          validationStatus = 'product_link';
-          isVerified = false;
-        } else if (lowerUrl.includes('/m/') || lowerUrl.includes('cupom')) {
-          validationStatus = 'verified';
-          isVerified = true;
-        }
+      }
+
+      // 2. Classificação Rígida
+      const classificationResult = classifyShopeeContentForCoupon(metadata.rawText || '', {
+        title: coupon.couponLabel || undefined,
+        canonical_url: (resolvedUrl || coupon.redemptionUrl) || undefined
+      });
+
+      if (classificationResult.classification === 'verified_coupon') {
+        validationStatus = 'verified';
+        isVerified = true;
+      } else if (classificationResult.classification === 'product_offer' || classificationResult.classification === 'product_with_coupon') {
+        validationStatus = 'product_link';
+        isVerified = false;
+        console.log(`[SHOPEE-COUPON-SERVICE] Classificado como PRODUTO/MISTO (${classificationResult.classification}). Rejeitando como cupom puro.`);
+      } else if (classificationResult.classification === 'promo_landing') {
+        validationStatus = 'candidate';
+        isVerified = false;
+      } else if (classificationResult.classification === 'rejected') {
+        validationStatus = 'rejected';
+        isVerified = false;
+      } else {
+        validationStatus = 'candidate';
+        isVerified = false;
       }
 
       const payload = {

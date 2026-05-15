@@ -4,6 +4,7 @@ import { shopeeCouponService } from '@/services/supabase/shopee-coupon-service';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { marketplaceService } from '@/services/supabase/marketplace-service';
 import { ShopeeAdapter } from '@/lib/marketplaces/ShopeeAdapter';
+import { classifyShopeeContentForCoupon } from '@/lib/marketplaces/shopee/coupon-classifier';
 
 /**
  * GET /api/shopee/discovered-coupons
@@ -111,11 +112,27 @@ export async function GET(request: Request) {
       }
     }));
 
-    // 6. Retornar resposta formatada
+    // 6. Filtragem Rígida (Fase 2H.1B - Live Classification)
+    // Mesmo antes da migration, garantimos que produtos não apareçam na listagem de cupons.
+    const strictCoupons = enrichedCoupons.filter(coupon => {
+       // Se já foi classificado pelo banco (após migration) e for verified, mantemos.
+       // Caso contrário, classificamos em tempo real.
+       if (coupon.validation_status === 'verified' && coupon.is_verified_coupon === true) return true;
+       if (coupon.validation_status === 'product_link' || coupon.validation_status === 'rejected') return false;
+
+       const classification = classifyShopeeContentForCoupon(coupon.raw_text || '', {
+         title: coupon.coupon_label || undefined,
+         canonical_url: coupon.redemption_url || undefined
+       });
+       
+       return classification.classification === 'verified_coupon';
+    });
+
+    // 7. Retornar resposta formatada
     return NextResponse.json({
       status: 'SUCCESS',
-      count: enrichedCoupons.length,
-      data: enrichedCoupons
+      count: strictCoupons.length,
+      data: strictCoupons
     });
 
   } catch (error: any) {

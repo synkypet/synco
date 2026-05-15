@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { AutomationSource, AutomationRoute } from '@/types/automation';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { classifyShopeeContentForCoupon } from '@/lib/marketplaces/shopee/coupon-classifier';
 
 const generateHash = (input: string) => {
   let hash = 0;
@@ -733,10 +734,10 @@ export const automationService = {
 
     // --- COMPATIBILIDADE (OPÇÃO A) ---
     if (candError && candError.code === '42703') {
-      console.warn('[AUTOMATION-SERVICE] Coluna is_verified_coupon ausente. Fallback para busca sem filtro de verificação.');
+      console.warn('[AUTOMATION-SERVICE] Coluna is_verified_coupon ausente. Fallback para busca com classificação factual live.');
       let fallbackQuery = supabase
         .from('discovered_coupons')
-        .select('id')
+        .select('id, raw_text, coupon_label, redemption_url')
         .limit(100);
 
       if (isGlobalAggregator) {
@@ -747,7 +748,15 @@ export const automationService = {
       
       const { data: fallbackData, error: fallbackError } = await fallbackQuery;
       if (fallbackError) throw fallbackError;
-      candidates = fallbackData;
+      
+      // Aplicar classificação factual live no fallback
+      candidates = (fallbackData || []).filter(c => {
+        const classification = classifyShopeeContentForCoupon(c.raw_text || '', {
+          title: c.coupon_label || undefined,
+          canonical_url: c.redemption_url || undefined
+        });
+        return classification.classification === 'verified_coupon';
+      }).map(c => ({ id: c.id }));
     } else if (candError) {
       throw candError;
     }

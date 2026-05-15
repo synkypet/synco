@@ -9,6 +9,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { extractShopeeCoupons } from './marketplaces/shopee/coupon-extractor';
 import { ShopeeCoupon } from '@/types/shopee-coupon';
 import { formatShopeeCouponMessage } from './marketplaces/shopee/coupon-formatter';
+import { classifyShopeeContentForCoupon } from './marketplaces/shopee/coupon-classifier';
 import { buildSmartContext, renderSmartTemplate, DEFAULT_TEMPLATES, resolveAndRenderTemplate } from './templates/universal-template-engine';
 
 export type Marketplace = 'Shopee' | 'Amazon' | 'Mercado Livre' | 'Magalu' | 'Unknown';
@@ -147,56 +148,42 @@ export function classifyOffer(text: string, factual: Partial<FactualData>): { ty
   const content = (text + ' ' + (factual.title || '')).toLowerCase();
   const reasons: string[] = [];
 
-  // 1. Uso do novo extrator Shopee (Fase 2B)
-  // Analisamos o texto original E a URL canônica (caso já tenha sido resolvida)
-  const shopeeCoupons = extractShopeeCoupons(text);
-  
-  // Refinamento: Se não extraiu do texto mas a URL canônica é claramente um cupom/promo
-  if (shopeeCoupons.length === 0 && factual.canonical_url && factual.canonical_url.startsWith('http')) {
-    const lowerUrl = factual.canonical_url.toLowerCase();
-    const isCentral = lowerUrl.includes('/m/cupom-de-desconto') || lowerUrl.includes('cupom');
+  // 1. Uso do novo classificador unificado (Fase 2H)
+  const shopeeClassification = classifyShopeeContentForCoupon(text, {
+    title: factual.title,
+    canonical_url: factual.canonical_url
+  });
+
+  if (shopeeClassification.classification === 'verified_coupon' || 
+      shopeeClassification.classification === 'product_with_coupon' ||
+      shopeeClassification.classification === 'promo_landing') {
     
-    if (isCentral) {
-      shopeeCoupons.push({
-        marketplace: 'shopee',
-        type: 'pagina_cupons',
-        code: null,
-        couponLabel: 'Cupom de Desconto Shopee',
-        redemptionUrl: factual.canonical_url,
-        confidence: 0.80,
-        status: 'candidate',
-        dedupeKey: `shopee:coupon:url:${factual.canonical_url}`
-      });
-    }
-  }
+    const type: OfferType = shopeeClassification.classification === 'verified_coupon' 
+      ? 'coupon_offer' 
+      : shopeeClassification.classification === 'product_with_coupon' 
+        ? 'product_with_coupon' 
+        : 'promo_landing';
 
-  if (shopeeCoupons.length > 0) {
-    const isCurrentLinkARedemptionUrl = shopeeCoupons.some(c => c.redemptionUrl && (factual.originalUrl === c.redemptionUrl || factual.originalUrl?.includes(c.redemptionUrl) || factual.canonical_url === c.redemptionUrl));
-    const hasProductData = !!(factual.title && factual.price && factual.price > 0 && !factual.title.toLowerCase().includes('sem título') && !factual.title.toLowerCase().includes('produto shopee'));
-
-    let type: OfferType = 'product_offer';
+    // Recuperar cupons para metadados
+    const shopeeCoupons = extractShopeeCoupons(text);
     
-    // Ajustar título factual para cupons (evitar slugs técnicos em logs/preview)
-    const isLanding = shopeeCoupons.some(c => c.type === 'pagina_cupons');
-    if (isLanding && (!factual.title || factual.title.includes('M/') || factual.title.includes('Produto Shopee'))) {
-      factual.title = 'Cupons Shopee Liberados';
-    } else if (shopeeCoupons.some(c => c.type === 'codigo') && !hasProductData) {
-      factual.title = `Cupom: ${shopeeCoupons.find(c => c.type === 'codigo')?.code}`;
+    // Ajustar título factual se necessário
+    if (type === 'coupon_offer' && (!factual.title || factual.title.includes('M/') || factual.title.includes('Produto Shopee'))) {
+      if (shopeeCoupons.length > 0 && shopeeCoupons[0].code) {
+        factual.title = `Cupom: ${shopeeCoupons[0].code}`;
+      } else {
+        factual.title = 'Cupons Shopee Liberados';
+      }
+    } else if (type === 'promo_landing' && (!factual.title || !factual.title.includes('Super Ofertas'))) {
+      factual.title = 'Acesso VIP Shopee: Super Ofertas';
+      factual.landing_type = 'super_ofertas';
     }
 
-    if (isCurrentLinkARedemptionUrl) {
-      type = hasProductData ? 'product_with_coupon' : 'coupon_offer';
-      reasons.push(`Link atual identificado como resgate de cupom`);
-    } else if (shopeeCoupons.some(c => c.type === 'codigo')) {
-      type = hasProductData ? 'product_with_coupon' : 'coupon_offer';
-      reasons.push(`Código de cupom detectado no texto da mensagem`);
-    } else {
-      // Se detectou qualquer cupom e não é um produto forte, tratamos como oferta de cupom
-      type = hasProductData ? 'product_with_coupon' : 'coupon_offer';
-      reasons.push(`Cupom detectado no conteúdo`);
-    }
-
-    return { type, reasons, coupons: shopeeCoupons };
+    return { 
+      type, 
+      reasons: shopeeClassification.reasons, 
+      coupons: shopeeCoupons 
+    };
   }
 
   // 1.1 Detecção de Landing Pages (Fase 2F.1)
