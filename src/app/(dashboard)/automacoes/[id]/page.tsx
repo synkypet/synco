@@ -176,23 +176,25 @@ export default function AutomationDetailPage() {
         onBack={() => router.push('/automacoes')} 
       />
 
-      {/* BLOCO 1: CENTRO DE COMANDO (NICHOS, RITMO E CURADORIA) */}
-      <OriginBlock
-        source={source}
-        allGroups={allGroups || []}
-        targetNames={targetNames}
-        onAddDestination={() => setIsAddRouteOpen(true)}
-        onDeleteDestination={(routeId) => deleteRoute.mutate({ id: routeId, sourceId: id })}
-        onUpdate={(updates) => {
-          // Se houver updates de automation_routes, usamos a mutation de rota
-          if (updates.automation_routes && updates.automation_routes[0]) {
-            const r = updates.automation_routes[0];
-            upsertRoute.mutate({ ...r, source_id: id });
-          } else {
-            updateSource.mutate({ id, updates });
-          }
-        }}
-      />
+      {/* BLOCO 1: CENTRO DE COMANDO (NICHOS, RITMO E CURADORIA) - OCULTO PARA CUPONS CAPTURADOS */}
+      {source.source_type !== 'captured_coupons_shopee' && (
+        <OriginBlock
+          source={source}
+          allGroups={allGroups || []}
+          targetNames={targetNames}
+          onAddDestination={() => setIsAddRouteOpen(true)}
+          onDeleteDestination={(routeId) => deleteRoute.mutate({ id: routeId, sourceId: id })}
+          onUpdate={(updates) => {
+            // Se houver updates de automation_routes, usamos a mutation de rota
+            if (updates.automation_routes && updates.automation_routes[0]) {
+              const r = updates.automation_routes[0];
+              upsertRoute.mutate({ ...r, source_id: id });
+            } else {
+              updateSource.mutate({ id, updates });
+            }
+          }}
+        />
+      )}
 
       {/* BLOCO ESPECIAL: GESTÃO DE CUPONS (Apenas para captured_coupons_shopee) */}
       {source.source_type === 'captured_coupons_shopee' && routes && routes.length > 0 && (
