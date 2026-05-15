@@ -58,7 +58,7 @@ export function formatShopeeProductMessage(factual: FactualData, rawText?: strin
   lines.push('');
 
   // 6. Link Principal
-  lines.push('📦 Compre aqui:');
+  lines.push('🛒 Garanta aqui:');
   lines.push(factual.finalLinkToSend);
 
   // 7. Bloco de Cupom (Instruções)

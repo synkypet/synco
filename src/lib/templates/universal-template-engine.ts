@@ -42,7 +42,7 @@ export const DEFAULT_TEMPLATES = {
 
 {{smart_price_block}}
 
-📦 Compre aqui:
+🛒 Garanta aqui:
 {{affiliate_link}}
 
 {{disclaimer}}`,
@@ -51,7 +51,7 @@ export const DEFAULT_TEMPLATES = {
 
 {{smart_price_block}}
 
-📦 Compre aqui:
+🛒 Garanta aqui:
 {{affiliate_link}}
 
 {{coupon_block}}
@@ -122,7 +122,7 @@ export function buildSmartContext(data: FactualData, sourceName?: string): Smart
     } else {
       // Tentar extrair apenas o miolo de preço
       const lines = fullMsg.split('\n');
-      const linkIndex = lines.findIndex(l => l.includes('📦 Compre aqui'));
+      const linkIndex = lines.findIndex(l => l.includes('🛒 Garanta aqui'));
       if (linkIndex > 2) {
         smartPriceBlock = lines.slice(2, linkIndex).join('\n').trim();
       }
@@ -232,7 +232,7 @@ export function renderSmartTemplate(template: string, context: SmartTemplateCont
   // Remove linhas inteiras que contenham apenas um label e um placeholder vazio
   // Ex: "📦 Compre aqui: " -> ""
   // NOTA: Removemos 🎟️ e 🔗 desta lista para permitir labels multilinhas (cabeçalho em uma linha, valor na outra)
-  const orphanLines = /^(?:💸|📦|🛍️|⚡).*:\s*$/gm;
+  const orphanLines = /^(?:💸|📦|🛍️|⚡|🛒).*:\s*$/gm;
   result = result.replace(orphanLines, '');
 
   result = result.replace(/\{\{[a-z0-9_]+\}\}/gi, '');
