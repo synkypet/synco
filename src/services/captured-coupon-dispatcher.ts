@@ -5,13 +5,15 @@ import { ShopeeAdapter } from '@/lib/marketplaces/ShopeeAdapter';
 import { campaignService } from '@/services/supabase/campaign-service';
 import { triggerWorker } from '@/lib/worker/trigger';
 import { resolveUserAccess } from '@/services/supabase/access-service';
-import { buildSmartContext, renderSmartTemplate, DEFAULT_TEMPLATES } from '@/lib/templates/universal-template-engine';
+import { renderSmartTemplate, DEFAULT_TEMPLATES } from '@/lib/templates/universal-template-engine';
+import { normalizeShopeeCouponForMessage } from '@/lib/marketplaces/shopee/coupon-extractor';
 
 export interface CapturedCouponDispatchResult {
   jobsCreated: number;
   sourcesProcessed: number;
   couponsProcessed: number;
   skippedByDedupe: number;
+  skippedByGlobalTargetDedupe: number;
 }
 
 export const capturedCouponDispatcher = {
@@ -28,7 +30,7 @@ export const capturedCouponDispatcher = {
     console.log(`${logPrefix} Iniciando ciclo de despacho de cupons capturados...`);
 
     // 1. Buscar todas as fontes de "Cupons Capturados" ativas
-    const { data: sources } = await supabase
+    const { data: sources, error: sourcesError } = await supabase
       .from('automation_sources')
       .select(`
         *,
@@ -45,13 +47,19 @@ export const capturedCouponDispatcher = {
       .eq('source_type', 'captured_coupons_shopee')
       .eq('is_active', true);
 
+    if (sourcesError) {
+      console.error(`${logPrefix} Erro ao buscar fontes:`, sourcesError);
+      return { jobsCreated: 0, sourcesProcessed: 0, couponsProcessed: 0, skippedByDedupe: 0, skippedByGlobalTargetDedupe: 0 };
+    }
+
     if (!sources || sources.length === 0) {
       console.log(`${logPrefix} Nenhuma automação de cupons capturados ativa encontrada.`);
       return { 
         jobsCreated: 0, 
         sourcesProcessed: 0,
         couponsProcessed: 0,
-        skippedByDedupe: 0
+        skippedByDedupe: 0,
+        skippedByGlobalTargetDedupe: 0
       };
     }
 
@@ -60,6 +68,7 @@ export const capturedCouponDispatcher = {
     let totalCreated = 0;
     let totalCouponsProcessed = 0;
     let totalSkippedByDedupe = 0;
+    let totalSkippedByGlobalTargetDedupe = 0;
     const userAccessCache = new Map<string, any>();
     const userConnectionsCache = new Map<string, any[]>();
     const shopeeAdapter = new ShopeeAdapter();
@@ -69,9 +78,10 @@ export const capturedCouponDispatcher = {
       const sourceLogPrefix = `${logPrefix} ${userTag}`;
 
       const routes = (source.automation_routes || []).filter((r: any) => r.is_active);
-      console.log(`${sourceLogPrefix} [SOURCE:${source.id}] Processando ${routes.length} rotas ativas.`);
-      
-      if (routes.length === 0) continue;
+      if (routes.length === 0) {
+        console.log(`${sourceLogPrefix} [SOURCE:${source.id}] Sem rotas ativas configuradas.`);
+        continue;
+      }
 
       // --- 1. BILLING & ACCESS ---
       let access = userAccessCache.get(source.user_id);
@@ -97,7 +107,6 @@ export const capturedCouponDispatcher = {
       }
 
       // --- 3. FETCH CAPTURED COUPONS ---
-      // Pegamos os cupons capturados recentemente (ex: últimas 48h) que estão em estado 'candidate' ou 'valid'
       const { data: capturedCoupons } = await supabase
         .from('discovered_coupons')
         .select('*')
@@ -124,7 +133,8 @@ export const capturedCouponDispatcher = {
           if (userCycleCount >= batchLimit) break;
 
           // --- 4. DEDUPE ---
-          const isDuplicate = await automationService.checkCouponDispatch(
+          // 4.1 Dedupe por Rota (Permanente)
+          const isRouteDuplicate = await automationService.checkCouponDispatch(
             source.user_id,
             coupon.id,
             route.id,
@@ -132,19 +142,44 @@ export const capturedCouponDispatcher = {
             supabase
           );
 
-          if (isDuplicate) {
+          if (isRouteDuplicate) {
             totalSkippedByDedupe++;
+            continue;
+          }
+
+          // 4.2 Dedupe Global por Destino (Evita duplicidade entre diferentes automações)
+          const isGlobalDuplicate = await automationService.checkGlobalTargetCouponDispatch(
+            source.user_id,
+            coupon.id,
+            route.target_id,
+            supabase
+          );
+
+          if (isGlobalDuplicate) {
+            totalSkippedByGlobalTargetDedupe++;
+            // Registrar como pulado por dedupe global para evitar re-processamento por esta rota
+            await automationService.registerCouponDispatch({
+              user_id: source.user_id,
+              coupon_id: coupon.id,
+              route_id: route.id,
+              target_id: route.target_id,
+              status: 'skipped',
+              dedupe_key: `global_dedupe:${source.user_id}:${coupon.id}:${route.target_id}`
+            }, supabase);
             continue;
           }
           
           totalCouponsProcessed++;
 
-          // --- 5. RE-AFFILIATION & VALIDATION ---
+          // --- 5. NORMALIZATION & RE-AFFILIATION ---
           try {
+            // Normalizar dados do cupom (extrair código do label, limpar lixo)
+            const norm = normalizeShopeeCouponForMessage(coupon);
+            
             let finalAffiliateLink = '';
             
-            if (coupon.redemption_url) {
-              const preResult = await shopeeAdapter.preProcessIncomingLink(coupon.redemption_url, shopeeConn);
+            if (norm.effectiveLink) {
+              const preResult = await shopeeAdapter.preProcessIncomingLink(norm.effectiveLink, shopeeConn);
               
               if (preResult.reaffiliation_status === 'reaffiliated' || preResult.reaffiliation_status === 'canonicalized' || preResult.reaffiliation_status === 'resolved') {
                 finalAffiliateLink = preResult.generated_affiliate_url || preResult.affiliateUrl || '';
@@ -155,18 +190,18 @@ export const capturedCouponDispatcher = {
             }
 
             // Se não tem link de resgate e nem código, o cupom é inválido para envio
-            if (!finalAffiliateLink && !coupon.code) {
+            if (!finalAffiliateLink && !norm.code) {
               console.warn(`${sourceLogPrefix} [SKIP] Cupom ${coupon.id} sem link de resgate e sem código.`);
               continue;
             }
 
             // --- 6. RENDER TEMPLATE ---
-            // Construímos um contexto simplificado para o cupom
+            // Construímos um contexto simplificado para o cupom usando os dados normalizados
             const couponContext = {
-              product_name: coupon.coupon_label || 'Cupom Shopee',
+              product_name: norm.discountLine || 'Cupom Shopee',
               affiliate_link: finalAffiliateLink,
-              coupon_code: coupon.code,
-              coupon_discount_line: coupon.coupon_label ? `💸 ${coupon.coupon_label}` : '',
+              coupon_code: norm.code,
+              coupon_discount_line: norm.discountLine,
               coupon_link: finalAffiliateLink,
               smart_price_block: '',
               original_price_line: '',
@@ -180,65 +215,59 @@ export const capturedCouponDispatcher = {
             const templateBody = route.template_config?.body || DEFAULT_TEMPLATES.shopee_coupon;
             const messageText = renderSmartTemplate(templateBody, couponContext as any);
 
+            if (!messageText) {
+              console.warn(`${sourceLogPrefix} [SKIP] Template resultou em mensagem vazia para cupom ${coupon.id}`);
+              continue;
+            }
+
             // --- 7. CREATE CAMPAIGN ---
-            const campaignData = {
-              name: `AUTO-CUPOM: ${coupon.coupon_label?.substring(0, 30) || coupon.code || 'Capturado'}`,
-              origin: 'automation_coupon' as any,
+            const campaign = await campaignService.create(source.user_id, {
+              name: `Automação: ${source.name}`,
+              origin: 'automation_coupon',
+              destinations: [{
+                type: route.target_type,
+                id: route.target_id
+              }],
               metadata: {
                 automationCouponSend: true,
                 confirmedAutomationRoute: true,
                 automationSourceId: source.id,
                 automationRouteId: route.id,
                 couponId: coupon.id,
-                dispatchOrigin: 'captured_coupon_automation'
+                dispatchOrigin: 'captured_coupon_dispatch',
+                // Guardar dados do cupom no metadata global para facilitar rastreio se necessário
+                coupon_label: norm.discountLine,
+                coupon_code: norm.code
               },
-              destinations: [{
-                type: route.target_type,
-                id: route.target_id
-              }],
               items: [{
-                product_name: coupon.coupon_label || 'Cupom Shopee',
+                product_name: norm.discountLine || 'Cupom Shopee',
                 custom_text: messageText,
-                image_url: null, // Cupons capturados geralmente não têm imagem robusta fácil
                 affiliate_url: finalAffiliateLink,
-                eligibility_status: 'eligible' as const,
-                eligibility_reasons: ['automation_authorized_coupon']
+                offer_type: 'coupon_offer',
+                eligibility_status: 'eligible',
+                eligibility_reasons: []
               }]
-            };
+            }, supabase);
 
-            const campaign = await campaignService.create(source.user_id, campaignData, supabase);
+            totalCreated++;
+            userCycleCount++;
 
-            // --- 8. REGISTER HISTORY ---
+            // Registrar sucesso na tabela de deduplicação
             await automationService.registerCouponDispatch({
               user_id: source.user_id,
               coupon_id: coupon.id,
               route_id: route.id,
               target_id: route.target_id,
               campaign_id: campaign.id,
-              status: 'sent',
+              status: 'queued',
               dedupe_key: `user:${source.user_id}:coupon:${coupon.id}:route:${route.id}:target:${route.target_id}`
             }, supabase);
 
-            await automationService.logEvent({
-              source_id: source.id,
-              user_id: source.user_id,
-              status: 'processed',
-              event_type: 'captured_coupon_dispatch',
-              details: { 
-                campaignId: campaign.id,
-                couponId: coupon.id,
-                routeId: route.id
-              }
-            }, supabase);
-
-            totalCreated++;
-            userCycleCount++;
-            console.log(`${sourceLogPrefix} [DISPATCHED] Cupom capturado "${coupon.code || coupon.coupon_label}" enviado para ${route.target_id}`);
+            console.log(`${sourceLogPrefix} [SUCCESS] Campanha ${campaign.id} criada para cupom ${coupon.id}`);
 
           } catch (err: any) {
-            console.error(`${sourceLogPrefix} Erro no ciclo de despacho do cupom ${coupon.id}:`, err.message);
-            
-            // Registrar falha para evitar loop infinito em erros persistentes
+            console.error(`${sourceLogPrefix} [ERROR] Erro ao processar cupom ${coupon.id}:`, err.message);
+            // Registrar falha para evitar retry infinito no mesmo ciclo
             await automationService.registerCouponDispatch({
               user_id: source.user_id,
               coupon_id: coupon.id,
@@ -256,13 +285,14 @@ export const capturedCouponDispatcher = {
       await triggerWorker({ requestId: rid });
     }
 
-    console.log(`${logPrefix} Ciclo finalizado. Total de campanhas criadas: ${totalCreated} | Processados: ${totalCouponsProcessed} | Dedupe: ${totalSkippedByDedupe}`);
+    console.log(`${logPrefix} Ciclo finalizado. Total de campanhas criadas: ${totalCreated} | Processados: ${totalCouponsProcessed} | Dedupe Rota: ${totalSkippedByDedupe} | Dedupe Global: ${totalSkippedByGlobalTargetDedupe}`);
     
     return { 
       jobsCreated: totalCreated,
       sourcesProcessed: sources.length,
       couponsProcessed: totalCouponsProcessed,
-      skippedByDedupe: totalSkippedByDedupe
+      skippedByDedupe: totalSkippedByDedupe,
+      skippedByGlobalTargetDedupe: totalSkippedByGlobalTargetDedupe
     };
   }
 };

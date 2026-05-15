@@ -1,5 +1,5 @@
 
-import { extractShopeeCoupons } from './coupon-extractor';
+import { extractShopeeCoupons, normalizeShopeeCouponForMessage } from './coupon-extractor';
 import { formatShopeeCouponMessage } from './coupon-formatter';
 
 const testCases = [
@@ -50,11 +50,40 @@ const testCases = [
   }
 ];
 
+const normalizationTestCases = [
+  {
+    name: 'Normalização: Cupom Antigo com Código no Label',
+    coupon: {
+      code: '',
+      coupon_label: 'PLUS15I2AF\nR$15 OFF em compras a partir de R$65\n⚠️ Corre porque esse cupom acaba rápido!\n👇',
+      redemption_url: 'https://s.shopee.com.br/2g7zWLLon1'
+    },
+    expected: {
+      code: 'PLUS15I2AF',
+      discountLine: '💸 *R$15 OFF* em compras a partir de *R$65*'
+    }
+  },
+  {
+    name: 'Normalização: Cupom com Código Limpo',
+    coupon: {
+      code: 'T3N15SH0P33',
+      coupon_label: '*R$10 OFF* acima de *R$40*',
+      redemption_url: 'https://s.shopee.com.br/5L8keyhSi0'
+    },
+    expected: {
+      code: 'T3N15SH0P33',
+      discountLine: '💸 *R$10 OFF* acima de *R$40*'
+    }
+  }
+];
+
 function runTests() {
   console.log('--- INICIANDO TESTES DO MOTOR DE CUPONS SHOPEE ---\n');
   let passed = 0;
   let failed = 0;
 
+  // 1. Testes de Extração
+  console.log('--- TESTES DE EXTRAÇÃO ---\n');
   testCases.forEach((tc, index) => {
     console.log(`Teste ${index + 1}: ${tc.name}`);
     const results = extractShopeeCoupons(tc.input);
@@ -79,9 +108,31 @@ function runTests() {
     if (match) {
       console.log('  [PASS]');
       passed++;
-      // Mostrar exemplo de formatação para o primeiro de cada tipo
-      console.log('  Mensagem Formatada:');
-      console.log(formatShopeeCouponMessage(result).split('\n').map(l => '    ' + l).join('\n'));
+    } else {
+      failed++;
+    }
+    console.log('');
+  });
+
+  // 2. Testes de Normalização
+  console.log('--- TESTES DE NORMALIZAÇÃO ---\n');
+  normalizationTestCases.forEach((tc, index) => {
+    console.log(`Teste Norm ${index + 1}: ${tc.name}`);
+    const result = normalizeShopeeCouponForMessage(tc.coupon);
+    
+    let match = true;
+    if (result.code !== tc.expected.code) {
+      console.error(`  [FAIL] Código: esperado "${tc.expected.code}", obtido "${result.code}"`);
+      match = false;
+    }
+    if (result.discountLine !== tc.expected.discountLine) {
+      console.error(`  [FAIL] Label: esperado "${tc.expected.discountLine}", obtido "${result.discountLine}"`);
+      match = false;
+    }
+
+    if (match) {
+      console.log('  [PASS]');
+      passed++;
     } else {
       failed++;
     }
@@ -92,9 +143,7 @@ function runTests() {
   console.log(`Sucessos: ${passed}`);
   console.log(`Falhas: ${failed}`);
 
-  if (failed > 0) {
-    process.exit(1);
-  }
+  if (failed > 0) process.exit(1);
 }
 
 runTests();

@@ -197,3 +197,57 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
   // Remover duplicatas finais
   return Array.from(new Map(coupons.map(c => [c.dedupeKey, c])).values());
 }
+
+/**
+ * Normaliza um cupom vindo do banco para o formato de mensagem,
+ * corrigindo labels sujos e extraindo códigos que possam estar vazando no label.
+ */
+export function normalizeShopeeCouponForMessage(coupon: any): { 
+  code: string | null; 
+  discountLine: string;
+  effectiveLink: string;
+} {
+  let code = (coupon.code || '').trim();
+  let rawLabel = (coupon.coupon_label || coupon.label || '').trim();
+  
+  // 1. Tentar extrair código do label se o campo code estiver vazio
+  if (!code && rawLabel) {
+    // Procura por códigos no início do label ou isolados
+    const standalonePattern = /(?:⚡|🔥|🎟️)?\s*\*?([A-Z0-9]{8,15})\*?/i;
+    const match = rawLabel.match(standalonePattern);
+    if (match) {
+      const extracted = match[1].toUpperCase();
+      if (!BLACKLISTED_CODES.includes(extracted) && !/^\d+$/.test(extracted) && !extracted.includes('OFF')) {
+        code = extracted;
+      }
+    }
+  }
+
+  // 2. Limpar o label de desconto
+  // Remover o código do label se ele estiver lá
+  if (code && rawLabel.includes(code)) {
+    rawLabel = rawLabel.replace(code, '').replace(/^\s*\*|\*\s*$/g, '').trim();
+  }
+
+  // Remover lixo comum: 👇, emojis de urgência, avisos de disponibilidade
+  let discountLine = rawLabel
+    .replace(/👇/g, '')
+    .replace(/⚡|🔥|🎟️|✨|💥|⚠️/g, '')
+    .replace(/Corre porque esse cupom acaba rápido!/gi, '')
+    .replace(/Cupom sujeito à disponibilidade.*/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Aplicar formatação de negrito e emoji de dinheiro
+  discountLine = formatDiscountLabel(discountLine);
+  if (discountLine) {
+    discountLine = `💸 ${discountLine}`;
+  }
+
+  return {
+    code: code || null,
+    discountLine,
+    effectiveLink: coupon.redemption_url || coupon.redemptionUrl || ''
+  };
+}
+

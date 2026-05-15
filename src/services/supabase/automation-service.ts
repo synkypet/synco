@@ -643,5 +643,27 @@ export const automationService = {
     if (error) {
       console.error('[AUTO-SERVICE] [REGISTER-COUPON-DISPATCH-ERROR]', error);
     }
+  },
+
+  /**
+   * Verifica se um cupom já foi enviado para um destino específico,
+   * independentemente de qual automação (rota) o enviou.
+   */
+  async checkGlobalTargetCouponDispatch(userId: string, couponId: string, targetId: string, client?: SupabaseClient): Promise<boolean> {
+    const supabase = client || createClient();
+    const { data, error } = await supabase
+      .from('automation_coupon_dispatches')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('coupon_id', couponId)
+      .eq('target_id', targetId)
+      .in('status', ['queued', 'sent'])
+      .maybeSingle();
+
+    if (error) {
+      console.error('[AUTO-SERVICE] [CHECK-GLOBAL-COUPON-DISPATCH-ERROR]', error);
+      return false;
+    }
+    return !!data;
   }
 };

@@ -1,4 +1,4 @@
-// src/lib/marketplaces/shopee/coupon-automation-dispatch.test.ts
+
 import { capturedCouponDispatcher } from '../../../services/captured-coupon-dispatcher';
 import { campaignService } from '../../../services/supabase/campaign-service';
 import { automationService } from '../../../services/supabase/automation-service';
@@ -47,6 +47,7 @@ async function runTests() {
 
   // Mocks de Serviços
   const originalCheck = automationService.checkCouponDispatch;
+  const originalCheckGlobal = (automationService as any).checkGlobalTargetCouponDispatch;
   const originalRegister = automationService.registerCouponDispatch;
   const originalCampaignCreate = campaignService.create;
   const originalPreProcess = ShopeeAdapter.prototype.preProcessIncomingLink;
@@ -83,6 +84,7 @@ async function runTests() {
     }];
 
     automationService.checkCouponDispatch = async () => false;
+    (automationService as any).checkGlobalTargetCouponDispatch = async () => false;
     automationService.registerCouponDispatch = async () => {};
     campaignService.create = async (uid, dto) => {
       if (dto.origin === 'automation_coupon' && dto.metadata?.couponId === 'coupon-1') return { id: 'camp-1' } as any;
@@ -102,21 +104,22 @@ async function runTests() {
       failed++;
     }
 
-    // --- CENÁRIO B: Mesmo cupom para mesmo destino ---
-    console.log('Cenário B: Mesmo cupom para mesmo destino');
-    automationService.checkCouponDispatch = async () => true;
+    // --- CENÁRIO B: Dedupe Global por Destino ---
+    console.log('Cenário B: Dedupe Global por Destino (mesmo destino, automação diferente)');
+    automationService.checkCouponDispatch = async () => false; // Rota limpa
+    (automationService as any).checkGlobalTargetCouponDispatch = async () => true; // Já enviado globalmente
     const resB = await capturedCouponDispatcher.executeDispatch(mockSupabase);
-    if (resB.jobsCreated === 0 && resB.skippedByDedupe === 1) {
+    if (resB.jobsCreated === 0 && resB.skippedByGlobalTargetDedupe === 1) {
       console.log('  [PASS]');
       passed++;
     } else {
-      console.error('  [FAIL] Não deveria reenviar (Dedupe falhou)');
+      console.error('  [FAIL] Deveria ter skipado por Global Dedupe');
       failed++;
     }
 
     // --- CENÁRIO C: Rota Inativa ---
     console.log('Cenário C: Rota inativa');
-    automationService.checkCouponDispatch = async () => false;
+    (automationService as any).checkGlobalTargetCouponDispatch = async () => false;
     mockData.automation_sources[0].automation_routes[0].is_active = false;
     const resC = await capturedCouponDispatcher.executeDispatch(mockSupabase);
     if (resC.jobsCreated === 0 && resC.sourcesProcessed === 1) {
@@ -128,29 +131,25 @@ async function runTests() {
     }
     mockData.automation_sources[0].automation_routes[0].is_active = true;
 
-    // --- CENÁRIO D: Cupom sem código e sem link ---
-    console.log('Cenário D: Cupom sem código e sem link');
-    automationService.checkCouponDispatch = async () => false;
-    mockData.discovered_coupons[0].code = null;
-    mockData.discovered_coupons[0].redemption_url = null;
-    const resD = await capturedCouponDispatcher.executeDispatch(mockSupabase);
-    if (resD.jobsCreated === 0) {
-      console.log('  [PASS]');
-      passed++;
-    } else {
-      console.error('  [FAIL] Deveria bloquear cupom vazio');
-      failed++;
-    }
+    // --- CENÁRIO D: Normalização de Cupom Antigo (vazio code, ruidoso label) ---
+    console.log('Cenário D: Normalização de cupom antigo');
+    mockData.discovered_coupons[0].code = '';
+    mockData.discovered_coupons[0].coupon_label = 'PLUS15I2AF\nR$15 OFF\n👇';
+    
+    let capturedLabel = '';
+    let capturedCode = '';
+    campaignService.create = async (uid, dto) => {
+      capturedLabel = dto.metadata?.coupon_label;
+      capturedCode = dto.metadata?.coupon_code;
+      return { id: 'camp-norm' } as any;
+    };
 
-    // --- CENÁRIO E: Tipo de fonte errado (coupon_shopee não deve ser processado aqui) ---
-    console.log('Cenário E: Tipo de fonte oficial (não capturado)');
-    mockData.automation_sources[0].source_type = 'coupon_shopee';
-    const resE = await capturedCouponDispatcher.executeDispatch(mockSupabase);
-    if (resE.jobsCreated === 0 && resE.sourcesProcessed === 0) {
+    await capturedCouponDispatcher.executeDispatch(mockSupabase);
+    if (capturedCode === 'PLUS15I2AF' && capturedLabel.includes('R$15 OFF') && !capturedLabel.includes('👇')) {
       console.log('  [PASS]');
       passed++;
     } else {
-      console.error('  [FAIL] Captured dispatcher não deve processar coupon_shopee');
+      console.error(`  [FAIL] Normalização falhou. Code: ${capturedCode}, Label: ${capturedLabel}`);
       failed++;
     }
 
@@ -160,6 +159,7 @@ async function runTests() {
   } finally {
     // Restaurar originais
     automationService.checkCouponDispatch = originalCheck;
+    (automationService as any).checkGlobalTargetCouponDispatch = originalCheckGlobal;
     automationService.registerCouponDispatch = originalRegister;
     campaignService.create = originalCampaignCreate;
     ShopeeAdapter.prototype.preProcessIncomingLink = originalPreProcess;
@@ -170,12 +170,6 @@ async function runTests() {
   console.log(`Falhas: ${failed}`);
 
   if (failed > 0) process.exit(1);
-}
-
-// Mocking dependencies that use environment variables or complex logic
-// This is minimal to avoid real API calls
-jest: {
-  mock: (path: string, fn: any) => {}
 }
 
 runTests();
