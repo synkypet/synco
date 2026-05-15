@@ -134,7 +134,7 @@ export default function AutomacoesDashboardPage() {
 
   // Validação simples
   const isNameValid = newName.trim().length >= 3;
-  const isEntryValid = entryType === 'radar_offers' || entryType === 'coupon_shopee' || (channelId && sourceGroupId);
+  const isEntryValid = entryType === 'radar_offers' || entryType === 'coupon_shopee' || entryType === 'captured_coupons_shopee' || (channelId && sourceGroupId);
   const isTargetValid = !!targetId;
   const isSearchTermValid = entryType === 'radar_offers' ? creationKeywords.length > 0 : true;
   const isFormValid = isNameValid && isEntryValid && isTargetValid && isSearchTermValid && !isRadarLimitReached && !isMarketplaceRequiredAndMissing;
@@ -160,7 +160,18 @@ export default function AutomacoesDashboardPage() {
         batchLimit: parseInt(shopeeLimit),
         send_interval_minutes: parseInt(sendIntervalMinutes) || 1,
         preset_type: 'custom'
-      } : undefined,
+      } : (entryType === 'captured_coupons_shopee' ? {
+        batchLimit: parseInt(shopeeLimit) || 3,
+        send_interval_minutes: parseInt(sendIntervalMinutes) || 10,
+        only_new_coupons: true,
+        reaffiliate_before_send: true,
+        dedupe_by_destination: true,
+        template_type: 'shopee_coupon'
+      } : {
+        batchLimit: parseInt(shopeeLimit) || 5,
+        send_interval_minutes: parseInt(sendIntervalMinutes) || 5,
+        shopee_list_type: shopeeList
+      }),
       // Filtros alinhados com os campos reais lidos pelo discovery service
       filters: entryType === 'radar_offers' ? {
         min_price: minPrice ? parseFloat(minPrice) : undefined,
@@ -475,63 +486,83 @@ export default function AutomacoesDashboardPage() {
                         </div>
 
                         <div className="pt-2 border-t border-white/5">
-                           <div className="flex items-center justify-between p-3 rounded-xl bg-deep-void/40 border border-white/5 shadow-skeuo-pressed">
-                              <div className="flex items-center gap-2.5">
-                                 <ShieldCheck size={14} className="text-emerald-500" />
-                                 <div className="flex flex-col">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-white/80 leading-none">Lojas Oficiais</span>
-                                    <span className="text-[7px] font-bold uppercase text-white/10 mt-0.5 tracking-tighter">Shopee Oficial / Indicado</span>
-                                 </div>
-                              </div>
-                              <Switch 
-                                checked={onlyOfficialShops} 
-                                onCheckedChange={setOnlyOfficialShops}
-                                className="scale-75"
-                              />
-                           </div>
-                        </div>
+                            <div className="flex items-center justify-between p-3 rounded-xl bg-deep-void/40 border border-white/5 shadow-skeuo-pressed">
+                               <div className="flex items-center gap-2.5">
+                                  <ShieldCheck size={14} className="text-emerald-500" />
+                                  <div className="flex flex-col">
+                                     <span className="text-[9px] font-black uppercase tracking-widest text-white/80 leading-none">Lojas Oficiais</span>
+                                     <span className="text-[7px] font-bold uppercase text-white/10 mt-0.5 tracking-tighter">Shopee Oficial / Indicado</span>
+                                  </div>
+                               </div>
+                               <Switch 
+                                 checked={onlyOfficialShops} 
+                                 onCheckedChange={setOnlyOfficialShops}
+                                 className="scale-75"
+                               />
+                            </div>
+                         </div>
+                      </div>
+                    )}
 
-                        {/* Configurações de Frequência e Horário */}
-                        <div className="pt-4 border-t border-white/5 space-y-5">
+                    {/* Frequência e Limite (Compartilhado por Radar e Cupons) */}
+                    {(entryType === 'radar_offers' || entryType === 'captured_coupons_shopee' || entryType === 'coupon_shopee') && !isMarketplaceRequiredAndMissing && (
+                      <div className="pt-4 border-t border-white/5 space-y-5 animate-in slide-in-from-bottom-2 duration-300">
+                         <div className="grid grid-cols-2 gap-4">
                            <div className="space-y-2">
-                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Intervalo entre produtos</Label>
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Intervalo de Envio</Label>
                              <div className="relative">
                                <Input 
                                  type="number" 
                                  min="1" 
                                  max="1440" 
-                                 placeholder="1" 
+                                 placeholder="10" 
                                  value={sendIntervalMinutes} 
                                  onChange={(e) => setSendIntervalMinutes(e.target.value)} 
                                  className="pl-3 pr-20"
                                />
-                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/20 uppercase pointer-events-none">minuto(s)</span>
+                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/20 uppercase pointer-events-none">min(s)</span>
                              </div>
-                             <p className="text-[8px] text-white/30 font-medium leading-tight">
-                               Controla o tempo entre um produto e outro. Exemplo: 5 minutos = o Radar só inicia o próximo produto após esse intervalo.
-                             </p>
                            </div>
-
-                           <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5">
-                              <div className="flex items-center gap-2">
-                                <ShieldCheck size={12} className="text-emerald-500/50" />
-                                <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Proteção Anti-Spam</span>
-                              </div>
-                              <p className="text-[8px] text-white/30 font-medium leading-normal italic">
-                                Os grupos de uma mesma campanha são enviados em sequência com proteção automática: aproximadamente 1 grupo a cada ~5,5 segundos por canal.
-                              </p>
-                           </div>
-
-                           <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
-                             <div className="flex items-center gap-2">
-                               <Clock size={12} className="text-kinetic-orange/50" />
-                               <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Horário de Envio</span>
+                           <div className="space-y-2">
+                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Limite por ciclo</Label>
+                             <div className="relative">
+                               <Input 
+                                 type="number" 
+                                 min="1" 
+                                 max="50" 
+                                 placeholder="3" 
+                                 value={shopeeLimit} 
+                                 onChange={(e) => setShopeeLimit(e.target.value)} 
+                               />
                              </div>
-                             <p className="text-[8px] text-white/30 font-medium leading-normal italic">
-                               Os horários permitidos para envio são configurados globalmente nas <Link href="/configuracoes?tab=automation" className="text-kinetic-orange hover:underline">Configurações Gerais</Link> da conta.
-                             </p>
                            </div>
-                        </div>
+                         </div>
+
+                         <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <ShieldCheck size={12} className="text-emerald-500/50" />
+                              <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Operação Controlada</span>
+                            </div>
+                            <p className="text-[8px] text-white/30 font-medium leading-normal italic">
+                              {entryType === 'captured_coupons_shopee' 
+                                ? "O sistema busca novos cupons periodicamente e os envia respeitando o intervalo para evitar bloqueios." 
+                                : "Os grupos são disparados em sequência com proteção automática (vazão de ~1 grupo a cada 5s)."}
+                            </p>
+                         </div>
+                      </div>
+                    )}
+
+                    {entryType === 'radar_offers' && !isMarketplaceRequiredAndMissing && (
+                      <div className="space-y-5">
+                         <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
+                           <div className="flex items-center gap-2">
+                             <Clock size={12} className="text-kinetic-orange/50" />
+                             <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Horário de Envio</span>
+                           </div>
+                           <p className="text-[8px] text-white/30 font-medium leading-normal italic">
+                             Os horários permitidos para envio são configurados globalmente nas <Link href="/configuracoes?tab=automation" className="text-kinetic-orange hover:underline">Configurações Gerais</Link>.
+                           </p>
+                         </div>
 
 
                         <div className="space-y-2">
@@ -623,11 +654,13 @@ export default function AutomacoesDashboardPage() {
 
                     {entryType === 'captured_coupons_shopee' && !isMarketplaceRequiredAndMissing && (
                       <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
-                        <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
-                          <p className="text-[10px] font-medium text-white/40 leading-relaxed italic">
-                            O SYNCO enviará cupons que foram capturados dos grupos monitorados e salvos no Radar. 
+                        <div className="p-4 bg-kinetic-orange/5 border border-kinetic-orange/20 rounded-2xl">
+                          <p className="text-[10px] font-bold text-kinetic-orange uppercase tracking-widest mb-2">Operação de Cupons Radar</p>
+                          <p className="text-[10px] font-medium text-white/60 leading-relaxed">
+                            O SYNCO enviará cupons capturados pelo Radar nos grupos monitorados. 
+                            Os cupons são <span className="text-white font-bold">re-afiliados automaticamente</span> para o seu link antes do envio.
                             <br/><br/>
-                            <span className="text-amber-400/80">⚠️ Cupons são enviados apenas quando capturados e re-afiliados. O sistema não garante que o cupom ainda tenha saldo no momento do envio.</span>
+                            <span className="text-emerald-400/80">✓ Deduplicação automática:</span> Cupons nunca são repetidos para o mesmo destino.
                           </p>
                         </div>
                       </div>
