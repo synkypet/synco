@@ -133,6 +133,7 @@ export default function RadarOfertasPage() {
   const [couponFilterType, setCouponFilterType] = useState<'all' | 1 | 2>('all');
   const [selectedCouponOffer, setSelectedCouponOffer] = useState<ShopeeOffer | null>(null);
   const [couponSubTab, setCouponSubTab] = useState<'official' | 'detected_coupons' | 'detected_pages'>('official');
+  const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
   
   const queryClient = useQueryClient();
   const shopeeCache = React.useRef<Record<string, any>>({});
@@ -354,7 +355,8 @@ export default function RadarOfertasPage() {
     isLoading: loadingDiscovered,
     refetch: refetchDiscovered
   } = useDiscoveredCoupons({
-    limit: 50
+    limit: 50,
+    isVerified: showVerifiedOnly ? true : undefined
   });
 
   const {
@@ -1003,15 +1005,27 @@ export default function RadarOfertasPage() {
                       </div>
                     </div>
 
-                    <Button 
-                      onClick={() => refetchDiscovered()}
-                      variant="ghost" 
-                      className="h-12 px-6 rounded-xl bg-white/5 border border-white/[0.02] shadow-skeuo-flat hover:bg-white/10 text-kinetic-orange font-black text-[9px] uppercase tracking-widest gap-2"
-                      disabled={loadingDiscovered}
-                    >
-                      <RefreshCw size={14} className={cn(loadingDiscovered && "animate-spin")} />
-                      Sincronizar Radar
-                    </Button>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2 mr-4 bg-deep-void/40 p-2 rounded-xl border border-white/5">
+                        <Switch 
+                          id="verified-only" 
+                          checked={showVerifiedOnly} 
+                          onCheckedChange={setShowVerifiedOnly} 
+                          className="data-[state=checked]:bg-kinetic-orange scale-75"
+                        />
+                        <Label htmlFor="verified-only" className="text-[9px] font-black uppercase tracking-widest text-white/40 cursor-pointer">Apenas Verificados</Label>
+                      </div>
+
+                      <Button 
+                        onClick={() => refetchDiscovered()}
+                        variant="ghost" 
+                        className="h-12 px-6 rounded-xl bg-white/5 border border-white/[0.02] shadow-skeuo-flat hover:bg-white/10 text-kinetic-orange font-black text-[9px] uppercase tracking-widest gap-2"
+                        disabled={loadingDiscovered}
+                      >
+                        <RefreshCw size={14} className={cn(loadingDiscovered && "animate-spin")} />
+                        Sincronizar Radar
+                      </Button>
+                    </div>
                   </div>
 
                   {loadingDiscovered ? (

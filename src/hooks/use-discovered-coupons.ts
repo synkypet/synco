@@ -20,6 +20,11 @@ export interface DiscoveredCoupon {
   captured_at: string;
   last_seen_at: string;
   
+  // Novos campos de validação (Fase 2B.1)
+  validation_status: 'candidate' | 'verified' | 'rejected' | 'product_link' | 'expired';
+  is_verified_coupon: boolean;
+  resolved_at: string | null;
+
   // Novos campos virtuais injetados pela API
   effective_redemption_url?: string | null;
   reaffiliation_status?: 'not_needed' | 'resolved' | 'canonicalized' | 'reaffiliated' | 'blocked' | 'failed' | 'warning';
@@ -34,6 +39,8 @@ export interface DiscoveredCouponsResponse {
 
 export interface DiscoveredCouponsFilters {
   status?: string;
+  validationStatus?: string;
+  isVerified?: boolean;
   couponType?: string;
   search?: string;
   limit?: number;
@@ -50,6 +57,12 @@ export function useDiscoveredCoupons(filters: DiscoveredCouponsFilters = {}) {
       
       if (filters.status && filters.status !== 'all') {
         url.searchParams.set('status', filters.status);
+      }
+      if (filters.validationStatus && filters.validationStatus !== 'all') {
+        url.searchParams.set('validation_status', filters.validationStatus);
+      }
+      if (filters.isVerified !== undefined) {
+        url.searchParams.set('is_verified', String(filters.isVerified));
       }
       if (filters.couponType && filters.couponType !== 'all') {
         url.searchParams.set('coupon_type', filters.couponType);

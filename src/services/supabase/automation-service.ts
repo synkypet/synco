@@ -710,22 +710,47 @@ export const automationService = {
 
     const isGlobalAggregator = source?.source_type === 'captured_coupons_shopee';
 
-    // 1. Buscar candidatos recentes para esta fonte (discovered_coupons)
+    // 1. Buscar candidatos recentes (discovered_coupons)
+    // SEMPRE filtramos por is_verified_coupon=true para evitar que produtos virem regras de automação
     let couponQuery = supabase
       .from('discovered_coupons')
       .select('id')
       .limit(100);
 
+    // Tentamos aplicar o filtro de verificação
+    couponQuery = couponQuery.eq('is_verified_coupon', true);
+
     if (isGlobalAggregator) {
-      // Para agregadores globais, buscamos tudo do usuário para Shopee
-      couponQuery = couponQuery.eq('user_id', userId).eq('marketplace', 'shopee');
+      couponQuery = couponQuery
+        .eq('user_id', userId)
+        .eq('marketplace', 'shopee');
     } else {
       // Para fontes específicas (Radar, etc), filtramos pela fonte
       couponQuery = couponQuery.eq('source_id', sourceId);
     }
 
-    const { data: candidates, error: candError } = await couponQuery;
-    if (candError) throw candError;
+    let { data: candidates, error: candError } = await couponQuery;
+
+    // --- COMPATIBILIDADE (OPÇÃO A) ---
+    if (candError && candError.code === '42703') {
+      console.warn('[AUTOMATION-SERVICE] Coluna is_verified_coupon ausente. Fallback para busca sem filtro de verificação.');
+      let fallbackQuery = supabase
+        .from('discovered_coupons')
+        .select('id')
+        .limit(100);
+
+      if (isGlobalAggregator) {
+        fallbackQuery = fallbackQuery.eq('user_id', userId).eq('marketplace', 'shopee');
+      } else {
+        fallbackQuery = fallbackQuery.eq('source_id', sourceId);
+      }
+      
+      const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+      if (fallbackError) throw fallbackError;
+      candidates = fallbackData;
+    } else if (candError) {
+      throw candError;
+    }
 
     // 2. Buscar candidatos de promo pages
     let promoQuery = supabase

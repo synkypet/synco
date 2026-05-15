@@ -19,6 +19,9 @@ export async function GET(request: Request) {
     // 2. Extrair parâmetros de busca da URL
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') || undefined;
+    const validationStatus = searchParams.get('validation_status') || undefined;
+    const isVerified = searchParams.get('is_verified') === 'true' ? true : 
+                       searchParams.get('is_verified') === 'false' ? false : undefined;
     const couponType = searchParams.get('coupon_type') || undefined;
     const search = searchParams.get('search') || undefined;
     const limitParam = searchParams.get('limit');
@@ -34,15 +37,30 @@ export async function GET(request: Request) {
     }
 
     // 4. Executar listagem via serviço
-    // O serviço utiliza createAdminClient para bypass de RLS se necessário, 
-    // mas o filtro por user_id é injetado programaticamente e obrigatório.
     const supabaseAdmin = createAdminClient();
-    const coupons = await shopeeCouponService.listDiscoveredCoupons(user.id, {
-      status,
-      couponType,
-      search,
-      limit
-    }, supabaseAdmin);
+    let coupons = [];
+    try {
+      coupons = await shopeeCouponService.listDiscoveredCoupons(user.id, {
+        status,
+        validationStatus,
+        isVerified,
+        couponType,
+        search,
+        limit
+      }, supabaseAdmin);
+    } catch (err: any) {
+      if (err.code === '42703') {
+        console.warn('[API-DISCOVERED-COUPONS] Colunas de validação ausentes. Fallback para listagem simplificada.');
+        coupons = await shopeeCouponService.listDiscoveredCoupons(user.id, {
+          status,
+          couponType,
+          search,
+          limit
+        }, supabaseAdmin);
+      } else {
+        throw err;
+      }
+    }
 
     // 5. Enriquecer com Re-afiliação em tempo real
     // Buscamos a conexão Shopee do usuário para gerar links afiliados customizados
