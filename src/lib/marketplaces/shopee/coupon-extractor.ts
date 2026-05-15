@@ -52,13 +52,12 @@ export function formatDiscountLabel(label: string): string {
   if (!label) return '';
   
   let formatted = label
-    .replace(/⚡|🔥|🎟️|✨|💥/g, '') // Remove emojis de destaque para evitar duplicidade
-    .replace(/^\s*\*\s*/, '') // Remove asteriscos órfãos no início
+    .replace(/⚡|🔥|🎟️|✨|💥|💸/g, '') // Remove emojis de destaque e financeiros para limpeza
+    .replace(/^\s*\*+\s*/, '') // Remove asteriscos órfãos no início
     .replace(/\s+/g, ' ')
     .trim();
 
   // Negritar valores monetários e porcentagens
-  // R$ 10,00 ou 10%
   formatted = formatted.replace(/(R\$\s?\d+(?:[.,]\d+)?|(?:\d+)\s?%)\s?OFF/gi, '*$1 OFF*');
   
   // Negritar "a partir de R$ XX" ou "acima de R$ XX"
@@ -229,10 +228,13 @@ export function normalizeShopeeCouponForMessage(coupon: any): {
     rawLabel = rawLabel.replace(code, '').replace(/^\s*\*|\*\s*$/g, '').trim();
   }
 
-  // Remover lixo comum: 👇, emojis de urgência, avisos de disponibilidade
+  // Remover lixo comum: 👇, emojis de urgência, avisos de disponibilidade, links
+  const urlRegex = /https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:shopee\.com\.br|shp\.ee|shope\.ee)[^\s]*/gi;
+  
   let discountLine = rawLabel
+    .replace(urlRegex, '') // Remove links do label
     .replace(/👇/g, '')
-    .replace(/⚡|🔥|🎟️|✨|💥|⚠️/g, '')
+    .replace(/⚡|🔥|🎟️|✨|💥|⚠️|💸/g, '')
     .replace(/Corre porque esse cupom acaba rápido!/gi, '')
     .replace(/Cupom sujeito à disponibilidade.*/gi, '')
     .replace(/\s+/g, ' ')
@@ -242,9 +244,8 @@ export function normalizeShopeeCouponForMessage(coupon: any): {
   discountLine = formatDiscountLabel(discountLine);
   
   if (discountLine) {
-    // Garantir que começa com exatamente um emoji de dinheiro, sem duplicar
-    // Remove qualquer emoji 💸 existente no início antes de readicionar um limpo
-    discountLine = `💸 ${discountLine.replace(/^💸\s*/, '')}`;
+    // Garantir que começa com exatamente um emoji de dinheiro
+    discountLine = `💸 ${discountLine}`;
   }
 
   return {

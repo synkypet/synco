@@ -1,6 +1,5 @@
 
 import { extractShopeeCoupons, normalizeShopeeCouponForMessage } from './coupon-extractor';
-import { formatShopeeCouponMessage } from './coupon-formatter';
 
 const testCases = [
   {
@@ -88,15 +87,15 @@ const normalizationTestCases = [
     }
   },
   {
-    name: 'Normalização: Remover Ruídos Legados (👇, urgência)',
+    name: 'Normalização: Remover Ruídos Legados (👇, urgência, links)',
     coupon: {
       code: 'CUPOM30',
-      coupon_label: '💸 R$30 OFF\n👇 Resgate agora!\n⚠️ Corre porque esse cupom acaba rápido!',
+      coupon_label: '💸 R$30 OFF\n👇 Resgate agora: https://shopee.com.br/test\n⚠️ Corre porque esse cupom acaba rápido!',
       redemption_url: 'https://s.shopee.com.br/test'
     },
     expected: {
       code: 'CUPOM30',
-      discountLine: '💸 *R$30 OFF* Resgate agora!'
+      discountLine: '💸 *R$30 OFF* Resgate agora:'
     }
   }
 ];

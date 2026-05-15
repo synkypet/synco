@@ -242,7 +242,7 @@ export const capturedCouponDispatcher = {
                 coupon_code: norm.code
               },
               items: [{
-                product_name: norm.discountLine.replace(/^💸\s*/, '') || 'Cupom Shopee',
+                product_name: norm.code ? `Cupom Shopee ${norm.code}` : (norm.discountLine.replace(/^💸\s*/, '') || 'Cupom Shopee'),
                 custom_text: messageText,
                 affiliate_url: finalAffiliateLink,
                 offer_type: 'coupon_offer',
@@ -277,8 +277,8 @@ export const capturedCouponDispatcher = {
               target_id: route.target_id,
               campaign_id: campaign.id,
               send_job_id: sendJobId,
-              status: jobStatus === 'completed' ? 'sent' : 'queued',
-              sent_at: jobStatus === 'completed' ? new Date().toISOString() : null,
+              status: jobStatus === 'completed' || jobStatus === 'sent' ? 'sent' : 'queued',
+              sent_at: jobStatus === 'completed' || jobStatus === 'sent' ? new Date().toISOString() : null,
               dedupe_key: `user:${source.user_id}:coupon:${coupon.id}:route:${route.id}:target:${route.target_id}`
             }, supabase);
 

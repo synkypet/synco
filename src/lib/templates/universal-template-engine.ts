@@ -228,11 +228,11 @@ export function renderSmartTemplate(template: string, context: SmartTemplateCont
     result = result.replace(regex, value);
   });
 
-  // 3. Limpeza de Placeholders Orfãos e Linhas Vazias Decorrentes
+  // 3. Limpeza de Placeholders Órfãos e Linhas Vazias Decorrentes
   // Remove linhas inteiras que contenham apenas um label e um placeholder vazio
-  // Ex: "🎟️ *Código:* " -> ""
-  // Modificado: só remove se for o FIM da linha e não houver nada depois (nem na próxima linha se for um label isolado)
-  const orphanLines = /^(?:🎟️|💸|🔗|📦|🛍️|⚡).*:\s*$/gm;
+  // Ex: "📦 Compre aqui: " -> ""
+  // NOTA: Removemos 🎟️ e 🔗 desta lista para permitir labels multilinhas (cabeçalho em uma linha, valor na outra)
+  const orphanLines = /^(?:💸|📦|🛍️|⚡).*:\s*$/gm;
   result = result.replace(orphanLines, '');
 
   result = result.replace(/\{\{[a-z0-9_]+\}\}/gi, '');
