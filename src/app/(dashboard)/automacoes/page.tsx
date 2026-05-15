@@ -55,6 +55,7 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
+  DialogDescription,
   DialogTrigger,
   DialogFooter
 } from '@/components/ui/dialog';
@@ -330,6 +331,9 @@ export default function AutomacoesDashboardPage() {
                          </div>
                        )}
                     </DialogTitle>
+                    <DialogDescription className="text-white/40 text-[10px] uppercase font-bold tracking-tight mb-4">
+                       Configure uma nova esteira operacional para captura e disparo automático de ofertas.
+                    </DialogDescription>
                  </DialogHeader>
                  
                  <div className="space-y-6 pt-2">
