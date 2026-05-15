@@ -232,7 +232,7 @@ export function renderSmartTemplate(template: string, context: SmartTemplateCont
   // Remove linhas inteiras que contenham apenas um label e um placeholder vazio
   // Ex: "📦 Compre aqui: " -> ""
   // NOTA: Removemos 🎟️ e 🔗 desta lista para permitir labels multilinhas (cabeçalho em uma linha, valor na outra)
-  const orphanLines = /^(?:💸|📦|🛍️|⚡|🛒).*:\s*$/gm;
+  const orphanLines = /^(?:💸|🛍️|⚡).*:\s*$/gm;
   result = result.replace(orphanLines, '');
 
   result = result.replace(/\{\{[a-z0-9_]+\}\}/gi, '');
