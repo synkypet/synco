@@ -1032,6 +1032,74 @@ export default function RadarOfertasPage() {
                     </div>
                   </div>
                 )}
+                {/* Conteúdo Principal do Radar */}
+                <div className="bg-anthracite-surface p-8 rounded-[40px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
+                  
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-kinetic-orange/10 rounded-2xl flex items-center justify-center shadow-skeuo-elevated">
+                        <Activity size={24} className="text-kinetic-orange" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black uppercase tracking-widest text-white/90 italic font-headline">Monitoramento Radar</h3>
+                        <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Cupons detectados automaticamente em grupos e webhooks</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2 mr-4 bg-deep-void/40 p-2 rounded-xl border border-white/5">
+                        <Switch 
+                          id="verified-only" 
+                          checked={showVerifiedOnly} 
+                          onCheckedChange={setShowVerifiedOnly} 
+                          className="data-[state=checked]:bg-kinetic-orange scale-75"
+                        />
+                        <Label htmlFor="verified-only" className="text-[9px] font-black uppercase tracking-widest text-white/40 cursor-pointer">Apenas Verificados</Label>
+                      </div>
+
+                      <Button 
+                        onClick={() => refetchDiscovered()}
+                        variant="ghost" 
+                        className="h-12 px-6 rounded-xl bg-white/5 border border-white/[0.02] shadow-skeuo-flat hover:bg-white/10 text-kinetic-orange font-black text-[9px] uppercase tracking-widest gap-2"
+                        disabled={loadingDiscovered}
+                      >
+                        <RefreshCw size={14} className={cn(loadingDiscovered && "animate-spin")} />
+                        Sincronizar Radar
+                      </Button>
+                    </div>
+                  </div>
+
+                  {loadingDiscovered ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                        <div key={i} className="h-64 bg-white/5 rounded-3xl animate-pulse shadow-skeuo-pressed" />
+                      ))}
+                    </div>
+                  ) : discoveredCouponsData?.data && discoveredCouponsData.data.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {discoveredCouponsData.data.map((coupon) => (
+                        <DiscoveredCouponCard 
+                          key={coupon.id}
+                          coupon={coupon}
+                          isSelected={selectedCouponIds.includes(coupon.id)}
+                          onToggleSelection={handleToggleCouponSelection}
+                          onReject={(id) => handleBulkReject([id])}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-24 text-center bg-deep-void/40 rounded-[48px] border border-dashed border-white/5 shadow-skeuo-pressed">
+                      <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Inbox size={32} className="text-white/10" />
+                      </div>
+                      <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-white/30 mb-2">Radar em Silêncio</h4>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-white/10 max-w-sm mx-auto leading-relaxed">
+                        Quando o Radar encontrar cupons da Shopee, eles aparecerão aqui para revisão manual e cópia segura.
+                      </p>
+                    </div>
+                  )}
+                </div>
              </div>
            ) : (
              <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
