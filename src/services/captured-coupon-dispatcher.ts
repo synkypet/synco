@@ -22,8 +22,9 @@ export const capturedCouponDispatcher = {
    */
   async executeDispatch(
     supabase: SupabaseClient,
-    options: { requestId?: string } = {}
+    options: { requestId?: string; services?: { automationService?: any } } = {}
   ): Promise<CapturedCouponDispatchResult> {
+    const autoService = options.services?.automationService || automationService;
     const rid = options.requestId || Math.random().toString(36).substring(7);
     const logPrefix = `[CAPTURED-COUPON-DISPATCHER] [${rid}]`;
 
@@ -106,49 +107,106 @@ export const capturedCouponDispatcher = {
         continue;
       }
 
-      // --- 3. FETCH CAPTURED COUPONS ---
-      const { data: capturedCoupons } = await supabase
-        .from('discovered_coupons')
-        .select('*')
-        .eq('user_id', source.user_id)
-        .in('status', ['candidate', 'valid'])
-        .gte('last_seen_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
-        .order('last_seen_at', { ascending: false });
+      for (const route of routes) {
+        const routeLogPrefix = `${sourceLogPrefix} [ROUTE:${route.id.substring(0,8)}]`;
 
-      if (!capturedCoupons || capturedCoupons.length === 0) {
-        console.log(`${sourceLogPrefix} Nenhum cupom capturado recente encontrado.`);
-        continue;
-      }
-      
-      console.log(`${sourceLogPrefix} Encontrados ${capturedCoupons.length} cupons candidatos.`);
+        // --- 3. SYNC RULES FROM CANDIDATES ---
+        // Garante que novos cupons capturados virem regras (is_selected=false por padrão)
+        try {
+          await automationService.syncRulesFromCandidates(source.id, route.id, source.user_id, supabase);
+        } catch (syncErr: any) {
+          console.error(`${routeLogPrefix} Erro ao sincronizar candidatos:`, syncErr.message);
+        }
 
-      const config = source.config || {};
-      const batchLimit = config.batchLimit || 5;
-      let userCycleCount = 0;
+        // --- 4. FETCH ACTIVE RULES ---
+        // Buscamos apenas regras selecionadas, ativas e que já venceram o agendamento
+        const now = new Date();
+        const { data: activeRules, error: rulesError } = await supabase
+          .from('automation_coupon_rules')
+          .select(`
+            *,
+            coupon:discovered_coupons(*),
+            promo_page:discovered_promo_pages(*)
+          `)
+          .eq('source_id', source.id)
+          .eq('route_id', route.id)
+          .eq('is_selected', true)
+          .eq('is_active', true)
+          .or(`next_run_at.lte.${now.toISOString()},next_run_at.is.null`)
+          .order('next_run_at', { ascending: true });
 
-      for (const coupon of capturedCoupons) {
-        if (userCycleCount >= batchLimit) break;
+        if (rulesError) {
+          console.error(`${routeLogPrefix} Erro ao buscar regras:`, rulesError);
+          continue;
+        }
 
-        for (const route of routes) {
-          if (userCycleCount >= batchLimit) break;
+        if (!activeRules || activeRules.length === 0) {
+          continue;
+        }
 
-          // --- 4. DEDUPE ---
-          // 4.1 Dedupe por Rota (Permanente)
-          const isRouteDuplicate = await automationService.checkCouponDispatch(
+        console.log(`${routeLogPrefix} Encontradas ${activeRules.length} regras selecionadas para processamento.`);
+
+        const config = source.config || {};
+        const batchLimit = config.batchLimit || 5;
+        let routeCycleCount = 0;
+
+        for (const rule of activeRules) {
+          if (routeCycleCount >= batchLimit) break;
+
+          const itemType = rule.item_type;
+          const coupon = rule.coupon;
+          const promoPage = rule.promo_page;
+
+          // --- 5. GUARDRAIL: PROMO LANDING PROTECTION ---
+          if (itemType === 'promo_landing') {
+            console.log(`${routeLogPrefix} [RULE:${rule.id}] Pulo: promo_landing requer opt-in explícito e guardrail dedicado.`);
+            // Marcamos como processado para não travar o loop de agendamento se estiver selecionado
+            const nextRunAt = new Date(Date.now() + (rule.interval_minutes || 60) * 60000);
+            await autoService.updateCouponRule(rule.id, { 
+              next_run_at: nextRunAt.toISOString(),
+              updated_at: new Date().toISOString()
+            }, supabase);
+            continue;
+          }
+
+          if (itemType === 'coupon' && !coupon) {
+            console.warn(`${routeLogPrefix} [RULE:${rule.id}] Regra de cupom sem o cupom descoberto.`);
+            continue;
+          }
+
+          // --- 6. DETERMINISTIC CYCLE KEY (BUCKET-BASED) ---
+          // A cycle_key é baseada no cupom, destino e no bucket de tempo do intervalo.
+          // Isso garante que se o mesmo cupom for disparado por rotas diferentes
+          // para o mesmo destino no mesmo ciclo, eles batam no mesmo bucket e ocorra o dedupe.
+          const intervalMinutes = rule.interval_minutes || 60;
+          const intervalMs = intervalMinutes * 60 * 1000;
+          const anchorTs = new Date(rule.next_run_at || now).getTime();
+          // Bucketing: Truncamos o horário do agendamento para o início do intervalo
+          const bucketTs = Math.floor(anchorTs / intervalMs) * intervalMs;
+          
+          // Chave: coupon + target + bucket (Global Cycle Dedupe)
+          const cycleKey = `coupon:${coupon.id}:target:${route.target_id}:due:${bucketTs}`;
+
+          // --- 7. DEDUPE ---
+          // 7.1 Dedupe por Rota + Ciclo (Recorrência Segura)
+          const isCycleDuplicate = await autoService.checkCouponDispatch(
             source.user_id,
             coupon.id,
             route.id,
             route.target_id,
+            cycleKey,
             supabase
           );
 
-          if (isRouteDuplicate) {
+          if (isCycleDuplicate) {
             totalSkippedByDedupe++;
             continue;
           }
 
-          // 4.2 Dedupe Global por Destino (Evita duplicidade entre diferentes automações)
-          const isGlobalDuplicate = await automationService.checkGlobalTargetCouponDispatch(
+          // 7.2 Dedupe Global por Destino (Opcional, mas mantido para segurança inicial)
+          // Na recorrência, talvez o usuário QUEIRA reenviar o mesmo cupom mesmo que outra automação tenha enviado.
+          // Mas por enquanto mantemos a política de não floodar o mesmo destino com o mesmo cupom.
+          const isGlobalDuplicate = await autoService.checkGlobalTargetCouponDispatch(
             source.user_id,
             coupon.id,
             route.target_id,
@@ -157,46 +215,48 @@ export const capturedCouponDispatcher = {
 
           if (isGlobalDuplicate) {
             totalSkippedByGlobalTargetDedupe++;
-            // Registrar como pulado por dedupe global para evitar re-processamento por esta rota
-            await automationService.registerCouponDispatch({
+            // Registrar como pulado para este ciclo
+            await autoService.registerCouponDispatch({
               user_id: source.user_id,
               coupon_id: coupon.id,
               route_id: route.id,
               target_id: route.target_id,
               status: 'skipped',
+              cycle_key: cycleKey,
               dedupe_key: `global_dedupe:${source.user_id}:${coupon.id}:${route.target_id}`
+            }, supabase);
+            
+            // Avançar o agendamento da regra para o próximo ciclo
+            const nextRunAt = new Date(Date.now() + (rule.interval_minutes || 60) * 60000);
+            await autoService.updateCouponRule(rule.id, { 
+              next_run_at: nextRunAt.toISOString()
             }, supabase);
             continue;
           }
           
           totalCouponsProcessed++;
 
-          // --- 5. NORMALIZATION & RE-AFFILIATION ---
+          // --- 8. NORMALIZATION & RE-AFFILIATION ---
           try {
-            // Normalizar dados do cupom (extrair código do label, limpar lixo)
             const norm = normalizeShopeeCouponForMessage(coupon);
-            
             let finalAffiliateLink = '';
             
             if (norm.effectiveLink) {
               const preResult = await shopeeAdapter.preProcessIncomingLink(norm.effectiveLink, shopeeConn);
-              
               if (preResult.reaffiliation_status === 'reaffiliated' || preResult.reaffiliation_status === 'canonicalized' || preResult.reaffiliation_status === 'resolved') {
                 finalAffiliateLink = preResult.generated_affiliate_url || preResult.affiliateUrl || '';
               } else {
-                console.warn(`${sourceLogPrefix} [SKIP] Falha na reafiliação do cupom ${coupon.id}: ${preResult.reaffiliation_error}`);
+                console.warn(`${routeLogPrefix} [SKIP] Falha na reafiliação do cupom ${coupon.id}: ${preResult.reaffiliation_error}`);
                 continue;
               }
             }
 
-            // Se não tem link de resgate e nem código, o cupom é inválido para envio
             if (!finalAffiliateLink && !norm.code) {
-              console.warn(`${sourceLogPrefix} [SKIP] Cupom ${coupon.id} sem link de resgate e sem código.`);
+              console.warn(`${routeLogPrefix} [SKIP] Cupom ${coupon.id} sem link de resgate e sem código.`);
               continue;
             }
 
-            // --- 6. RENDER TEMPLATE ---
-            // Construímos um contexto simplificado para o cupom usando os dados normalizados
+            // --- 9. RENDER TEMPLATE ---
             const couponContext = {
               product_name: norm.discountLine.replace(/^💸\s*/, '') || 'Cupom Shopee',
               affiliate_link: finalAffiliateLink,
@@ -218,11 +278,11 @@ export const capturedCouponDispatcher = {
             const messageText = renderSmartTemplate(templateBody, couponContext as any);
 
             if (!messageText) {
-              console.warn(`${sourceLogPrefix} [SKIP] Template resultou em mensagem vazia para cupom ${coupon.id}`);
+              console.warn(`${routeLogPrefix} [SKIP] Template resultou em mensagem vazia para cupom ${coupon.id}`);
               continue;
             }
 
-            // --- 7. CREATE CAMPAIGN ---
+            // --- 10. CREATE CAMPAIGN ---
             const campaign = await campaignService.create(source.user_id, {
               name: `Automação: ${source.name}`,
               origin: 'automation_coupon',
@@ -235,11 +295,10 @@ export const capturedCouponDispatcher = {
                 confirmedAutomationRoute: true,
                 automationSourceId: source.id,
                 automationRouteId: route.id,
+                couponRuleId: rule.id,
                 couponId: coupon.id,
-                dispatchOrigin: 'captured_coupon_dispatch',
-                // Guardar dados do cupom no metadata global para facilitar rastreio se necessário
-                coupon_label: norm.discountLine,
-                coupon_code: norm.code
+                cycleKey: cycleKey,
+                dispatchOrigin: 'captured_coupon_dispatch'
               },
               items: [{
                 product_name: norm.code ? `Cupom Shopee ${norm.code}` : (norm.discountLine.replace(/^💸\s*/, '') || 'Cupom Shopee'),
@@ -251,7 +310,6 @@ export const capturedCouponDispatcher = {
               }]
             }, supabase);
 
-            // Tentar obter o send_job_id criado para o histórico
             let sendJobId: string | null = null;
             let jobStatus: any = 'queued';
             
@@ -267,10 +325,10 @@ export const capturedCouponDispatcher = {
             }
 
             totalCreated++;
-            userCycleCount++;
+            routeCycleCount++;
 
-            // Registrar sucesso na tabela de deduplicação
-            await automationService.registerCouponDispatch({
+            // --- 11. REGISTER DISPATCH & UPDATE RULE ---
+            await autoService.registerCouponDispatch({
               user_id: source.user_id,
               coupon_id: coupon.id,
               route_id: route.id,
@@ -279,21 +337,36 @@ export const capturedCouponDispatcher = {
               send_job_id: sendJobId,
               status: jobStatus === 'completed' || jobStatus === 'sent' ? 'sent' : 'queued',
               sent_at: jobStatus === 'completed' || jobStatus === 'sent' ? new Date().toISOString() : null,
-              dedupe_key: `user:${source.user_id}:coupon:${coupon.id}:route:${route.id}:target:${route.target_id}`
+              cycle_key: cycleKey,
+              dedupe_key: `rule:${rule.id}:cycle:${cycleKey}:target:${route.target_id}`
             }, supabase);
 
-            console.log(`${sourceLogPrefix} [SUCCESS] Campanha ${campaign.id} criada para cupom ${coupon.id}`);
+            // Atualizar o agendamento da regra: next_run = now + interval
+            const nextRunAt = new Date(Date.now() + (rule.interval_minutes || 60) * 60000);
+            await autoService.updateCouponRule(rule.id, { 
+              last_sent_at: new Date().toISOString(),
+              next_run_at: nextRunAt.toISOString()
+            }, supabase);
+
+            console.log(`${routeLogPrefix} [SUCCESS] Campanha ${campaign.id} criada para cupom ${coupon.id} (Ciclo: ${cycleKey})`);
 
           } catch (err: any) {
-            console.error(`${sourceLogPrefix} [ERROR] Erro ao processar cupom ${coupon.id}:`, err.message);
-            // Registrar falha para evitar retry infinito no mesmo ciclo
-            await automationService.registerCouponDispatch({
+            console.error(`${routeLogPrefix} [ERROR] Erro ao processar cupom ${coupon.id}:`, err.message);
+            // Registrar falha para este ciclo
+            await autoService.registerCouponDispatch({
               user_id: source.user_id,
               coupon_id: coupon.id,
               route_id: route.id,
               target_id: route.target_id,
               status: 'failed',
-              dedupe_key: `user:${source.user_id}:coupon:${coupon.id}:route:${route.id}:target:${route.target_id}`
+              cycle_key: cycleKey,
+              dedupe_key: `rule:${rule.id}:cycle:${cycleKey}:fail`
+            }, supabase);
+            
+            // Mesmo em caso de erro, avançamos o agendamento para não travar a fila
+            const nextRunAt = new Date(Date.now() + (rule.interval_minutes || 60) * 60000);
+            await autoService.updateCouponRule(rule.id, { 
+              next_run_at: nextRunAt.toISOString()
             }, supabase);
           }
         }

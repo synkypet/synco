@@ -26,6 +26,7 @@ import { LogFeed } from '@/components/automation/LogFeed';
 import { AutomationStatusHeader } from '@/components/automation/AutomationStatusHeader';
 import { AutomationTargetSelector } from '@/components/automation/AutomationTargetSelector';
 import { QuickListCreateDialog } from '@/components/automation/QuickListCreateDialog';
+import { CouponManagementBlock } from '@/components/automation/CouponManagementBlock';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -192,6 +193,16 @@ export default function AutomationDetailPage() {
           }
         }}
       />
+
+      {/* BLOCO ESPECIAL: GESTÃO DE CUPONS (Apenas para captured_coupons_shopee) */}
+      {source.source_type === 'captured_coupons_shopee' && routes && routes.length > 0 && (
+        <div className="animate-in slide-in-from-bottom-4 duration-700">
+          <CouponManagementBlock 
+            sourceId={source.id} 
+            routeId={routes[0].id} 
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* COLUNA DA ESQUERDA/CENTRAL: HISTÓRICO DE AÇÕES */}

@@ -603,17 +603,18 @@ export const automationService = {
   },
 
   /**
-   * Verifica se um cupom já foi enviado para uma rota/destino específica.
+   * Verifica se um cupom já foi enviado para um destino específico em um ciclo específico.
+   * Implementa deduplicação global por ciclo (ignora a rota/automação específica).
    */
-  async checkCouponDispatch(userId: string, couponId: string, routeId: string, targetId: string, client?: SupabaseClient): Promise<boolean> {
+  async checkCouponDispatch(userId: string, couponId: string, routeId: string, targetId: string, cycleKey: string, client?: SupabaseClient): Promise<boolean> {
     const supabase = client || createClient();
     const { data, error } = await supabase
       .from('automation_coupon_dispatches')
       .select('id')
       .eq('user_id', userId)
       .eq('coupon_id', couponId)
-      .eq('route_id', routeId)
       .eq('target_id', targetId)
+      .eq('cycle_key', cycleKey)
       .maybeSingle();
 
     if (error) {
@@ -636,6 +637,7 @@ export const automationService = {
     status: 'queued' | 'sent' | 'failed' | 'skipped';
     sent_at?: string | null;
     dedupe_key: string;
+    cycle_key: string;
   }, client?: SupabaseClient): Promise<void> {
     const supabase = client || createClient();
     const { error } = await supabase
@@ -659,7 +661,7 @@ export const automationService = {
       .eq('user_id', userId)
       .eq('coupon_id', couponId)
       .eq('target_id', targetId)
-      .in('status', ['queued', 'sent'])
+      .in('status', ['sent']) // Na recorrência, verificamos se já foi enviado com sucesso globalmente (opcional, dependendo da estratégia)
       .maybeSingle();
 
     if (error) {
@@ -667,5 +669,115 @@ export const automationService = {
       return false;
     }
     return !!data;
+  },
+
+  /**
+   * Busca as regras de cupom de uma fonte/rota
+   */
+  async getCouponRules(sourceId: string, routeId: string, client?: SupabaseClient) {
+    const supabase = client || createClient();
+    const { data, error } = await supabase
+      .from('automation_coupon_rules')
+      .select(`
+        *,
+        coupon:discovered_coupons(*),
+        promo_page:discovered_promo_pages(*)
+      `)
+      .eq('source_id', sourceId)
+      .eq('route_id', routeId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[AUTO-SERVICE] [GET-COUPON-RULES-ERROR]', error);
+      return [];
+    }
+    return data || [];
+  },
+
+  /**
+   * Sincroniza candidatos de cupons capturados para as regras.
+   * Novos cupons entram como is_selected=false.
+   */
+  async syncRulesFromCandidates(sourceId: string, routeId: string, userId: string, client?: SupabaseClient) {
+    const supabase = client || createClient();
+
+    // 1. Buscar candidatos recentes para esta fonte (discovered_coupons)
+    const { data: candidates, error: candError } = await supabase
+      .from('discovered_coupons')
+      .select('id')
+      .eq('source_id', sourceId)
+      .limit(100);
+
+    if (candError) throw candError;
+
+    // 2. Buscar candidatos de promo pages
+    const { data: promoCandidates, error: promoError } = await supabase
+      .from('discovered_promo_pages')
+      .select('id')
+      .eq('source_id', sourceId)
+      .limit(100);
+
+    if (promoError) throw promoError;
+
+    // 3. Upsert Seguro: Criar rules apenas se não existirem
+    if (candidates && candidates.length > 0) {
+      const couponRules = candidates.map(c => ({
+        user_id: userId,
+        source_id: sourceId,
+        route_id: routeId,
+        coupon_id: c.id,
+        item_type: 'coupon',
+        is_selected: false,
+        is_active: true
+      }));
+
+      await supabase.from('automation_coupon_rules').upsert(couponRules, { 
+        onConflict: 'source_id, route_id, coupon_id' 
+      });
+    }
+
+    if (promoCandidates && promoCandidates.length > 0) {
+      const promoRules = promoCandidates.map(p => ({
+        user_id: userId,
+        source_id: sourceId,
+        route_id: routeId,
+        promo_page_id: p.id,
+        item_type: 'promo_landing',
+        is_selected: false,
+        is_active: true
+      }));
+
+      await supabase.from('automation_coupon_rules').upsert(promoRules, { 
+        onConflict: 'source_id, route_id, promo_page_id' 
+      });
+    }
+  },
+
+  /**
+   * Atualiza uma regra específica (Backend Only / Service Role)
+   */
+  async updateCouponRule(ruleId: string, updates: any, client?: SupabaseClient) {
+    const supabase = client || createClient();
+    const { error } = await supabase
+      .from('automation_coupon_rules')
+      .update(updates)
+      .eq('id', ruleId);
+    
+    if (error) throw error;
+  },
+
+  /**
+   * Upsert de regra manual (Backend Only)
+   */
+  async upsertCouponRule(rule: any, client?: SupabaseClient) {
+    const supabase = client || createClient();
+    const { data, error } = await supabase
+      .from('automation_coupon_rules')
+      .upsert(rule)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
   }
 };

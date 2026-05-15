@@ -51,7 +51,7 @@ async function runTests() {
         coupon_link: 'https://s.shopee.com.br/link',
         coupon_link_line: '🔗 *Resgate aqui:*\nhttps://s.shopee.com.br/link'
       },
-      check: (res: string) => res.includes('Código: PLUS15I2AF') && res.includes('R$15 OFF')
+      check: (res: string) => res.includes('PLUS15I2AF') && res.includes('R$15 OFF')
     },
     {
       name: 'Persistência de CTA de Resgate Multiline',

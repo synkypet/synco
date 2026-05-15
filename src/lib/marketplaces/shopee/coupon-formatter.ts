@@ -9,7 +9,7 @@ export function formatShopeeCouponMessage(coupon: ShopeeCoupon): string {
   const isLanding = isLandingPageType || isLandingUrl;
 
   // Títulos amigáveis (Regra 2E.1A)
-  const title = isLanding ? '🚨 *CUPONS SHOPEE LIBERADOS!* 🚨' : '🔥 *CUPOM DE DESCONTO LIBERADO!*';
+  const title = isLanding ? '🚨 *CUPONS SHOPEE LIBERADOS!* 🚨' : '🔥 *CUPOM SHOPEE LIBERADO!* 🔥';
   
   // Limpeza de label para evitar "R$ OFF" ou valores vazios
   const rawLabel = (coupon.couponLabel || '').trim();

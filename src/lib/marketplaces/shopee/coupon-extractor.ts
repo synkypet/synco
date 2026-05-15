@@ -41,7 +41,8 @@ export function generateDedupeKey(coupon: Partial<ShopeeCoupon>): string {
 const BLACKLISTED_CODES = [
   'SHOPEE', 'CUPOM', 'CODIGO', 'OFF', 'PIX', 'FRETE', 'GRATIS', 'LINK', 
   'RESGATE', 'PROMO', 'TUDO', 'LOJAS', 'CONFIRA', 'APROVEITE', 'CLIQUE', 
-  'AQUI', 'SITE', 'APP', 'VÁLIDO', 'VALIDO', 'GANHE', 'VOLTOU', 'TOP'
+  'AQUI', 'SITE', 'APP', 'VÁLIDO', 'VALIDO', 'GANHE', 'VOLTOU', 'TOP',
+  'LIBERADO', 'DISPONIVEL', 'OFERTA', 'DESCONTO', 'ESPECIAL'
 ];
 
 /**
@@ -52,8 +53,8 @@ export function formatDiscountLabel(label: string): string {
   if (!label) return '';
   
   let formatted = label
-    .replace(/⚡|🔥|🎟️|✨|💥|💸/g, '') // Remove emojis de destaque e financeiros para limpeza
-    .replace(/^\s*\*+\s*/, '') // Remove asteriscos órfãos no início
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{1F1E6}-\u{1F1FF}]/gu, '') // Remove emojis
+    .replace(/\*/g, '') // Remove asteriscos existentes para evitar duplicação
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -85,7 +86,7 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
   });
 
   // 2. Extração de Código (Estratégia A: Com Prefixos)
-  const explicitCodePatterns = /(?:use\s+o\s+)?(?:cupom|código|codigo):\s*([A-Z0-9]{5,20})/gi;
+  const explicitCodePatterns = /(?:use\s+o\s+)?(?:cupom|código|codigo):\s*([A-Z0-9]{8,20})(?!\w)/gi;
   let match;
   while ((match = explicitCodePatterns.exec(rawText)) !== null) {
     const code = match[1].toUpperCase();
@@ -107,14 +108,18 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
   // Se não encontrou código explícito, tenta procurar por tokens isolados no início
   if (coupons.length === 0) {
     for (let i = 0; i < Math.min(lines.length, 3); i++) {
-      const line = lines[i];
-      // Procura por algo como: ⚡ *PLUS15I2AF ou apenas PLUS15I2AF
-      const standalonePattern = /(?:⚡|🔥|🎟️)?\s*\*?([A-Z0-9]{8,15})\*?/i;
-      const isolatedMatch = line.match(standalonePattern);
+      let line = lines[i];
+      // Remover URLs da linha para não extrair tokens de URL como códigos
+      const urlRegex = /https?:\/\/[^\s]+/gi;
+      line = line.replace(urlRegex, '').trim();
       
-      if (isolatedMatch) {
-        const code = isolatedMatch[1].toUpperCase();
-        if (!BLACKLISTED_CODES.includes(code) && !/^\d+$/.test(code) && !code.includes('OFF')) {
+      const standalonePattern = /(?:⚡|🔥|🎟️)?\s*(?<!\w)([A-Z0-9]{8,15})(?!\w)/i;
+      const isolatedMatch = line.match(standalonePattern);
+        
+        if (isolatedMatch) {
+          const code = isolatedMatch[1].toUpperCase();
+          // Heurística: se tem 'OFF' ou é apenas números curtos, não é código de cupom
+          if (!BLACKLISTED_CODES.includes(code) && !/^\d+$/.test(code) && !code.includes('OFF') && !code.includes('HTTP')) {
           coupons.push({
             marketplace: 'shopee',
             type: 'codigo',
@@ -133,7 +138,7 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
 
   // 4. Extração de Desconto + Link
   // Detecta: R$50 OFF: https://... ou Cupom 50%: https://... ou linhas de desconto soltas
-  const discountLinePattern = /((?:R\$\s?\d+|(?:\d+)\s?%)\s?OFF[^:\n]*)/gi;
+  const discountLinePattern = /((?:R\$\s?\d+|(?:\d+)\s?%)\s?OFF(?:[^\n|]*))/gi;
   while ((match = discountLinePattern.exec(rawText)) !== null) {
     const rawLabel = match[1].trim();
     const formattedLabel = formatDiscountLabel(rawLabel);
