@@ -166,7 +166,7 @@ export const capturedCouponDispatcher = {
               product_name: coupon.coupon_label || 'Cupom Shopee',
               affiliate_link: finalAffiliateLink,
               coupon_code: coupon.code,
-              coupon_discount_line: coupon.coupon_label ? `⚡ *${coupon.coupon_label}*` : '',
+              coupon_discount_line: coupon.coupon_label ? `💸 ${coupon.coupon_label}` : '',
               coupon_link: finalAffiliateLink,
               smart_price_block: '',
               original_price_line: '',

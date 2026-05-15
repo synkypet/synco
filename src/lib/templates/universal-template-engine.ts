@@ -56,12 +56,14 @@ export const DEFAULT_TEMPLATES = {
 
 ⚠️ Preços e cupons sujeitos à disponibilidade da Shopee.`,
 
-  shopee_coupon: `🔥 *CUPOM DE DESCONTO LIBERADO!*
+  shopee_coupon: `🔥 *CUPOM SHOPEE LIBERADO!* 🔥
 
 {{coupon_discount_line}}
 🎟️ *Código:* {{coupon_code}}
 
-🔗 Resgate aqui:
+⚡ Resgate antes que acabe.
+
+🔗 *Resgate aqui:*
 {{coupon_link}}
 
 ⚠️ Cupom sujeito à disponibilidade e limite de uso na Shopee.`,
@@ -221,11 +223,16 @@ export function renderSmartTemplate(template: string, context: SmartTemplateCont
     result = result.replace(regex, value);
   });
 
-  // 3. Limpeza de Placeholders Orfãos
+  // 3. Limpeza de Placeholders Orfãos e Linhas Vazias Decorrentes
+  // Remove linhas inteiras que contenham apenas um label e um placeholder vazio
+  // Ex: "🎟️ *Código:* " -> ""
+  const orphanLines = /^(?:🎟️|💸|🔗|📦|🛍️|⚡).*:\s*$/gm;
+  result = result.replace(orphanLines, '');
+
   result = result.replace(/\{\{[a-z0-9_]+\}\}/gi, '');
 
   // 4. Limpeza de Labels Viúvas (SEGURANÇA)
-  const widowLabels = /^(?:Pix:|Por:|De:|🔥 Por:|💥 Por:|💳 ou)\s*$/gmi;
+  const widowLabels = /^(?:Pix:|Por:|De:|🔥 Por:|💥 Por:|💳 ou|🎟️ \*Código:\*|🔗 \*Resgate aqui:\*)\s*$/gmi;
   result = result.replace(widowLabels, '');
 
   // 5. Normalização de Quebras de Linha

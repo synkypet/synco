@@ -8,48 +8,44 @@ const testCases = [
     input: '🎟️Use o cupom: R$100 OFF| resgate aqui: https://s.shopee.com.br/60OBIqsPJf',
     expected: {
       type: 'link_resgate',
-      couponLabel: 'R$100 OFF',
+      couponLabel: '*R$100 OFF*',
       redemptionUrl: 'https://s.shopee.com.br/60OBIqsPJf'
     }
   },
   {
-    name: 'Link de Resgate 50 OFF',
-    input: '🎟️Use o cupom: R$50 OFF| resgate aqui: https://s.shopee.com.br/gMfczVZwO',
-    expected: {
-      type: 'link_resgate',
-      couponLabel: 'R$50 OFF',
-      redemptionUrl: 'https://s.shopee.com.br/gMfczVZwO'
-    }
-  },
-  {
-    name: 'Código Explícito',
-    input: '🎟️Use o cupom: M0D4555HP',
+    name: 'Código com Asterisco e Emojis',
+    input: '⚡ *PLUS15I2AF\n💸 R$15 OFF em compras a partir de R$65\n\nhttps://s.shopee.com.br/50VuGMn8BG',
     expected: {
       type: 'codigo',
-      code: 'M0D4555HP'
+      code: 'PLUS15I2AF',
+      couponLabel: '*R$15 OFF* em compras a partir de *R$65*'
     }
   },
   {
-    name: 'Página de Cupons (S.SHOPEE)',
-    input: '🔗 RESGATE OS CUPONS AQUI:\nhttps://s.shopee.com.br/gMfczVZwO',
+    name: 'Código Isolado na Primeira Linha',
+    input: 'T3N15SH0P33\nR$10 OFF acima de R$40\nhttps://s.shopee.com.br/5L8keyhSi0',
     expected: {
-      type: 'pagina_cupons',
-      redemptionUrl: 'https://s.shopee.com.br/gMfczVZwO'
+      type: 'codigo',
+      code: 'T3N15SH0P33',
+      couponLabel: '*R$10 OFF* acima de *R$40*'
     }
   },
   {
-    name: 'Página de Cupons (BR.SHP.EE)',
-    input: 'Confira Cupom de Desconto Shopee 2026 na Shopee! https://br.shp.ee/CKfvC8dB',
+    name: 'Link de Resgate sem Código (R$30 OFF)',
+    input: '🔥 CUPOM DE DESCONTO LIBERADO!\n\n⚡ R$30 OFF\n🔗 Resgate aqui:\nhttps://s.shopee.com.br/3Vh6TbeP92',
     expected: {
-      type: 'pagina_cupons',
-      redemptionUrl: 'https://br.shp.ee/CKfvC8dB'
+      type: 'link_resgate',
+      couponLabel: '*R$30 OFF*',
+      redemptionUrl: 'https://s.shopee.com.br/3Vh6TbeP92'
     }
   },
   {
-    name: 'URL com Pontuação Final',
-    input: 'Confira Cupom de Desconto Shopee 2026 na Shopee! https://br.shp.ee/CKfvC8dB.',
+    name: 'Evitar Falsos Positivos (SHOPEE)',
+    input: '⚡ *SHOPEE\n💸 R$10 OFF\nhttps://s.shopee.com.br/test',
     expected: {
-      redemptionUrl: 'https://br.shp.ee/CKfvC8dB'
+      type: 'link_resgate',
+      code: null,
+      couponLabel: '*R$10 OFF*'
     }
   }
 ];

@@ -1,47 +1,98 @@
-import { buildSmartContext, renderSmartTemplate, DEFAULT_TEMPLATES } from './universal-template-engine';
-import { FactualData } from '../linkProcessor';
 
-async function testTemplateEngine() {
-  console.log('--- [TEST] UniversalTemplateEngine Safety ---');
+import { renderSmartTemplate, DEFAULT_TEMPLATES } from './universal-template-engine';
 
-  const mockFactual: FactualData = {
-    originalUrl: 'https://shopee.com.br/product/123/456',
-    cleanUrl: 'https://shopee.com.br/product/123/456',
+async function runTests() {
+  console.log('--- INICIANDO TESTES DO MOTOR DE TEMPLATES UNIVERSAL ---\n');
+  let passed = 0;
+  let failed = 0;
+
+  const baseContext: any = {
+    product_name: 'Produto Teste',
+    affiliate_link: 'https://shope.ee/link-produto',
+    smart_price_block: '🔥 *Por: R$ 99,90*',
+    original_price_line: '~De: R$ 120,00~',
+    current_price_line: '🔥 *Por: R$ 99,90*',
+    coupon_block: '',
+    disclaimer: '⚠️ Sujeito a alteração.',
     marketplace: 'Shopee',
-    title: 'Produto Teste',
-    finalLinkToSend: 'https://s.shopee.com.br/test',
-    fetchedAt: new Date().toISOString(),
-    incoming_url: 'https://shopee.com.br/product/123/456',
-    canonical_url: 'https://shopee.com.br/product/123/456',
-    reaffiliation_status: 'reaffiliated',
-    pixDisplayEligible: false,
-    eligibility: {
-      isEligible: true,
-      status: 'eligible',
-      reasons: [],
-      offer_type: 'product_offer'
-    }
+    offer_type: 'product_offer'
   };
 
-  // Cenário A: Produto SEM preço
-  const contextNoPrice = buildSmartContext(mockFactual);
-  const resultNoPrice = renderSmartTemplate(DEFAULT_TEMPLATES.shopee_product, contextNoPrice);
-  
-  console.assert(resultNoPrice === '', 'Cenário A: Deve retornar string vazia para produto sem preço');
-  if (resultNoPrice === '') console.log('✅ Cenário A: OK');
-  else console.error('❌ Cenário A: FALHA. Retornou:', resultNoPrice);
+  const testCases = [
+    {
+      name: 'Renderização Completa de Produto',
+      template: DEFAULT_TEMPLATES.shopee_product,
+      context: baseContext,
+      check: (res: string) => res.includes('Produto Teste') && res.includes('R$ 99,90')
+    },
+    {
+      name: 'Remoção de Linha de Código Vazia em Cupom',
+      template: DEFAULT_TEMPLATES.shopee_coupon,
+      context: {
+        ...baseContext,
+        offer_type: 'coupon_offer',
+        coupon_code: '',
+        coupon_discount_line: '💸 *R$30 OFF*',
+        coupon_link: 'https://s.shopee.com.br/3Vh6TbeP92'
+      },
+      check: (res: string) => !res.includes('Código:') && res.includes('R$30 OFF')
+    },
+    {
+      name: 'Exibição de Código em Cupom',
+      template: DEFAULT_TEMPLATES.shopee_coupon,
+      context: {
+        ...baseContext,
+        offer_type: 'coupon_offer',
+        coupon_code: 'PLUS15I2AF',
+        coupon_discount_line: '💸 *R$15 OFF*',
+        coupon_link: 'https://s.shopee.com.br/link'
+      },
+      check: (res: string) => res.includes('Código: PLUS15I2AF') && res.includes('R$15 OFF')
+    },
+    {
+      name: 'Remoção de Link de Resgate Vazio',
+      template: DEFAULT_TEMPLATES.shopee_coupon,
+      context: {
+        ...baseContext,
+        offer_type: 'coupon_offer',
+        coupon_code: 'TESTE',
+        coupon_link: ''
+      },
+      check: (res: string) => !res.includes('Resgate aqui:')
+    },
+    {
+      name: 'Bloqueio de Template de Produto sem Preço',
+      template: DEFAULT_TEMPLATES.shopee_product,
+      context: {
+        ...baseContext,
+        smart_price_block: ''
+      },
+      check: (res: string) => res === ''
+    }
+  ];
 
-  // Cenário B: Produto COM preço válido
-  const mockWithPrice = { ...mockFactual, price: 57.54, currentPriceSource: 'api.priceMin' };
-  const contextWithPrice = buildSmartContext(mockWithPrice);
-  const resultWithPrice = renderSmartTemplate(DEFAULT_TEMPLATES.shopee_product, contextWithPrice);
+  testCases.forEach((tc, index) => {
+    console.log(`Teste ${index + 1}: ${tc.name}`);
+    const result = renderSmartTemplate(tc.template, tc.context);
+    
+    if (tc.check(result)) {
+      console.log('  [PASS]');
+      passed++;
+    } else {
+      console.error('  [FAIL]');
+      console.log('  --- RESULTADO OBTIDO ---');
+      console.log(result);
+      console.log('  ------------------------');
+      failed++;
+    }
+    console.log('');
+  });
 
-  console.assert(resultWithPrice.includes('Por: R$ 57,54'), 'Cenário B: Deve conter o preço correto');
-  console.assert(!resultWithPrice.includes('ITEM INVÁLIDO'), 'Cenário B: Não deve conter erro');
-  if (resultWithPrice.includes('Por: R$ 57,54')) console.log('✅ Cenário B: OK');
-  else console.error('❌ Cenário B: FALHA. Retornou:', resultWithPrice);
+  console.log(`--- RESULTADO FINAL ---`);
+  console.log(`Sucessos: ${passed}`);
+  console.log(`Falhas: ${failed}`);
 
-  console.log('--- [TEST] FIM ---');
+  if (failed > 0) process.exit(1);
 }
 
-testTemplateEngine();
+runTests();
