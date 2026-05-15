@@ -7,6 +7,7 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
+  DialogDescription,
   DialogFooter 
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -85,6 +86,9 @@ export function QuickListCreateDialog({
               <List size={18} className="text-kinetic-orange" />
               Criar Nova Lista de Destino
             </DialogTitle>
+            <DialogDescription className="text-white/40 text-[10px] font-bold uppercase tracking-widest mt-1">
+              Agrupe múltiplos canais para realizar disparos simultâneos via automação.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 mt-6">
