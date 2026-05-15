@@ -198,11 +198,13 @@ export const capturedCouponDispatcher = {
             // --- 6. RENDER TEMPLATE ---
             // Construímos um contexto simplificado para o cupom usando os dados normalizados
             const couponContext = {
-              product_name: norm.discountLine || 'Cupom Shopee',
+              product_name: norm.discountLine.replace(/^💸\s*/, '') || 'Cupom Shopee',
               affiliate_link: finalAffiliateLink,
               coupon_code: norm.code,
+              coupon_code_line: norm.code ? `🎟️ *Código:* ${norm.code}` : '',
               coupon_discount_line: norm.discountLine,
               coupon_link: finalAffiliateLink,
+              coupon_link_line: finalAffiliateLink ? `🔗 *Resgate aqui:*\n${finalAffiliateLink}` : '',
               smart_price_block: '',
               original_price_line: '',
               current_price_line: '',
@@ -240,7 +242,7 @@ export const capturedCouponDispatcher = {
                 coupon_code: norm.code
               },
               items: [{
-                product_name: norm.discountLine || 'Cupom Shopee',
+                product_name: norm.discountLine.replace(/^💸\s*/, '') || 'Cupom Shopee',
                 custom_text: messageText,
                 affiliate_url: finalAffiliateLink,
                 offer_type: 'coupon_offer',
@@ -248,6 +250,21 @@ export const capturedCouponDispatcher = {
                 eligibility_reasons: []
               }]
             }, supabase);
+
+            // Tentar obter o send_job_id criado para o histórico
+            let sendJobId: string | null = null;
+            let jobStatus: any = 'queued';
+            
+            const { data: jobs } = await supabase
+              .from('send_jobs')
+              .select('id, status')
+              .eq('campaign_id', campaign.id)
+              .limit(1);
+            
+            if (jobs && jobs.length > 0) {
+              sendJobId = jobs[0].id;
+              jobStatus = jobs[0].status;
+            }
 
             totalCreated++;
             userCycleCount++;
@@ -259,7 +276,9 @@ export const capturedCouponDispatcher = {
               route_id: route.id,
               target_id: route.target_id,
               campaign_id: campaign.id,
-              status: 'queued',
+              send_job_id: sendJobId,
+              status: jobStatus === 'completed' ? 'sent' : 'queued',
+              sent_at: jobStatus === 'completed' ? new Date().toISOString() : null,
               dedupe_key: `user:${source.user_id}:coupon:${coupon.id}:route:${route.id}:target:${route.target_id}`
             }, supabase);
 

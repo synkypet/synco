@@ -632,7 +632,9 @@ export const automationService = {
     route_id: string;
     target_id: string;
     campaign_id?: string;
+    send_job_id?: string | null;
     status: 'queued' | 'sent' | 'failed' | 'skipped';
+    sent_at?: string | null;
     dedupe_key: string;
   }, client?: SupabaseClient): Promise<void> {
     const supabase = client || createClient();

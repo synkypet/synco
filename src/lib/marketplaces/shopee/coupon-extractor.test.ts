@@ -74,6 +74,30 @@ const normalizationTestCases = [
       code: 'T3N15SH0P33',
       discountLine: '💸 *R$10 OFF* acima de *R$40*'
     }
+  },
+  {
+    name: 'Normalização: Evitar Duplicação de Emoji 💸',
+    coupon: {
+      code: 'PROMO15',
+      coupon_label: '💸 💸 *R$15 OFF*',
+      redemption_url: 'https://s.shopee.com.br/test'
+    },
+    expected: {
+      code: 'PROMO15',
+      discountLine: '💸 *R$15 OFF*'
+    }
+  },
+  {
+    name: 'Normalização: Remover Ruídos Legados (👇, urgência)',
+    coupon: {
+      code: 'CUPOM30',
+      coupon_label: '💸 R$30 OFF\n👇 Resgate agora!\n⚠️ Corre porque esse cupom acaba rápido!',
+      redemption_url: 'https://s.shopee.com.br/test'
+    },
+    expected: {
+      code: 'CUPOM30',
+      discountLine: '💸 *R$30 OFF* Resgate agora!'
+    }
   }
 ];
 

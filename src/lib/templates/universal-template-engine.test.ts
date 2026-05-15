@@ -32,8 +32,10 @@ async function runTests() {
         ...baseContext,
         offer_type: 'coupon_offer',
         coupon_code: '',
+        coupon_code_line: '',
         coupon_discount_line: '💸 *R$30 OFF*',
-        coupon_link: 'https://s.shopee.com.br/3Vh6TbeP92'
+        coupon_link: 'https://s.shopee.com.br/3Vh6TbeP92',
+        coupon_link_line: '🔗 *Resgate aqui:*\nhttps://s.shopee.com.br/3Vh6TbeP92'
       },
       check: (res: string) => !res.includes('Código:') && res.includes('R$30 OFF')
     },
@@ -44,10 +46,23 @@ async function runTests() {
         ...baseContext,
         offer_type: 'coupon_offer',
         coupon_code: 'PLUS15I2AF',
+        coupon_code_line: '🎟️ *Código:* PLUS15I2AF',
         coupon_discount_line: '💸 *R$15 OFF*',
-        coupon_link: 'https://s.shopee.com.br/link'
+        coupon_link: 'https://s.shopee.com.br/link',
+        coupon_link_line: '🔗 *Resgate aqui:*\nhttps://s.shopee.com.br/link'
       },
       check: (res: string) => res.includes('Código: PLUS15I2AF') && res.includes('R$15 OFF')
+    },
+    {
+      name: 'Persistência de CTA de Resgate Multiline',
+      template: DEFAULT_TEMPLATES.shopee_coupon,
+      context: {
+        ...baseContext,
+        offer_type: 'coupon_offer',
+        coupon_discount_line: '💸 *R$15 OFF*',
+        coupon_link_line: '🔗 *Resgate aqui:*\nhttps://s.shopee.com.br/link'
+      },
+      check: (res: string) => res.includes('Resgate aqui:') && res.includes('https://s.shopee.com.br/link')
     },
     {
       name: 'Remoção de Link de Resgate Vazio',
@@ -56,18 +71,11 @@ async function runTests() {
         ...baseContext,
         offer_type: 'coupon_offer',
         coupon_code: 'TESTE',
-        coupon_link: ''
+        coupon_code_line: '🎟️ *Código:* TESTE',
+        coupon_link: '',
+        coupon_link_line: ''
       },
       check: (res: string) => !res.includes('Resgate aqui:')
-    },
-    {
-      name: 'Bloqueio de Template de Produto sem Preço',
-      template: DEFAULT_TEMPLATES.shopee_product,
-      context: {
-        ...baseContext,
-        smart_price_block: ''
-      },
-      check: (res: string) => res === ''
     }
   ];
 

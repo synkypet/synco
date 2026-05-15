@@ -25,6 +25,7 @@ async function runTests() {
       in: () => chain,
       gte: () => chain,
       order: () => chain,
+      limit: () => chain,
       maybeSingle: () => Promise.resolve({ data: getMockData(table, true) }),
       single: () => Promise.resolve({ data: getMockData(table, true) }),
       insert: () => Promise.resolve({ data: { id: 'new-id' }, error: null }),

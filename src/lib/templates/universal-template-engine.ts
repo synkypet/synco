@@ -17,8 +17,10 @@ export interface SmartTemplateContext {
   
   // Variáveis para Cupons
   coupon_code?: string | null;
+  coupon_code_line?: string;
   coupon_discount_line?: string;
   coupon_link?: string | null;
+  coupon_link_line?: string;
   coupon_warning?: string;
   
   // Variáveis para Promo Landings
@@ -58,13 +60,12 @@ export const DEFAULT_TEMPLATES = {
 
   shopee_coupon: `🔥 *CUPOM SHOPEE LIBERADO!* 🔥
 
+{{coupon_code_line}}
 {{coupon_discount_line}}
-🎟️ *Código:* {{coupon_code}}
 
 ⚡ Resgate antes que acabe.
 
-🔗 *Resgate aqui:*
-{{coupon_link}}
+{{coupon_link_line}}
 
 ⚠️ Cupom sujeito à disponibilidade e limite de uso na Shopee.`,
 
@@ -159,8 +160,10 @@ export function buildSmartContext(data: FactualData, sourceName?: string): Smart
     disclaimer: disclaimer,
     
     coupon_code: bestCoupon?.code,
+    coupon_code_line: bestCoupon?.code ? `🎟️ *Código:* ${bestCoupon.code}` : '',
     coupon_discount_line: couponDiscountLine,
     coupon_link: bestCoupon?.redemptionUrl || data.finalLinkToSend,
+    coupon_link_line: (bestCoupon?.redemptionUrl || data.finalLinkToSend) ? `🔗 *Resgate aqui:*\n${bestCoupon?.redemptionUrl || data.finalLinkToSend}` : '',
     
     promo_title: data.title,
     promo_link: data.finalLinkToSend,
@@ -198,8 +201,10 @@ export function renderSmartTemplate(template: string, context: SmartTemplateCont
     'coupon_block': context.coupon_block,
     'disclaimer': context.disclaimer,
     'coupon_code': context.coupon_code || '',
+    'coupon_code_line': context.coupon_code_line || '',
     'coupon_discount_line': context.coupon_discount_line || '',
     'coupon_link': context.coupon_link || '',
+    'coupon_link_line': context.coupon_link_line || '',
     'promo_link': context.promo_link || '',
     'source_name': context.source_name || ''
   };
@@ -226,13 +231,16 @@ export function renderSmartTemplate(template: string, context: SmartTemplateCont
   // 3. Limpeza de Placeholders Orfãos e Linhas Vazias Decorrentes
   // Remove linhas inteiras que contenham apenas um label e um placeholder vazio
   // Ex: "🎟️ *Código:* " -> ""
+  // Modificado: só remove se for o FIM da linha e não houver nada depois (nem na próxima linha se for um label isolado)
   const orphanLines = /^(?:🎟️|💸|🔗|📦|🛍️|⚡).*:\s*$/gm;
   result = result.replace(orphanLines, '');
 
   result = result.replace(/\{\{[a-z0-9_]+\}\}/gi, '');
 
   // 4. Limpeza de Labels Viúvas (SEGURANÇA)
-  const widowLabels = /^(?:Pix:|Por:|De:|🔥 Por:|💥 Por:|💳 ou|🎟️ \*Código:\*|🔗 \*Resgate aqui:\*)\s*$/gmi;
+  // Removido labels que podem ser multiline (Código e Resgate) do widowLabels 
+  // para permitir que o valor apareça na linha de baixo se o template for assim.
+  const widowLabels = /^(?:Pix:|Por:|De:|🔥 Por:|💥 Por:|💳 ou)\s*$/gmi;
   result = result.replace(widowLabels, '');
 
   // 5. Normalização de Quebras de Linha

@@ -238,10 +238,13 @@ export function normalizeShopeeCouponForMessage(coupon: any): {
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Aplicar formatação de negrito e emoji de dinheiro
+  // Aplicar formatação de negrito
   discountLine = formatDiscountLabel(discountLine);
+  
   if (discountLine) {
-    discountLine = `💸 ${discountLine}`;
+    // Garantir que começa com exatamente um emoji de dinheiro, sem duplicar
+    // Remove qualquer emoji 💸 existente no início antes de readicionar um limpo
+    discountLine = `💸 ${discountLine.replace(/^💸\s*/, '')}`;
   }
 
   return {
