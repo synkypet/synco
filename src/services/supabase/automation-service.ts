@@ -90,7 +90,7 @@ export const automationService = {
     userId: string, 
     setup: {
       name: string;
-      source_type: 'group_monitor' | 'radar_offers' | 'coupon_shopee';
+      source_type: 'group_monitor' | 'radar_offers' | 'coupon_shopee' | 'captured_coupons_shopee';
       channel_id?: string;
       external_group_id?: string;
       target_type: 'group' | 'list';
@@ -600,5 +600,48 @@ export const automationService = {
       return null;
     }
     return data;
+  },
+
+  /**
+   * Verifica se um cupom já foi enviado para uma rota/destino específica.
+   */
+  async checkCouponDispatch(userId: string, couponId: string, routeId: string, targetId: string, client?: SupabaseClient): Promise<boolean> {
+    const supabase = client || createClient();
+    const { data, error } = await supabase
+      .from('automation_coupon_dispatches')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('coupon_id', couponId)
+      .eq('route_id', routeId)
+      .eq('target_id', targetId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[AUTO-SERVICE] [CHECK-COUPON-DISPATCH-ERROR]', error);
+      return false;
+    }
+    return !!data;
+  },
+
+  /**
+   * Registra um envio de cupom no histórico.
+   */
+  async registerCouponDispatch(dispatch: {
+    user_id: string;
+    coupon_id: string;
+    route_id: string;
+    target_id: string;
+    campaign_id?: string;
+    status: 'queued' | 'sent' | 'failed' | 'skipped';
+    dedupe_key: string;
+  }, client?: SupabaseClient): Promise<void> {
+    const supabase = client || createClient();
+    const { error } = await supabase
+      .from('automation_coupon_dispatches')
+      .insert(dispatch);
+
+    if (error) {
+      console.error('[AUTO-SERVICE] [REGISTER-COUPON-DISPATCH-ERROR]', error);
+    }
   }
 };

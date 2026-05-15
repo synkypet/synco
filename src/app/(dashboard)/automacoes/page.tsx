@@ -104,7 +104,7 @@ export default function AutomacoesDashboardPage() {
   // New Creation State
   const [isNewMonitorOpen, setIsNewMonitorOpen] = useState(false);
   const [newName, setNewName] = useState('');
-  const [entryType, setEntryType] = useState<'group_monitor' | 'radar_offers' | 'coupon_shopee'>('group_monitor');
+  const [entryType, setEntryType] = useState<'group_monitor' | 'radar_offers' | 'coupon_shopee' | 'captured_coupons_shopee'>('group_monitor');
   const [channelId, setChannelId] = useState('');
   const [sourceGroupId, setSourceGroupId] = useState('');
   const [targetType, setTargetType] = useState<'group' | 'list'>('list');
@@ -130,7 +130,7 @@ export default function AutomacoesDashboardPage() {
   // Marketplaces
   const { data: connections } = useUserMarketplaceConnections(user?.id);
   const activeConnectionsCount = connections?.filter(c => c.is_active).length || 0;
-  const isMarketplaceRequiredAndMissing = (entryType === 'radar_offers' || entryType === 'coupon_shopee') && activeConnectionsCount === 0;
+  const isMarketplaceRequiredAndMissing = (entryType === 'radar_offers' || entryType === 'coupon_shopee' || entryType === 'captured_coupons_shopee') && activeConnectionsCount === 0;
 
   // Validação simples
   const isNameValid = newName.trim().length >= 3;
@@ -339,41 +339,52 @@ export default function AutomacoesDashboardPage() {
                     {/* 2. Entrada */}
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">De onde vêm as ofertas?</Label>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setEntryType('group_monitor')}
-                          className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border transition-all ${
-                            entryType === 'group_monitor' 
-                              ? 'bg-kinetic-orange/10 border-kinetic-orange/40 text-kinetic-orange shadow-glow-orange' 
-                              : 'bg-white/5 border-white/10 text-white/20 hover:bg-white/10'
-                          }`}
-                        >
-                          <Radio size={20} className="mb-2" />
-                          <span className="text-[9px] font-black uppercase tracking-widest">Monitorar Grupo</span>
-                        </button>
-                        <button
-                          onClick={() => setEntryType('radar_offers')}
-                          className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border transition-all ${
-                            entryType === 'radar_offers' 
-                              ? 'bg-kinetic-orange/10 border-kinetic-orange/40 text-kinetic-orange shadow-glow-orange' 
-                              : 'bg-white/5 border-white/10 text-white/20 hover:bg-white/10'
-                          }`}
-                        >
-                          <Inbox size={20} className="mb-2" />
-                          <span className="text-[9px] font-black uppercase tracking-widest">Radar de Produtos</span>
-                        </button>
-                        <button
-                          onClick={() => setEntryType('coupon_shopee')}
-                          className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border transition-all ${
-                            entryType === 'coupon_shopee' 
-                              ? 'bg-kinetic-orange/10 border-kinetic-orange/40 text-kinetic-orange shadow-glow-orange' 
-                              : 'bg-white/5 border-white/10 text-white/20 hover:bg-white/10'
-                          }`}
-                        >
-                          <BadgePercent size={20} className="mb-2" />
-                          <span className="text-[9px] font-black uppercase tracking-widest">Cupons Shopee</span>
-                        </button>
-                      </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => setEntryType('group_monitor')}
+                            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all ${
+                              entryType === 'group_monitor' 
+                                ? 'bg-kinetic-orange/10 border-kinetic-orange/40 text-kinetic-orange shadow-glow-orange' 
+                                : 'bg-white/5 border-white/10 text-white/20 hover:bg-white/10'
+                            }`}
+                          >
+                            <Radio size={18} className="mb-2" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Monitorar Grupo</span>
+                          </button>
+                          <button
+                            onClick={() => setEntryType('radar_offers')}
+                            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all ${
+                              entryType === 'radar_offers' 
+                                ? 'bg-kinetic-orange/10 border-kinetic-orange/40 text-kinetic-orange shadow-glow-orange' 
+                                : 'bg-white/5 border-white/10 text-white/20 hover:bg-white/10'
+                            }`}
+                          >
+                            <Inbox size={18} className="mb-2" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Radar de Produtos</span>
+                          </button>
+                          <button
+                            onClick={() => setEntryType('coupon_shopee')}
+                            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all ${
+                              entryType === 'coupon_shopee' 
+                                ? 'bg-kinetic-orange/10 border-kinetic-orange/40 text-kinetic-orange shadow-glow-orange' 
+                                : 'bg-white/5 border-white/10 text-white/20 hover:bg-white/10'
+                            }`}
+                          >
+                            <BadgePercent size={18} className="mb-2" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Campanhas Oficiais</span>
+                          </button>
+                          <button
+                            onClick={() => setEntryType('captured_coupons_shopee')}
+                            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all ${
+                              entryType === 'captured_coupons_shopee' 
+                                ? 'bg-kinetic-orange/10 border-kinetic-orange/40 text-kinetic-orange shadow-glow-orange' 
+                                : 'bg-white/5 border-white/10 text-white/20 hover:bg-white/10'
+                            }`}
+                          >
+                            <Zap size={18} className="mb-2" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Cupons Capturados</span>
+                          </button>
+                        </div>
                     </div>
   
                     {isMarketplaceRequiredAndMissing && (
@@ -602,10 +613,22 @@ export default function AutomacoesDashboardPage() {
                            </div>
                         </div>
 
-                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                           <p className="text-[10px] text-white/40 leading-relaxed italic">
-                             A Shopee tem campanhas ativas periodicamente. Sua automação vai verificar a cada ciclo e enviar quando houver cupons disponíveis que respeitem seus filtros.
-                           </p>
+                        <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+                          <p className="text-[10px] font-medium text-white/40 leading-relaxed italic">
+                            O SYNCO buscará por páginas de campanhas e coleções oficiais da Shopee com alta comissão.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {entryType === 'captured_coupons_shopee' && !isMarketplaceRequiredAndMissing && (
+                      <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
+                        <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+                          <p className="text-[10px] font-medium text-white/40 leading-relaxed italic">
+                            O SYNCO enviará cupons que foram capturados dos grupos monitorados e salvos no Radar. 
+                            <br/><br/>
+                            <span className="text-amber-400/80">⚠️ Cupons são enviados apenas quando capturados e re-afiliados. O sistema não garante que o cupom ainda tenha saldo no momento do envio.</span>
+                          </p>
                         </div>
                       </div>
                     )}

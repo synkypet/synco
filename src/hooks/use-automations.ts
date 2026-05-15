@@ -87,7 +87,7 @@ export function useCreateAutomationPipeline() {
     mutationFn: (setup: {
       userId: string;
       name: string;
-      source_type: 'group_monitor' | 'radar_offers';
+      source_type: 'group_monitor' | 'radar_offers' | 'coupon_shopee' | 'captured_coupons_shopee';
       channel_id?: string;
       external_group_id?: string;
       target_type: 'group' | 'list';

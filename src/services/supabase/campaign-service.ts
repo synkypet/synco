@@ -89,12 +89,24 @@ export const campaignService = {
         dto.metadata?.manualCouponSend === true &&
         dto.metadata?.confirmedByUser === true;
 
-      if (!isManualCoupon) {
-        console.warn(`[CAMPAIGN-SERVICE] [GUARDRAIL] Bloqueio de cupom: Tentativa de envio sem confirmação manual validada para user ${userId}. Origin: ${dto.origin}`);
+      const isAutomationCoupon = 
+        dto.origin === 'automation_coupon' && 
+        dto.metadata?.automationCouponSend === true &&
+        dto.metadata?.confirmedAutomationRoute === true &&
+        !!dto.metadata?.automationSourceId &&
+        !!dto.metadata?.automationRouteId &&
+        !!dto.metadata?.couponId;
+
+      if (!isManualCoupon && !isAutomationCoupon) {
+        console.warn(`[CAMPAIGN-SERVICE] [GUARDRAIL] Bloqueio de cupom: Tentativa de envio sem confirmação válida para user ${userId}. Origin: ${dto.origin}`);
         throw new Error('coupon_manual_confirmation_required');
       }
       
-      console.log(`[CAMPAIGN-SERVICE] [GUARDRAIL] Cupom autorizado para envio manual (Envio Rápido) para user ${userId}.`);
+      if (isManualCoupon) {
+        console.log(`[CAMPAIGN-SERVICE] [GUARDRAIL] Cupom autorizado para envio manual (Envio Rápido) para user ${userId}.`);
+      } else {
+        console.log(`[CAMPAIGN-SERVICE] [GUARDRAIL] Cupom autorizado via Automação de Cupons para user ${userId}. Source: ${dto.metadata?.automationSourceId}`);
+      }
     }
 
     // ─── 1. Validação Prévia ──────────────────────────────────────────────────
@@ -258,6 +270,11 @@ export const campaignService = {
           dto.metadata?.manualCouponSend === true &&
           dto.metadata?.confirmedByUser === true;
 
+        const isAutomationCouponConfirmed = 
+          dto.origin === 'automation_coupon' && 
+          dto.metadata?.automationCouponSend === true &&
+          dto.metadata?.confirmedAutomationRoute === true;
+
         const isManualPromoConfirmed = 
           dto.origin === 'manual' && 
           (dto.metadata?.dispatchOrigin === 'quick_send_manual_promo_landing' || dto.metadata?.dispatchOrigin === 'quick_send_manual_mixed') &&
@@ -265,7 +282,7 @@ export const campaignService = {
           dto.metadata?.confirmedByUser === true;
 
         const isEligible = (item.eligibility_status === 'eligible' || item.eligibility_status === 'warning') && 
-          (!isCoupon || isManualCouponConfirmed) &&
+          (!isCoupon || isManualCouponConfirmed || isAutomationCouponConfirmed) &&
           (originalItem?.offer_type !== 'promo_landing' || isManualPromoConfirmed);
 
         if (isConnected && isEligible) {
