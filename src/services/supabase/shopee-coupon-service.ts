@@ -220,7 +220,11 @@ export const shopeeCouponService = {
 
     // Filtros de validação (Protegidos para backward compatibility)
     if (validationStatus) {
-      query = query.eq('validation_status', validationStatus);
+      if (validationStatus.includes(',')) {
+        query = query.in('validation_status', validationStatus.split(','));
+      } else {
+        query = query.eq('validation_status', validationStatus);
+      }
     }
 
     if (isVerified !== undefined) {
@@ -390,5 +394,48 @@ export const shopeeCouponService = {
     }
 
     return stats;
+  },
+
+  /**
+   * Rejeita/Remove um ou mais cupons capturados.
+   * Não realiza hard delete, apenas marca como 'rejected' e desativa automações.
+   */
+  async rejectCandidates(userId: string, ids: string[], client?: SupabaseClient): Promise<void> {
+    const supabase = client || createClient();
+    
+    // 1. Marcar como rejeitado na tabela de descobertas
+    const { error: updateError } = await supabase
+      .from('discovered_coupons')
+      .update({ 
+        validation_status: 'rejected',
+        is_verified_coupon: false,
+        resolved_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .in('id', ids);
+
+    if (updateError) {
+      // Fallback para caso as colunas de validação não existam ainda (Retrocompatibilidade)
+      if (updateError.code === '42703') {
+        console.warn('[SHOPEE-COUPON-SERVICE] Colunas de validação ausentes ao rejeitar. Ignorando atualização de status.');
+      } else {
+        throw updateError;
+      }
+    }
+
+    // 2. Desativar regras de automação relacionadas para que parem de ser disparadas
+    const { error: ruleError } = await supabase
+      .from('automation_coupon_rules')
+      .update({ 
+        is_active: false, 
+        is_selected: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .in('coupon_id', ids);
+
+    if (ruleError) {
+      console.warn('[SHOPEE-COUPON-SERVICE] Falha ao desativar regras de automação para os itens rejeitados:', ruleError.message);
+    }
   }
 };
