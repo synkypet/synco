@@ -42,7 +42,10 @@ const BLACKLISTED_CODES = [
   'SHOPEE', 'CUPOM', 'CODIGO', 'OFF', 'PIX', 'FRETE', 'GRATIS', 'LINK', 
   'RESGATE', 'PROMO', 'TUDO', 'LOJAS', 'CONFIRA', 'APROVEITE', 'CLIQUE', 
   'AQUI', 'SITE', 'APP', 'VÁLIDO', 'VALIDO', 'GANHE', 'VOLTOU', 'TOP',
-  'LIBERADO', 'DISPONIVEL', 'OFERTA', 'DESCONTO', 'ESPECIAL'
+  'LIBERADO', 'DISPONIVEL', 'OFERTA', 'DESCONTO', 'ESPECIAL',
+  'MASSAGEADOR', 'SILICONE', 'COOKTOP', 'BOLSA', 'PERFUME', 'PANINI', 
+  'INFANTIL', 'FEMININA', 'MASCULINO', 'OFICIAL', 'KIT', 'JOGO', 
+  'CONJUNTO', 'UNIDADES', 'PEÇAS', 'PECAS', 'ESCOVA', 'TENIS', 'TÊNIS'
 ];
 
 /**
@@ -123,7 +126,12 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
         
         if (isolatedMatch) {
           const code = isolatedMatch[1].toUpperCase();
-          if (!BLACKLISTED_CODES.includes(code) && !/^\d+$/.test(code) && !code.includes('OFF') && !code.includes('HTTP')) {
+          // Heurística extra: Para estratégia B (sem prefixo), exigimos que o código contenha pelo menos um número
+          // ou seja explicitamente não uma palavra comum de produto para evitar falsos positivos como "MASSAGEADOR"
+          const hasNumber = /\d/.test(code);
+          const isGeneric = BLACKLISTED_CODES.includes(code);
+          
+          if (!isGeneric && !/^\d+$/.test(code) && !code.includes('OFF') && !code.includes('HTTP') && hasNumber) {
           coupons.push({
             marketplace: 'shopee',
             type: 'codigo',

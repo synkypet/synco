@@ -27,6 +27,7 @@ async function testRigidClassification() {
     {
       name: 'Produto com Cupom (Misto - Checklist 7)',
       text: 'Tênis Nike Air\n🔥 R$ 299,00\n🎟️ Use cupom NIKE10\nhttps://s.shopee.com.br/xyz',
+      factual: { canonical_url: 'https://shopee.com.br/product/1/2' },
       expected: 'product_with_coupon'
     },
     {
@@ -44,7 +45,24 @@ async function testRigidClassification() {
     {
       name: 'Link Genérico sem código (Unknown)',
       text: 'Link Shopee: https://s.shopee.com.br/123',
-      expected: 'unknown'
+      factual: { canonical_url: 'https://shopee.com.br/m/vouchers' },
+      expected: 'verified_coupon' // Com link resolve para voucher é verificado
+    },
+    {
+      name: 'MASSAGEADOR (Deve ser rejeitado como cupom)',
+      text: '🛍️ Massageador Muscular Profissional\n🔥 Por: R$ 574,00\nhttps://s.shopee.com.br/123',
+      factual: { canonical_url: 'https://shopee.com.br/product/1/2' },
+      expected: 'product_offer'
+    },
+    {
+      name: 'SILICONE (Deve ser rejeitado como cupom)',
+      text: '🛍️ Kit Silicone Cozinha\n🔥 Por: R$ 37,54',
+      expected: 'product_offer'
+    },
+    {
+      name: 'Cupom Real sem Link (Deve ser candidate, não verified)',
+      text: '🔥 CUPOM SHOPEE LIBERADO! 🔥\n\n🎟️ Código: PLUS15I2AF\n💸 R$15 OFF',
+      expected: 'candidate'
     }
   ];
 

@@ -296,46 +296,39 @@ export const shopeeCouponService = {
 
     for (const c of candidates) {
       try {
-        let isProduct = false;
-        let isVerified = false;
         let validationStatus: 'candidate' | 'verified' | 'rejected' | 'product_link' = 'candidate';
+        let isVerified = false;
+        let resolvedUrl = c.redemption_url;
 
-        if (c.coupon_type === 'codigo' && c.code) {
-          isVerified = true;
-          validationStatus = 'verified';
-        } else if (c.redemption_url) {
-          const lowerUrl = c.redemption_url.toLowerCase();
-          if (lowerUrl.includes('/product/') || /-i\.\d+\.\d+/.test(lowerUrl)) {
-            isProduct = true;
-          }
-
-          if (!isProduct && (lowerUrl.includes('s.shopee') || lowerUrl.includes('shp.ee'))) {
-            try {
-              const res = await adapter.preProcessIncomingLink(c.redemption_url);
-              if (res.canonical_url) {
-                const lowerCanonical = res.canonical_url.toLowerCase();
-                if (lowerCanonical.includes('/product/') || /-i\.\d+\.\d+/.test(lowerCanonical)) {
-                  isProduct = true;
-                } else if (lowerCanonical.includes('/m/') || lowerCanonical.includes('cupom') || lowerCanonical.includes('/user/voucher')) {
-                  isVerified = true;
-                  validationStatus = 'verified';
-                }
-              } else if (res.reaffiliation_status === 'blocked' || res.reaffiliation_status === 'failed') {
-                validationStatus = 'rejected';
-              }
-            } catch (resErr) {
-              console.warn(`[SHOPEE-COUPON-SERVICE] Erro ao resolver link ${c.redemption_url}:`, resErr);
+        // 1. Resolver Link se necessário para auditoria factual precisa
+        if (c.redemption_url && (c.redemption_url.includes('s.shopee') || c.redemption_url.includes('shp.ee'))) {
+          try {
+            const res = await adapter.preProcessIncomingLink(c.redemption_url);
+            if (res.canonical_url) {
+              resolvedUrl = res.canonical_url;
             }
-          } else if (!isProduct) {
-             if (lowerUrl.includes('/m/') || lowerUrl.includes('cupom')) {
-               isVerified = true;
-               validationStatus = 'verified';
-             }
+          } catch (resErr) {
+            console.warn(`[SHOPEE-COUPON-SERVICE] Erro ao resolver link ${c.redemption_url}:`, resErr);
           }
         }
 
-        if (isProduct) {
+        // 2. Classificação Rígida (FASE 2H.1)
+        const classificationResult = classifyShopeeContentForCoupon(c.raw_text || '', {
+          title: c.coupon_label || undefined,
+          canonical_url: (resolvedUrl || c.redemption_url) || undefined
+        });
+
+        if (classificationResult.classification === 'verified_coupon') {
+          validationStatus = 'verified';
+          isVerified = true;
+        } else if (classificationResult.classification === 'product_offer' || classificationResult.classification === 'product_with_coupon') {
           validationStatus = 'product_link';
+          isVerified = false;
+        } else if (classificationResult.classification === 'rejected') {
+          validationStatus = 'rejected';
+          isVerified = false;
+        } else {
+          validationStatus = 'candidate';
           isVerified = false;
         }
 

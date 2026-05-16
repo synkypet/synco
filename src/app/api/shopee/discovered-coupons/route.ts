@@ -115,17 +115,17 @@ export async function GET(request: Request) {
     // 6. Filtragem Rígida (Fase 2H.1B - Live Classification)
     // Mesmo antes da migration, garantimos que produtos não apareçam na listagem de cupons.
     const strictCoupons = enrichedCoupons.filter(coupon => {
-       // Se já foi classificado pelo banco (após migration) e for verified, mantemos.
-       // Caso contrário, classificamos em tempo real.
-       if (coupon.validation_status === 'verified' && coupon.is_verified_coupon === true) return true;
-       if (coupon.validation_status === 'product_link' || coupon.validation_status === 'rejected') return false;
-
+       // Classificamos em tempo real para garantir que dados contaminados no banco não apareçam
        const classification = classifyShopeeContentForCoupon(coupon.raw_text || '', {
          title: coupon.coupon_label || undefined,
          canonical_url: coupon.redemption_url || undefined
        });
        
-       return classification.classification === 'verified_coupon';
+       const isVerified = classification.classification === 'verified_coupon';
+       const hasLink = !!(coupon.effective_redemption_url || coupon.redemption_url);
+       
+       // SÓ RETORNA SE FOR VERIFICADO E TIVER LINK
+       return isVerified && hasLink;
     });
 
     // 7. Retornar resposta formatada

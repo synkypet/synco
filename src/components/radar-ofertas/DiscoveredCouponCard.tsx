@@ -39,19 +39,32 @@ export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({
   onReject
 }) => {
   
+  const hasLink = !!(coupon.effective_redemption_url || coupon.redemption_url);
+
   const handleCopyMessage = (e: React.MouseEvent) => {
     e.stopPropagation();
     
+    const link = coupon.effective_redemption_url || coupon.redemption_url;
+    if (!link || link === 'undefined') {
+      toast.error('Não é possível copiar: link de resgate ausente ou inválido.');
+      return;
+    }
+
     const formattedMessage = formatShopeeCouponMessage({
       marketplace: 'shopee',
       type: coupon.coupon_type,
       code: coupon.code,
       couponLabel: coupon.coupon_label,
-      redemptionUrl: coupon.effective_redemption_url || coupon.redemption_url,
+      redemptionUrl: link,
       confidence: coupon.confidence,
       status: coupon.status,
       dedupeKey: coupon.dedupe_key
     });
+
+    if (!formattedMessage) {
+      toast.error('Erro ao formatar mensagem. Verifique a integridade do cupom.');
+      return;
+    }
 
     navigator.clipboard.writeText(formattedMessage);
     
@@ -214,10 +227,14 @@ export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({
           <div className="flex items-center gap-2 mt-2">
             <KineticButton 
               onClick={handleCopyMessage}
-              className="flex-1 h-12 rounded-2xl bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border-white/5 group/btn shadow-skeuo-flat"
+              disabled={!hasLink}
+              className={cn(
+                "flex-1 h-12 rounded-2xl bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border-white/5 group/btn shadow-skeuo-flat",
+                !hasLink && "opacity-50 cursor-not-allowed"
+              )}
             >
               <Copy size={14} className="mr-2 group-hover/btn:scale-110 transition-transform" />
-              <span className="text-[9px] font-black uppercase tracking-[0.2em]">Copiar</span>
+              <span className="text-[9px] font-black uppercase tracking-[0.2em]">{hasLink ? 'Copiar' : 'Link Ausente'}</span>
             </KineticButton>
             
             <button 

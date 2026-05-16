@@ -443,8 +443,25 @@ export default function RadarOfertasPage() {
       return;
     }
 
-    const message = formatCouponsForQuickSend(selectedCoupons);
+    // FILTRAGEM RÍGIDA: Apenas itens com link válido podem ir para o Envio Rápido
+    const validCoupons = selectedCoupons.filter((c: any) => !!(c.effective_redemption_url || c.redemption_url));
     
+    if (validCoupons.length === 0) {
+      toast.error('Nenhum dos itens selecionados possui um link de resgate válido.');
+      return;
+    }
+
+    if (validCoupons.length < selectedCoupons.length) {
+      toast.warning(`${selectedCoupons.length - validCoupons.length} item(ns) foram ignorados por falta de link.`);
+    }
+
+    const message = formatCouponsForQuickSend(validCoupons);
+    
+    if (!message) {
+      toast.error('Erro ao gerar mensagem para os cupons selecionados.');
+      return;
+    }
+
     // Salvar no localStorage para o Envio Rápido consumir
     localStorage.setItem('quick_send_draft', JSON.stringify({
       message,
@@ -453,7 +470,7 @@ export default function RadarOfertasPage() {
       timestamp: Date.now()
     }));
 
-    toast.success(`${selectedCoupons.length} cupons preparados para o Envio Rápido!`);
+    toast.success(`${validCoupons.length} cupons preparados para o Envio Rápido!`);
     router.push('/envio-rapido');
   };
 
