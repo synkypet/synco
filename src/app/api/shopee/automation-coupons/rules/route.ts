@@ -45,9 +45,9 @@ export async function POST(request: Request) {
       const { ruleId, updates } = payload;
       
       if (updates && typeof updates.interval_minutes === 'number') {
-        if (updates.interval_minutes < 10) {
+        if (updates.interval_minutes < 1) {
           return NextResponse.json(
-            { error: 'O intervalo mínimo de envio é de 10 minutos por segurança da conta.' },
+            { error: 'O intervalo mínimo de envio é de 1 minuto.' },
             { status: 400 }
           );
         }

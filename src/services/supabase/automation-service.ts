@@ -789,7 +789,8 @@ export const automationService = {
       }));
 
       await supabase.from('automation_coupon_rules').upsert(couponRules, { 
-        onConflict: 'source_id, route_id, coupon_id' 
+        onConflict: 'source_id, route_id, coupon_id',
+        ignoreDuplicates: true
       });
     }
 
@@ -805,7 +806,8 @@ export const automationService = {
       }));
 
       await supabase.from('automation_coupon_rules').upsert(promoRules, { 
-        onConflict: 'source_id, route_id, promo_page_id' 
+        onConflict: 'source_id, route_id, promo_page_id',
+        ignoreDuplicates: true
       });
     }
   },

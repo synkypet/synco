@@ -131,11 +131,11 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
   const handleIntervalChange = async (ruleId: string, minutes: number) => {
     let targetMinutes = minutes;
     
-    if (targetMinutes < 10) {
-      toast.warning('O intervalo mínimo permitido é de 10 minutos para segurança da conta.');
-      targetMinutes = 10;
-      // Atualizar o estado local imediatamente para refletir 10
-      setRules(prev => prev.map(r => r.id === ruleId ? { ...r, interval_minutes: 10 } : r));
+    if (targetMinutes < 1) {
+      toast.warning('O intervalo mínimo permitido é de 1 minuto.');
+      targetMinutes = 1;
+      // Atualizar o estado local imediatamente para refletir 1
+      setRules(prev => prev.map(r => r.id === ruleId ? { ...r, interval_minutes: 1 } : r));
     }
     
     setIsUpdating(ruleId);
@@ -274,7 +274,7 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
                       <div className="flex items-center gap-2">
                         <Input 
                           type="number"
-                          min={10}
+                          min={1}
                           className="h-7 w-16 bg-deep-void border-none text-[12px] text-center p-0"
                           value={rule.interval_minutes}
                           onChange={(e) => setRules(prev => prev.map(r => r.id === rule.id ? { ...r, interval_minutes: parseInt(e.target.value) || 1 } : r))}
