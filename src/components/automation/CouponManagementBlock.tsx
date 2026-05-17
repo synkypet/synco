@@ -129,7 +129,15 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
   };
 
   const handleIntervalChange = async (ruleId: string, minutes: number) => {
-    if (minutes < 1) return;
+    let targetMinutes = minutes;
+    
+    if (targetMinutes < 10) {
+      toast.warning('O intervalo mínimo permitido é de 10 minutos para segurança da conta.');
+      targetMinutes = 10;
+      // Atualizar o estado local imediatamente para refletir 10
+      setRules(prev => prev.map(r => r.id === ruleId ? { ...r, interval_minutes: 10 } : r));
+    }
+    
     setIsUpdating(ruleId);
     try {
       const response = await fetch('/api/shopee/automation-coupons/rules', {
@@ -139,14 +147,16 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
           action: 'update',
           payload: {
             ruleId,
-            updates: { interval_minutes: minutes }
+            updates: { interval_minutes: targetMinutes }
           }
         })
       });
-      if (!response.ok) throw new Error('Erro ao atualizar intervalo');
       
-      setRules(prev => prev.map(r => r.id === ruleId ? { ...r, interval_minutes: minutes } : r));
-      toast.success(`Intervalo atualizado para ${minutes} min`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Erro ao atualizar intervalo');
+      
+      setRules(prev => prev.map(r => r.id === ruleId ? { ...r, interval_minutes: targetMinutes } : r));
+      toast.success(`Intervalo atualizado para ${targetMinutes} min`);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -264,6 +274,7 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
                       <div className="flex items-center gap-2">
                         <Input 
                           type="number"
+                          min={10}
                           className="h-7 w-16 bg-deep-void border-none text-[12px] text-center p-0"
                           value={rule.interval_minutes}
                           onChange={(e) => setRules(prev => prev.map(r => r.id === rule.id ? { ...r, interval_minutes: parseInt(e.target.value) || 1 } : r))}

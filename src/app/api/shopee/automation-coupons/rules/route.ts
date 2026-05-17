@@ -43,6 +43,16 @@ export async function POST(request: Request) {
 
     if (action === 'update') {
       const { ruleId, updates } = payload;
+      
+      if (updates && typeof updates.interval_minutes === 'number') {
+        if (updates.interval_minutes < 10) {
+          return NextResponse.json(
+            { error: 'O intervalo mínimo de envio é de 10 minutos por segurança da conta.' },
+            { status: 400 }
+          );
+        }
+      }
+      
       // Validação básica de ownership (poderia ser mais rigorosa checando a rule antes)
       await automationService.updateCouponRule(ruleId, updates, supabaseAdmin);
       return NextResponse.json({ success: true });
