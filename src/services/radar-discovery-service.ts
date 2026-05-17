@@ -213,304 +213,302 @@ export const radarDiscoveryService = {
         const minScoreRequired = firstRouteFilters.min_score || 15; 
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-        // Contadores do Funil Consolidado
-        let funnelTotalBudget = totalBudget;
-        let funnelTotalNew = 0;
-        let funnelCacheHits = 0;
-        let funnelTotalFetched = 0; // Rastreio real para avanço de página
+        // 6. Função Utilitária para rodar a descoberta (permite re-execução imediata pós-reset)
+        const runDiscoveryBatch = async (pageToUse: number) => {
+          let batchNew = 0;
+          let batchCacheHits = 0;
+          let batchFetched = 0;
 
-        // Log do estado do cache antes do loop
-        console.log(`${logPrefix} [RADAR-CACHE] size: ${radarCacheService.getSize()} entries`);
+          // Loop Sequencial de Keywords
+          for (let i = 0; i < keywords.length; i++) {
+            const kw = keywords[i];
+            const budget = budgets[i];
+            const listType = config.listType || 0;
+            
+            try {
+              // --- ATUALIZAR ROTAÇÃO (INÍCIO DO PROCESSAMENTO) ---
+              kw.last_used_at = new Date().toISOString();
 
-        // 6. Loop Sequencial de Keywords
-        for (let i = 0; i < keywords.length; i++) {
-          const kw = keywords[i];
-          const budget = budgets[i];
-          const listType = config.listType || 0;
-          
-          try {
-            // --- ATUALIZAR ROTAÇÃO (INÍCIO DO PROCESSAMENTO) ---
-            kw.last_used_at = new Date().toISOString();
-
-            // --- CAMADA DE CACHE (RAW Data) ---
-            let rawProducts = radarCacheService.get(kw.term, sortType, listType);
-            if (rawProducts) {
-              funnelCacheHits++;
-              // Não fatiamos mais aqui para permitir o escaneamento profundo até atingir o budget
-            } else {
-              rawProducts = await adapter.discoverProducts({
-                sortType,
-                listType,
-                keyword: kw.term,
-                limit: 50, // Buscar batch maior para garantir profundidade de triagem
-                page: s.discovery_page || 1,
-                connection: shopeeConnection
-              });
-              radarCacheService.set(kw.term, sortType, listType, rawProducts);
-            }
-
-            let kwNewLinks = 0;
-            let kwDeduped = 0;
-            let kwScoreSkipped = 0;
-            let kwValidationSkipped = 0;
-            let kwHardFilterSkipped = 0;
-
-            funnelTotalFetched += rawProducts.length;
-
-            console.log(`${logPrefix} [PRE-FILTER]`, { 
-              total_bruto: rawProducts.length, 
-              source_id: s.id,
-              keyword: kw.term,
-              budget_alocado: budget
-            });
-
-            // Contagem de descartes por keyword (Limites de cardinalidade)
-            let skippedMatchCount = 0;
-            let scannedNodes = 0;
-
-            // Pipeline por Item (Trace Mode Ativado)
-            for (const p of rawProducts) {
-              // 0. CHECK BUDGET (NOVO): Se já atingiu o budget desta keyword, para de escanear o bruto
-              if (kwNewLinks >= budget) break;
-              
-              scannedNodes++;
-              const url = p.productLink || p.offerLink;
-              
-              // 1. PRE-FILTER (Validação básica e Filtros do Usuário)
-              if (!p.name || !p.imageUrl || !p.currentPriceFactual || p.currentPriceFactual <= 0 || !p.commissionRate) {
-                kwValidationSkipped++;
-                logActivity(supabase, {
-                  source_id: s.id,
-                  user_id: s.user_id,
-                  event_type: 'ineligible',
+              // --- CAMADA DE CACHE (RAW Data) ---
+              let rawProducts = radarCacheService.get(kw.term, sortType, listType);
+              if (rawProducts) {
+                batchCacheHits++;
+              } else {
+                rawProducts = await adapter.discoverProducts({
+                  sortType,
+                  listType,
                   keyword: kw.term,
-                  title: p.name,
-                  discard_reason: 'Incomplete metadata',
-                  page: s.discovery_page
+                  limit: 50, // Buscar batch maior para garantir profundidade de triagem
+                  page: pageToUse || 1,
+                  connection: shopeeConnection
                 });
-                continue;
+                radarCacheService.set(kw.term, sortType, listType, rawProducts);
               }
 
-              // APLICAÇÃO DE FILTROS REAIS (NOVO)
-              const commPercent = Math.round((p.commissionRate || 0) * 100);
-              const discPercent = p.discountPercent || 0;
-              const hasCoupon = !!(p.coupon || p.offerLink?.includes('coupon'));
+              let kwNewLinks = 0;
+              let kwDeduped = 0;
+              let kwScoreSkipped = 0;
+              let kwValidationSkipped = 0;
+              let kwHardFilterSkipped = 0;
 
-              if (firstRouteFilters.min_price && p.currentPriceFactual < firstRouteFilters.min_price) {
-                kwValidationSkipped++;
-                continue;
-              }
-              if (firstRouteFilters.max_price && p.currentPriceFactual > firstRouteFilters.max_price) {
-                kwValidationSkipped++;
-                continue;
-              }
-              if (firstRouteFilters.min_commission_rate && commPercent < firstRouteFilters.min_commission_rate) {
-                kwValidationSkipped++;
-                continue;
-              }
-              if (firstRouteFilters.min_discount_percent && discPercent < firstRouteFilters.min_discount_percent) {
-                kwValidationSkipped++;
-                continue;
-              }
-              if (firstRouteFilters.only_official_stores && !p.officialStore) {
-                kwValidationSkipped++;
-                continue;
-              }
-              if (firstRouteFilters.only_coupons && !hasCoupon) {
-                kwValidationSkipped++;
-                continue;
-              }
+              batchFetched += rawProducts.length;
 
-              // 2. KEYWORD HARD FILTER (NOVO)
-              if (!hasKeywordMatch(p.name, kw.term, kw.aliases || [])) {
-                kwHardFilterSkipped++;
-                if (skippedMatchCount < 10) {
+              console.log(`${logPrefix} [PRE-FILTER]`, { 
+                total_bruto: rawProducts.length, 
+                source_id: s.id,
+                keyword: kw.term,
+                budget_alocado: budget,
+                page_used: pageToUse
+              });
+
+              // Contagem de descartes por keyword (Limites de cardinalidade)
+              let skippedMatchCount = 0;
+              let scannedNodes = 0;
+
+              // Pipeline por Item (Trace Mode Ativado)
+              for (const p of rawProducts) {
+                // 0. CHECK BUDGET (NOVO): Se já atingiu o budget desta keyword, para de escanear o bruto
+                if (kwNewLinks >= budget) break;
+                
+                scannedNodes++;
+                const url = p.productLink || p.offerLink;
+                
+                // 1. PRE-FILTER (Validação básica e Filtros do Usuário)
+                if (!p.name || !p.imageUrl || !p.currentPriceFactual || p.currentPriceFactual <= 0 || !p.commissionRate) {
+                  kwValidationSkipped++;
                   logActivity(supabase, {
                     source_id: s.id,
                     user_id: s.user_id,
-                    event_type: 'skipped_match',
+                    event_type: 'ineligible',
                     keyword: kw.term,
                     title: p.name,
-                    page: s.discovery_page
+                    discard_reason: 'Incomplete metadata',
+                    page: pageToUse
                   });
-                  skippedMatchCount++;
+                  continue;
                 }
-                console.log(`${logPrefix} [KEYWORD-FILTER-SKIP] "${p.name.slice(0, 30)}..." não deu match em "${kw.term}" (incluindo variantes e aliases)`);
-                continue;
-              }
 
-              const stableKey = (p.shopId && p.itemId) ? `shopee:${p.shopId}:${p.itemId}` : null;
-              if (!stableKey) continue;
+                // APLICAÇÃO DE FILTROS REAIS (NOVO)
+                const commPercent = Math.round((p.commissionRate || 0) * 100);
+                const discPercent = p.discountPercent || 0;
+                const hasCoupon = !!(p.coupon || p.offerLink?.includes('coupon'));
 
-              console.log('[STABLE-KEY-FINAL]', {
-                itemId: p.itemId,
-                shopId: p.shopId,
-                title: p.name?.slice(0, 30),
-                stableKey
-              });
+                if (firstRouteFilters.min_price && p.currentPriceFactual < firstRouteFilters.min_price) {
+                  kwValidationSkipped++;
+                  continue;
+                }
+                if (firstRouteFilters.max_price && p.currentPriceFactual > firstRouteFilters.max_price) {
+                  kwValidationSkipped++;
+                  continue;
+                }
+                if (firstRouteFilters.min_commission_rate && commPercent < firstRouteFilters.min_commission_rate) {
+                  kwValidationSkipped++;
+                  continue;
+                }
+                if (firstRouteFilters.min_discount_percent && discPercent < firstRouteFilters.min_discount_percent) {
+                  kwValidationSkipped++;
+                  continue;
+                }
+                if (firstRouteFilters.only_official_stores && !p.officialStore) {
+                  kwValidationSkipped++;
+                  continue;
+                }
+                if (firstRouteFilters.only_coupons && !hasCoupon) {
+                  kwValidationSkipped++;
+                  continue;
+                }
 
-              // Anti-Fadiga (Check individual)
-              const { data: recent } = await supabase
-                .from('radar_discovered_products')
-                .select('id')
-                .eq('source_id', s.id)
-                .eq('stable_product_key', stableKey)
-                .gte('dispatched_at', sevenDaysAgo)
-                .maybeSingle();
+                // 2. KEYWORD HARD FILTER (NOVO)
+                if (!hasKeywordMatch(p.name, kw.term, kw.aliases || [])) {
+                  kwHardFilterSkipped++;
+                  if (skippedMatchCount < 10) {
+                    logActivity(supabase, {
+                      source_id: s.id,
+                      user_id: s.user_id,
+                      event_type: 'skipped_match',
+                      keyword: kw.term,
+                      title: p.name,
+                      page: pageToUse
+                    });
+                    skippedMatchCount++;
+                  }
+                  console.log(`${logPrefix} [KEYWORD-FILTER-SKIP] "${p.name.slice(0, 30)}..." não deu match em "${kw.term}" (incluindo variantes e aliases)`);
+                  continue;
+                }
 
-              console.log('[DEDUPE-DECISION]', {
-                stable_key: stableKey,
-                exists: !!recent,
-                recent_record: recent,
-                source_id: s.id
-              });
+                const stableKey = (p.shopId && p.itemId) ? `shopee:${p.shopId}:${p.itemId}` : null;
+                if (!stableKey) continue;
 
-              if (recent) {
-                console.log('[DEDUPE-DETAIL]', { 
-                  stable_key: stableKey, 
-                  source_id: s.id,
-                  existing_id: recent?.id 
+                console.log('[STABLE-KEY-FINAL]', {
+                  itemId: p.itemId,
+                  shopId: p.shopId,
+                  title: p.name?.slice(0, 30),
+                  stableKey
                 });
-                kwDeduped++; 
-                continue; 
-              }
 
-              // Scoring
-              const { score: finalScore, reason: scoreReason } = productService.calculateQualityScore({
-                commissionRate: p.commissionRate || 0,
-                discountPercent: p.discountPercent || 0,
-                sales: p.sales || 0
-              });
+                // Anti-Fadiga (Check individual)
+                const { data: recent } = await supabase
+                  .from('radar_discovered_products')
+                  .select('id')
+                  .eq('source_id', s.id)
+                  .eq('stable_product_key', stableKey)
+                  .gte('dispatched_at', sevenDaysAgo)
+                  .maybeSingle();
 
-              if (finalScore < minScoreRequired) {
-                console.log('[SCORE-DETAIL]', { 
-                  score: finalScore, 
-                  threshold: minScoreRequired, 
-                  item_id: p.itemId,
-                  reason: scoreReason
+                console.log('[DEDUPE-DECISION]', {
+                  stable_key: stableKey,
+                  exists: !!recent,
+                  recent_record: recent,
+                  source_id: s.id
                 });
-                kwScoreSkipped++;
-                logActivity(supabase, {
-                  source_id: s.id,
-                  user_id: s.user_id,
-                  event_type: 'skipped_score',
-                  keyword: kw.term,
-                  score: finalScore,
-                  title: p.name,
-                  discard_reason: scoreReason,
-                  page: s.discovery_page
+
+                if (recent) {
+                  console.log('[DEDUPE-DETAIL]', { 
+                    stable_key: stableKey, 
+                    source_id: s.id,
+                    existing_id: recent?.id 
+                  });
+                  kwDeduped++; 
+                  continue; 
+                }
+
+                // Scoring
+                const { score: finalScore, reason: scoreReason } = productService.calculateQualityScore({
+                  commissionRate: p.commissionRate || 0,
+                  discountPercent: p.discountPercent || 0,
+                  sales: p.sales || 0
                 });
-                continue;
-              }
 
-              // Ingestão (Base de Produtos)
-              const product = await productService.upsertFromAutomation({
-                name: p.name,
-                marketplace: 'Shopee',
-                category: p.category || kw.term,
-                current_price: p.currentPriceFactual,
-                original_price: p.originalPrice,
-                discount_percent: p.discountPercent ? Math.round(p.discountPercent) : undefined,
-                commission_percent: Math.round((p.commissionRate || 0) * 100),
-                commission_value: p.commissionValueFactual,
-                image_url: p.imageUrl,
-                original_url: url,
-                opportunity_score: finalScore
-              }, supabase);
+                if (finalScore < minScoreRequired) {
+                  console.log('[SCORE-DETAIL]', { 
+                    score: finalScore, 
+                    threshold: minScoreRequired, 
+                    item_id: p.itemId,
+                    reason: scoreReason
+                  });
+                  kwScoreSkipped++;
+                  logActivity(supabase, {
+                    source_id: s.id,
+                    user_id: s.user_id,
+                    event_type: 'skipped_score',
+                    keyword: kw.term,
+                    score: finalScore,
+                    title: p.name,
+                    discard_reason: scoreReason,
+                    page: pageToUse
+                  });
+                  continue;
+                }
 
-              if (!product || !product.id) {
-                console.error(`${logPrefix} [RADAR-FATAL] product.id é null/undefined para item:`, {
-                  shopee_item_id: p.itemId,
-                  shopee_shop_id: p.shopId,
-                  product_name: p.name?.slice(0, 50)
-                });
-                continue;
-              }
+                // Ingestão (Base de Produtos)
+                const product = await productService.upsertFromAutomation({
+                  name: p.name,
+                  marketplace: 'Shopee',
+                  category: p.category || kw.term,
+                  current_price: p.currentPriceFactual,
+                  original_price: p.originalPrice,
+                  discount_percent: p.discountPercent ? Math.round(p.discountPercent) : undefined,
+                  commission_percent: Math.round((p.commissionRate || 0) * 100),
+                  commission_value: p.commissionValueFactual,
+                  image_url: p.imageUrl,
+                  original_url: url,
+                  opportunity_score: finalScore
+                }, supabase);
 
-              // LOG DE DIAGNÓSTICO DE INTEGRIDADE
-              console.log(`${logPrefix} [RADAR-PRODUCT-DEBUG]`, {
-                product_id: product.id,
-                product_type: typeof product.id,
-                has_product: !!product
-              });
+                if (!product || !product.id) {
+                  console.error(`${logPrefix} [RADAR-FATAL] product.id é null/undefined para item:`, {
+                    shopee_item_id: p.itemId,
+                    shopee_shop_id: p.shopId,
+                    product_name: p.name?.slice(0, 50)
+                  });
+                  continue;
+                }
 
-              // Vínculo Operacional (Radar Discovered)
-              const { data: inserted, error: insertedError } = await supabase
-                .from('radar_discovered_products')
-                .upsert({
+                // LOG DE DIAGNÓSTICO DE INTEGRIDADE
+                console.log(`${logPrefix} [RADAR-PRODUCT-DEBUG]`, {
                   product_id: product.id,
-                  source_id: s.id,
-                  user_id: s.user_id,
-                  discovered_at: new Date().toISOString(),
-                  score: finalScore,
-                  skipped_reason: scoreReason,
-                  stable_product_key: stableKey,
-                  status: 'pending'
-                }, { onConflict: 'product_id,source_id', ignoreDuplicates: true })
-                .select('id')
-                .maybeSingle();
-
-              if (insertedError) {
-                console.error(`${logPrefix} [RADAR-INSERT-ERROR] Erro ao inserir em radar_discovered_products:`, insertedError);
-              }
-
-              if (inserted) {
-                funnelTotalNew++;
-                kwNewLinks++;
-                logActivity(supabase, {
-                  source_id: s.id,
-                  user_id: s.user_id,
-                  event_type: 'discovered',
-                  product_id: product.id,
-                  keyword: kw.term,
-                  score: finalScore,
-                  title: p.name,
-                  page: s.discovery_page
+                  product_type: typeof product.id,
+                  has_product: !!product
                 });
-              } else {
-                kwDeduped++;
+
+                // Vínculo Operacional (Radar Discovered)
+                const { data: inserted, error: insertedError } = await supabase
+                  .from('radar_discovered_products')
+                  .upsert({
+                    product_id: product.id,
+                    source_id: s.id,
+                    user_id: s.user_id,
+                    discovered_at: new Date().toISOString(),
+                    score: finalScore,
+                    skipped_reason: scoreReason,
+                    stable_product_key: stableKey,
+                    status: 'pending'
+                  }, { onConflict: 'product_id,source_id', ignoreDuplicates: true })
+                  .select('id')
+                  .maybeSingle();
+
+                if (insertedError) {
+                  console.error(`${logPrefix} [RADAR-INSERT-ERROR] Erro ao inserir em radar_discovered_products:`, insertedError);
+                }
+
+                if (inserted) {
+                  batchNew++;
+                  kwNewLinks++;
+                  logActivity(supabase, {
+                    source_id: s.id,
+                    user_id: s.user_id,
+                    event_type: 'discovered',
+                    product_id: product.id,
+                    keyword: kw.term,
+                    score: finalScore,
+                    title: p.name,
+                    page: pageToUse
+                  });
+                } else {
+                  kwDeduped++;
+                }
               }
+
+              // LOG DE PROFUNDIDADE (NOVO)
+              console.log(`${logPrefix} [RADAR-DISCOVERY-DEPTH]`, {
+                source_id: s.id,
+                keyword: kw.term,
+                raw_nodes: rawProducts.length,
+                scanned_nodes: scannedNodes,
+                prefilter_candidates: rawProducts.length,
+                dedupe_skip: kwDeduped,
+                val_skip: kwValidationSkipped,
+                hard_filter_skip: kwHardFilterSkipped,
+                accepted: kwNewLinks,
+                total_budget_remaining: Math.max(0, totalBudget - (batchNew + kwNewLinks))
+              });
+
+              // LOG POR KEYWORD (TRACE MODE)
+              console.log(`${logPrefix} [RADAR-TRACE] ${kw.term} | fetch:${rawProducts.length} | scan:${scannedNodes}/${rawProducts.length} | hard_filter_skip:${kwHardFilterSkipped} | val_skip:${kwValidationSkipped} | dedupe_skip:${kwDeduped} | score_skip:${kwScoreSkipped} | ok:${kwNewLinks}`);
+            } catch (kwErr: any) {
+              console.error(`${logPrefix} [RADAR-FAIL] Erro na keyword "${kw.term}":`, kwErr.message);
+              logActivity(supabase, {
+                source_id: s.id,
+                user_id: s.user_id,
+                event_type: 'api_error',
+                keyword: kw.term,
+                discard_reason: kwErr.message,
+                page: pageToUse
+              });
+              // Continua para a próxima keyword
             }
-
-            // LOG DE PROFUNDIDADE (NOVO)
-            console.log(`${logPrefix} [RADAR-DISCOVERY-DEPTH]`, {
-              source_id: s.id,
-              keyword: kw.term,
-              raw_nodes: rawProducts.length,
-              scanned_nodes: scannedNodes,
-              prefilter_candidates: rawProducts.length,
-              dedupe_skip: kwDeduped,
-              val_skip: kwValidationSkipped,
-              hard_filter_skip: kwHardFilterSkipped,
-              accepted: kwNewLinks,
-              total_budget_remaining: Math.max(0, funnelTotalBudget - (funnelTotalNew + kwNewLinks))
-            });
-
-            // LOG POR KEYWORD (TRACE MODE)
-            console.log(`${logPrefix} [RADAR-TRACE] ${kw.term} | fetch:${rawProducts.length} | scan:${scannedNodes}/${rawProducts.length} | hard_filter_skip:${kwHardFilterSkipped} | val_skip:${kwValidationSkipped} | dedupe_skip:${kwDeduped} | score_skip:${kwScoreSkipped} | ok:${kwNewLinks}`);
-          } catch (kwErr: any) {
-            console.error(`${logPrefix} [RADAR-FAIL] Erro na keyword "${kw.term}":`, kwErr.message);
-            logActivity(supabase, {
-              source_id: s.id,
-              user_id: s.user_id,
-              event_type: 'api_error',
-              keyword: kw.term,
-              discard_reason: kwErr.message,
-              page: s.discovery_page
-            });
-            // Continua para a próxima keyword
           }
-        }
+
+          return { funnelTotalNew: batchNew, funnelTotalFetched: batchFetched, funnelCacheHits: batchCacheHits };
+        };
+
+        // Executar primeira tentativa de busca na página atual do radar
+        let { funnelTotalNew, funnelTotalFetched, funnelCacheHits } = await runDiscoveryBatch(s.discovery_page || 1);
 
         // LOG CONSOLIDADO
-        console.log(`${logPrefix} [RADAR-FUNNEL] total_budget:${funnelTotalBudget} total_new:${funnelTotalNew} cache_hits:${funnelCacheHits}/${keywords.length}`);
+        console.log(`${logPrefix} [RADAR-FUNNEL] total_budget:${totalBudget} total_new:${funnelTotalNew} cache_hits:${funnelCacheHits}/${keywords.length}`);
 
-        // 7. Persistir Estado com Lógica de Exaustão de Keyword
-        //
-        // REGRA 1: Ciclo vazio = Shopee retornou produtos mas todos foram filtrados/deduplicados
-        //          OU Shopee não retornou nenhum produto (página esgotada)
-        // REGRA 2: Após EXHAUSTION_THRESHOLD ciclos consecutivos vazios → reset de paginação
-        // REGRA 3: Ciclo com inserção → zera o contador de ciclos vazios
+        // 7. Persistir Estado com Lógica de Exaustão e Auto-Reset Inteligente
         const EXHAUSTION_THRESHOLD = 3;
         const currentEmptyCount = s.consecutive_empty_cycles ?? 0;
 
@@ -531,16 +529,47 @@ export const radarDiscoveryService = {
           nextConsecutiveEmptyCycles = currentEmptyCount + 1;
 
           if (nextConsecutiveEmptyCycles >= EXHAUSTION_THRESHOLD) {
-            // REGRA 2: Exaustão detectada — reiniciar paginação
-            nextDiscoveryPage = 1;
-            nextNeedsRestock = false; // desliga needs_restock para usar cooldown padrão
-            nextConsecutiveEmptyCycles = 0;
-            nextDiscoveryExhaustedAt = new Date().toISOString();
-            console.warn(
-              `${logPrefix} [RADAR-EXHAUSTION] [user:${s.user_id}] Keyword esgotada apos ` +
-              `${EXHAUSTION_THRESHOLD} ciclos vazios (pagina ${s.discovery_page}). ` +
-              `Reiniciando da pagina 1. needs_restock -> false.`
-            );
+            // REGRA 2: Exaustão detectada — reiniciar paginação com Auto-Reset completo e Cooldown
+            const lastReset = prevExhaustedAt ? new Date(prevExhaustedAt).getTime() : 0;
+            const cooldownMinutesForReset = Math.max(10, Number(config.send_interval_minutes ?? config.interval_minutes ?? cooldownMinutes));
+            const cooldownMs = cooldownMinutesForReset * 60 * 1000;
+            
+            if (NOW - lastReset < cooldownMs) {
+              // Cooldown ativo -> Bloquear o auto-reset para evitar loops de chamadas na API
+              console.log(`${logPrefix} [RADAR-AUTO-RESET-BLOCKED] { reason: 'cooldown_active', sourceId: '${s.id}' }`);
+              nextDiscoveryPage = s.discovery_page || 1;
+              nextNeedsRestock = s.needs_restock ?? false;
+              nextConsecutiveEmptyCycles = EXHAUSTION_THRESHOLD; // Clamp do contador
+            } else {
+              // Auto-reset permitido!
+              nextDiscoveryPage = 1;
+              nextNeedsRestock = false;
+              nextConsecutiveEmptyCycles = 0;
+              nextDiscoveryExhaustedAt = new Date().toISOString();
+              
+              console.log(`${logPrefix} [RADAR-AUTO-RESET] { radarId: '${s.id}', reason: 'consecutive_empty_cycles_limit', timestamp: '${nextDiscoveryExhaustedAt}' }`);
+              
+              // 1. Limpar produtos do banco associados a este radar para liberar rediscovery
+              await supabase
+                .from('radar_discovered_products')
+                .delete()
+                .eq('source_id', s.id);
+                
+              // 2. Limpar o cache de memória para os termos deste radar
+              keywords.forEach(kw => {
+                radarCacheService.clearKeyword(kw.term);
+              });
+              
+              // 3. Rerodar a descoberta imediatamente a partir da página 1
+              console.log(`${logPrefix} [RADAR-AUTO-RESET-IMMEDIATE-RUN] Iniciando rediscovery imediato na pagina 1...`);
+              const immediateRes = await runDiscoveryBatch(1);
+              funnelTotalNew = immediateRes.funnelTotalNew;
+              funnelTotalFetched = immediateRes.funnelTotalFetched;
+              funnelCacheHits = immediateRes.funnelCacheHits;
+              
+              // Ajustar próxima página após a rodada imediata
+              nextDiscoveryPage = funnelTotalFetched > 0 ? 2 : 1;
+            }
           } else {
             // REGRA 1: Ciclo vazio mas abaixo do threshold — pode avançar página se Shopee retornou algo
             nextDiscoveryPage = funnelTotalFetched > 0

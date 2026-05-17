@@ -122,6 +122,7 @@ export default function AutomacoesDashboardPage() {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewResults, setPreviewResults] = useState<any[] | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
   const [isQuickListOpen, setIsQuickListOpen] = useState(false);
 
   // Cálculos de Limite
@@ -282,6 +283,29 @@ export default function AutomacoesDashboardPage() {
       success: newStatus ? 'Automação ligada!' : 'Automação pausada.',
       error: 'Falha ao alterar status.'
     });
+  };
+
+  const handleResetRadar = async (sourceId: string) => {
+    setResettingId(sourceId);
+    try {
+      const response = await fetch(`/api/automations/radar/${sourceId}/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        queryClient.invalidateQueries({ queryKey: ['automation-sources'] });
+        toast.success(data.message || 'Radar de Ofertas resetado com sucesso.');
+      } else {
+        toast.error(data.error || 'Erro ao resetar o radar.');
+      }
+    } catch (err) {
+      toast.error('Falha na comunicação com o servidor.');
+    } finally {
+      setResettingId(null);
+    }
   };
 
   if (isLoading) {
@@ -867,6 +891,41 @@ export default function AutomacoesDashboardPage() {
                        </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      {source.source_type === 'radar_offers' && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-10 w-10 rounded-xl bg-white/5 border border-white/5 hover:bg-kinetic-orange/20 hover:text-kinetic-orange transition-all text-white/20"
+                              disabled={resettingId === source.id}
+                            >
+                              {resettingId === source.id ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <RefreshCw size={14} />
+                              )}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="bg-anthracite-surface border-white/5">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="text-white">Resetar Radar?</AlertDialogTitle>
+                              <AlertDialogDescription className="text-white/40 text-xs">
+                                Tem certeza? O radar voltará ao início e poderá reenviar produtos que já foram enviados anteriormente.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="bg-white/5 border-none hover:bg-white/10 text-white/60">Cancelar</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => handleResetRadar(source.id)}
+                                className="bg-kinetic-orange hover:bg-kinetic-orange/80 text-white border-none shadow-glow-orange-intense/10"
+                              >
+                                Sim, Resetar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
 
                       <AlertDialog>
                         <AlertDialogTrigger asChild>

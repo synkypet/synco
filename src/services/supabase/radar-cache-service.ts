@@ -51,6 +51,18 @@ class RadarCacheService {
   }
 
   /**
+   * Remove entradas do cache para um keyword específico.
+   */
+  clearKeyword(keyword: string): void {
+    const term = keyword.toLowerCase().trim();
+    for (const key of Array.from(this.cache.keys())) {
+      if (key.startsWith(`${term}:`)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  /**
    * Retorna o número atual de entradas no cache.
    */
   getSize(): number {
