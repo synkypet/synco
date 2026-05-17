@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { automationService } from '@/services/supabase/automation-service';
 import { NextResponse } from 'next/server';
 import { requireOperationalAccess } from '@/lib/access/require-operational-access';
@@ -57,9 +58,10 @@ export async function POST(
       throw new Error(`Erro ao atualizar estado da automação: ${updateError.message}`);
     }
 
-    // 4. Limpar histórico de produtos descobertos (anti-fadiga e dispatch queue)
+    // 4. Limpar histórico de produtos descobertos (anti-fadiga e dispatch queue) com service role para contornar RLS
     console.log(`${logPrefix} Removendo registros da tabela radar_discovered_products...`);
-    const { error: deleteError } = await supabase
+    const supabaseAdmin = createAdminClient();
+    const { error: deleteError } = await supabaseAdmin
       .from('radar_discovered_products')
       .delete()
       .eq('source_id', id);
