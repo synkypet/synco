@@ -3,6 +3,7 @@ import { ShopeeCoupon } from '@/types/shopee-coupon';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ShopeeAdapter } from '@/lib/marketplaces/ShopeeAdapter';
 import { classifyShopeeContentForCoupon } from '@/lib/marketplaces/shopee/coupon-classifier';
+import { shopeeCouponPersistenceService } from './shopee-coupon-persistence-service';
 
 export const shopeeCouponService = {
   /**
@@ -103,6 +104,33 @@ export const shopeeCouponService = {
         isVerified = false;
       }
 
+      // 3. Persistência Centralizada (FASE 2C.1.2)
+      // Agora usamos o shopeeCouponPersistenceService para quase tudo, 
+      // garantindo tentativa de afiliação automática no ato da persistência.
+      
+      const shouldAffiliate = isVerified || 
+                             classificationResult.classification === 'promo_landing' || 
+                             classificationResult.classification === 'candidate' ||
+                             (coupon.type === 'codigo' && coupon.code);
+
+      if (shouldAffiliate && classificationResult.classification !== 'rejected' && classificationResult.classification !== 'product_offer') {
+        console.log(`[SHOPEE-COUPON-SERVICE] Delegando persistência com afiliação para: ${dedupeKey} (${classificationResult.classification})`);
+        return await shopeeCouponPersistenceService.saveVerifiedShopeeCouponForUser({
+          userId,
+          contentType: classificationResult.classification,
+          acceptedTarget: 'coupons', // Radar trata tudo como coupons por enquanto
+          couponCode: coupon.code || undefined,
+          couponType: coupon.type,
+          couponLabel: coupon.couponLabel || undefined,
+          originalUrl: metadata.sourceUrl || undefined,
+          resolvedUrl: resolvedUrl || undefined,
+          canonicalUrl: metadata.productUrl || undefined,
+          rawText: metadata.rawText || undefined,
+          confidence: coupon.confidence || 0,
+          sourceId: metadata.sourceId
+        }, supabase);
+      }
+
       const payload = {
         user_id: userId,
         source_id: metadata.sourceId || null,
@@ -114,12 +142,12 @@ export const shopeeCouponService = {
         redemption_url: coupon.redemptionUrl || null,
         source_url: metadata.sourceUrl || null,
         product_url: metadata.productUrl || null,
-        raw_text: metadata.rawText || null,
+        raw_text: metadata.rawText?.substring(0, 500) || null,
         confidence: coupon.confidence || 0,
         status: 'candidate',
         dedupe_key: dedupeKey,
         
-        // FORÇAR TRAVAS DE SEGURANÇA (SOBRESCREVE QUALQUER INPUT)
+        // FORÇAR TRAVAS DE SEGURANÇA
         dispatchable: false,
         auto_dispatch_blocked: true,
         block_reason: 'coupon_requires_manual_review_or_phase_2c_dispatch',
@@ -127,9 +155,7 @@ export const shopeeCouponService = {
         last_seen_at: new Date().toISOString()
       };
 
-      // --- COMPATIBILIDADE (OPÇÃO A) ---
-      // Se as colunas de validação existirem, nós as incluímos no payload.
-      // Caso contrário, omitimos para evitar quebra em produção antes da migration.
+      // --- COMPATIBILIDADE ---
       try {
         const payloadWithValidation = {
           ...payload,
@@ -148,9 +174,7 @@ export const shopeeCouponService = {
           .single();
 
         if (error) {
-          // Se o erro for "coluna não existe" (42703), tentamos sem as colunas novas
           if (error.code === '42703') {
-            console.warn('[SHOPEE-COUPON-SERVICE] Colunas de validação ausentes. Usando fallback legacy.');
             const { data: legacyData, error: legacyError } = await supabase
               .from('discovered_coupons')
               .upsert(payload, { 
@@ -167,7 +191,6 @@ export const shopeeCouponService = {
         return data;
       } catch (err: any) {
         if (err.code === '42703') {
-           // Fallback final se o try falhar antes do erro ser retornado pelo Supabase
            const { data: legacyData } = await supabase
               .from('discovered_coupons')
               .upsert(payload, { onConflict: 'user_id, dedupe_key' })

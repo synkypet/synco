@@ -21,7 +21,40 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Payload incompleto' }, { status: 400 });
     }
 
+    // Se qualquer item falhou com coupon_id_not_found → abortar todo o despacho
+    if (campaignData.items && Array.isArray(campaignData.items)) {
+      const failed = campaignData.items.filter((item: any) => 
+        item.eligibility_status === 'ineligible' && 
+        item.eligibility_reasons?.includes('coupon_id_not_found')
+      );
+      if (failed.length > 0) {
+        console.warn(`[QUICK-SEND-API] Despacho manual abortado devido a cupons não encontrados no banco de dados para user ${userId}:`, failed);
+        return NextResponse.json({
+          error: 'dispatch_aborted',
+          message: 'Um ou mais cupons solicitados não foram encontrados no banco de dados.',
+          failed
+        }, { status: 422 });
+      }
+    }
+
     console.log(`[QUICK-SEND-API] Recebida solicitação de despacho manual validada para user ${userId}...`);
+
+    // Log obrigatório de auditoria
+    if (campaignData.items && Array.isArray(campaignData.items)) {
+      for (const item of campaignData.items) {
+        if (item.offer_type === 'coupon_offer') {
+          // Extrair código e link da mensagem se possível, ou usar os metadados do payload
+          const codeMatch = item.custom_text?.match(/🎟️ Código:\s*\*?([A-Za-z0-9_-]+)\*?/i);
+          const finalCode = codeMatch ? codeMatch[1] : null;
+          console.log(`[QUICK-SEND-API-AUDIT]`, {
+            couponId: item.product_id,
+            couponCode: finalCode,
+            finalMessageUrl: item.affiliate_url,
+            finalMessageCouponLabel: item.product_name
+          });
+        }
+      }
+    }
 
     // 4. Calcular quantidade (Estimativa básica por item x destinos informados)
     const itemsCount = campaignData.items.length;

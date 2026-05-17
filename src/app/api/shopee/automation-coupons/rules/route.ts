@@ -64,33 +64,27 @@ export async function POST(request: Request) {
           const factual = snapshot.factual;
           
           // 1. Garantir que o cupom existe na tabela discovered_coupons
-          // Nota: Aqui simplificamos, mas o ideal é ter um service para isso.
-          // Como o extrator já gerou o dedupeKey, usamos ele.
           const mainCoupon = factual.coupons?.[0];
           if (mainCoupon) {
-            const { data: discCoupon, error: discError } = await supabaseAdmin
-              .from('discovered_coupons')
-              .upsert({
-                user_id: user.id,
-                source_id: rule.source_id,
-                marketplace: 'shopee',
-                type: mainCoupon.type,
-                code: mainCoupon.code,
-                coupon_label: mainCoupon.couponLabel,
-                redemption_url: mainCoupon.redemptionUrl,
-                status: 'valid',
-                confidence: mainCoupon.confidence,
-                dedupe_key: mainCoupon.dedupeKey,
-                last_seen_at: new Date().toISOString()
-              }, { onConflict: 'dedupe_key' })
-              .select()
-              .single();
+            const { shopeeCouponPersistenceService } = await import('@/services/supabase/shopee-coupon-persistence-service');
+            const result = await shopeeCouponPersistenceService.saveVerifiedShopeeCouponForUser({
+              userId: user.id,
+              contentType: 'verified_coupon',
+              acceptedTarget: 'coupons',
+              couponCode: mainCoupon.code || undefined,
+              couponLabel: mainCoupon.couponLabel || undefined,
+              originalUrl: rule._manual_input,
+              resolvedUrl: mainCoupon.redemptionUrl || undefined,
+              canonicalUrl: factual.canonical_url || undefined,
+              rawText: (factual as any).rawText || (factual as any).raw_text,
+              sourceId: rule.source_id,
+              confidence: mainCoupon.confidence
+            }, supabaseAdmin);
             
-            if (discError) throw discError;
-            rule.coupon_id = discCoupon.id;
+            rule.coupon_id = result.id;
             rule.item_type = 'coupon';
           } else if (factual.eligibility.offer_type === 'promo_landing') {
-            // Tratar promo_landing
+            // Tratar promo_landing via service dedicado se existir, ou manter upsert atual por enquanto
             const { data: discPromo, error: discPromoError } = await supabaseAdmin
               .from('discovered_promo_pages')
               .upsert({

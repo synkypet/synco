@@ -44,34 +44,45 @@ export interface DiscoveredCouponsFilters {
   couponType?: string;
   search?: string;
   limit?: number;
+  enabled?: boolean;
+  debug?: boolean;
+  onlyVerified?: boolean;
 }
 
 /**
  * Hook para buscar cupons detectados pelo radar.
  */
 export function useDiscoveredCoupons(filters: DiscoveredCouponsFilters = {}) {
+  const { enabled = true, debug = false, onlyVerified = false, ...rest } = filters;
+
   return useQuery<DiscoveredCouponsResponse, Error>({
-    queryKey: ['shopee-discovered-coupons', filters],
+    queryKey: ['shopee-discovered-coupons', { ...rest, debug, onlyVerified }],
     queryFn: async () => {
       const url = new URL('/api/shopee/discovered-coupons', window.location.origin);
       
-      if (filters.status && filters.status !== 'all') {
-        url.searchParams.set('status', filters.status);
+      if (rest.status && rest.status !== 'all') {
+        url.searchParams.set('status', rest.status);
       }
-      if (filters.validationStatus && filters.validationStatus !== 'all') {
-        url.searchParams.set('validation_status', filters.validationStatus);
+      if (rest.validationStatus && rest.validationStatus !== 'all') {
+        url.searchParams.set('validation_status', rest.validationStatus);
       }
-      if (filters.isVerified !== undefined) {
-        url.searchParams.set('is_verified', String(filters.isVerified));
+      if (rest.isVerified !== undefined) {
+        url.searchParams.set('is_verified', String(rest.isVerified));
       }
-      if (filters.couponType && filters.couponType !== 'all') {
-        url.searchParams.set('coupon_type', filters.couponType);
+      if (rest.couponType && rest.couponType !== 'all') {
+        url.searchParams.set('coupon_type', rest.couponType);
       }
-      if (filters.search) {
-        url.searchParams.set('search', filters.search);
+      if (rest.search) {
+        url.searchParams.set('search', rest.search);
       }
-      if (filters.limit) {
-        url.searchParams.set('limit', String(filters.limit));
+      if (rest.limit) {
+        url.searchParams.set('limit', String(rest.limit));
+      }
+      if (debug) {
+        url.searchParams.set('debug', '1');
+      }
+      if (onlyVerified) {
+        url.searchParams.set('onlyVerified', '1');
       }
 
       const res = await fetch(url.toString());
@@ -81,6 +92,7 @@ export function useDiscoveredCoupons(filters: DiscoveredCouponsFilters = {}) {
       }
       return res.json();
     },
+    enabled,
     staleTime: 30000, // 30 segundos de cache
     refetchOnWindowFocus: true
   });

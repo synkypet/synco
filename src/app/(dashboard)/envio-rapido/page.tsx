@@ -66,6 +66,7 @@ export default function EnvioRapidoPage() {
   const [linksInput, setLinksInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedProducts, setProcessedProducts] = useState<ProductSnapshot[]>([]);
+  const [selectedCouponsFromDraft, setSelectedCouponsFromDraft] = useState<any[]>([]);
   const [autoStartFlag, setAutoStartFlag] = useState(false);
   const [tone, setTone] = useState('auto');
   const [selectedDestinations, setSelectedDestinations] = useState<string[]>([]);
@@ -142,6 +143,39 @@ export default function EnvioRapidoPage() {
       }
     }
   }, [searchParams, isProcessing]);
+
+  // 3. Auto-fill from localStorage (Coupons from Radar)
+  useEffect(() => {
+    const draft = localStorage.getItem('quick_send_draft');
+    if (draft && !linksInput && processedProducts.length === 0) {
+      try {
+        const { links, coupons, timestamp } = JSON.parse(draft);
+        if (Date.now() - timestamp < 60000) {
+          const linksArray = links ? links.split('\n').filter((l: string) => l.trim()) : [];
+          const couponsArray = (coupons && Array.isArray(coupons)) ? coupons : [];
+          
+          console.log('[QUICK-SEND-DRAFT-AUDIT]', {
+            links,
+            coupons: couponsArray,
+            linksLength: linksArray.length,
+            couponsLength: couponsArray.length
+          });
+
+          setSelectedCouponsFromDraft(couponsArray);
+          setLinksInput(links);
+          
+          toast.info('Carregando cupons do Radar...', { icon: '🎟️' });
+          
+          if (linksArray.length > 0) {
+            handleProcess(linksArray, couponsArray);
+          }
+        }
+        localStorage.removeItem('quick_send_draft');
+      } catch (e) {
+        console.error('Falha ao ler rascunho de cupons:', e);
+      }
+    }
+  }, []);
 
   // 2. Auto-fill from Radar Context (Products)
   useEffect(() => {
@@ -257,8 +291,10 @@ export default function EnvioRapidoPage() {
     }
   };
 
-  const handleProcess = async () => {
-    if (!linksInput.trim()) {
+  const handleProcess = async (overrideLinks?: string[] | React.MouseEvent, overrideCoupons?: any[]) => {
+    const actualLinks = (overrideLinks && !Array.isArray(overrideLinks)) ? undefined : overrideLinks as string[];
+    const activeLinksText = actualLinks ? actualLinks.join('\n') : linksInput;
+    if (!activeLinksText.trim()) {
       toast.error('Cole pelo menos um link para processar.');
       return;
     }
@@ -266,11 +302,23 @@ export default function EnvioRapidoPage() {
     setIsProcessing(true);
 
     try {
-      const links = linksInput.split('\n').filter(l => l.trim());
+      const links = activeLinksText.split('\n').filter(l => l.trim());
+      const couponsToUse = overrideCoupons || selectedCouponsFromDraft;
+      
+      console.log('[FRONTEND-ENVIO-RAPIDO-PROCESS-AUDIT]', {
+        links,
+        couponsToUse
+      });
+
       const res = await fetch('/api/links/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ links, tone, sourceText: linksInput })
+        body: JSON.stringify({ 
+          links, 
+          tone, 
+          sourceText: activeLinksText,
+          coupons: couponsToUse
+        })
       });
 
       if (!res.ok) {

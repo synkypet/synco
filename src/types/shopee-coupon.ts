@@ -1,5 +1,5 @@
 
-export type ShopeeCouponType = 'codigo' | 'link_resgate' | 'pagina_cupons';
+export type ShopeeCouponType = 'codigo' | 'link_resgate' | 'pagina_cupons' | 'pagina_oferta';
 export type ShopeeCouponStatus = 'candidate' | 'valid' | 'unknown' | 'expired';
 
 export interface ShopeeCoupon {

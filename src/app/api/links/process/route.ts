@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const { user } = gate;
 
     const body = await request.json();
-    const { links = [], tone = 'auto', sourceText } = body;
+    const { links = [], tone = 'auto', sourceText, coupons = [] } = body;
 
     if (!Array.isArray(links) || links.length === 0) {
       return NextResponse.json({ error: 'No links provided' }, { status: 400 });
@@ -29,7 +29,16 @@ export async function POST(request: Request) {
     const enrichedConnections = await marketplaceService.getEnrichedConnections(user.id, supabaseAdmin);
 
     // Server-side processing with tone support and randomized templates
-    const snapshots = await processLinks(links, enrichedConnections, tone, user.id, supabaseAdmin, sourceText);
+    console.log('[LINKS-PROCESS-ROUTE-AUDIT]', {
+      bodyLinks: links,
+      bodyCoupons: coupons,
+      linksLength: links.length,
+      couponsLength: coupons.length,
+      firstCouponId: coupons?.[0]?.couponId || coupons?.[0]?.id || null,
+      firstCouponInputUrl: coupons?.[0]?.inputUrl || links?.[0] || null
+    });
+
+    const snapshots = await processLinks(links, enrichedConnections, tone, user.id, supabaseAdmin, sourceText, coupons);
 
     return NextResponse.json({ 
       status: 'SUCCESS',

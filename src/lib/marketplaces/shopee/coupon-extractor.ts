@@ -26,6 +26,28 @@ export function sanitizeUrl(url: string): string {
 }
 
 /**
+ * Verifica se uma URL da Shopee é um link de afiliado gerado pelo SYNCO ou oficial.
+ */
+export function isShopeeAffiliateUrl(url: string): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  
+  // Links curtos comuns de afiliados
+  if (lower.includes('s.shopee.com.br') || lower.includes('shope.ee') || lower.includes('br.shp.ee')) {
+    // Verificamos se tem parâmetros de tracking comuns de afiliados
+    // Mas links curtos da Shopee quase sempre são afiliados se forem gerados para redirecionamento.
+    return true;
+  }
+  
+  // Links longos com utm_medium=affiliates ou mmp_pid
+  if (lower.includes('utm_medium=affiliates') || lower.includes('mmp_pid=') || lower.includes('uls_trackid=')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Gera uma chave de deduplicação pura.
  */
 export function generateDedupeKey(coupon: Partial<ShopeeCoupon>): string {

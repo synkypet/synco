@@ -35,10 +35,21 @@ import {
   Trash2,
   PinOff,
   Eye,
+  Info,
   Store,
   Activity,
   Inbox
 } from 'lucide-react';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -76,7 +87,7 @@ import { DiscoveredPromoCard } from '@/components/radar-ofertas/DiscoveredPromoC
 import { CampaignProductsDrawer } from '@/components/radar-campanhas/CampaignProductsDrawer';
 import { useDiscoveredPromoPages } from '@/hooks/use-discovered-promo-pages';
 import { useRouter } from 'next/navigation';
-import { formatCouponsForQuickSend } from '@/lib/marketplaces/shopee/coupon-formatter';
+import { formatCouponsForQuickSend, getCouponPrimaryUrl } from '@/lib/marketplaces/shopee/coupon-formatter';
 
 interface DiscoveryPage {
   pageNumber: number;
@@ -137,7 +148,25 @@ export default function RadarOfertasPage() {
   const [couponSubTab, setCouponSubTab] = useState<'detected_coupons' | 'detected_pages'>('detected_coupons');
   const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
   const [selectedCouponIds, setSelectedCouponIds] = useState<string[]>([]);
+  const [selectedPromoPageIds, setSelectedPromoPageIds] = useState<string[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  
+  // --- MANUAL VALIDATION STATE ---
+  const [manualLinksInput, setManualLinksInput] = useState('');
+  const [isAnalyzingManual, setIsAnalyzingManual] = useState(false);
+  const [manualAnalysisResults, setManualAnalysisResults] = useState<any[]>([]);
+  const [manualAnalysisErrors, setManualAnalysisErrors] = useState<any[]>([]);
+  const [isSavingManualItem, setIsSavingManualItem] = useState<Record<string, boolean>>({});
+  const [savedManualKeys, setSavedManualKeys] = useState<Record<string, string>>({});
+
+  // --- CLEANUP STATE ---
+  const [isCleanupModalOpen, setIsCleanupModalOpen] = useState(false);
+  const [cleanupAffectedCount, setCleanupAffectedCount] = useState(0);
+  const [isFetchingCleanupCount, setIsFetchingCleanupCount] = useState(false);
+  const [isCleaningTestData, setIsCleaningTestData] = useState(false);
+  
+  // --- BULK DELETE STATE ---
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   
   const queryClient = useQueryClient();
   const shopeeCache = React.useRef<Record<string, any>>({});
@@ -406,7 +435,9 @@ export default function RadarOfertasPage() {
     const ids = idsToReject || selectedCouponIds;
     if (ids.length === 0 || isBulkProcessing) return;
     
-    if (!confirm(`Remover ${ids.length} cupom(ns) da lista? Eles não serão enviados pela automação.`)) {
+    // Se for deleção unitária, confirmamos via confirm() padrão de forma rápida e segura.
+    // Se for deleção em lote, a confirmação já foi validada no modal customizado.
+    if (idsToReject && !confirm(`Remover este cupom da lista? Ele não será enviado pela automação.`)) {
       return;
     }
 
@@ -444,7 +475,7 @@ export default function RadarOfertasPage() {
     }
 
     // FILTRAGEM RÍGIDA: Apenas itens com link válido podem ir para o Envio Rápido
-    const validCoupons = selectedCoupons.filter((c: any) => !!(c.effective_redemption_url || c.redemption_url));
+    const validCoupons = selectedCoupons.filter((c: any) => !!getCouponPrimaryUrl(c));
     
     if (validCoupons.length === 0) {
       toast.error('Nenhum dos itens selecionados possui um link de resgate válido.');
@@ -455,22 +486,126 @@ export default function RadarOfertasPage() {
       toast.warning(`${selectedCoupons.length - validCoupons.length} item(ns) foram ignorados por falta de link.`);
     }
 
-    const message = formatCouponsForQuickSend(validCoupons);
-    
-    if (!message) {
-      toast.error('Erro ao gerar mensagem para os cupons selecionados.');
-      return;
-    }
+    const links = validCoupons.map(c => getCouponPrimaryUrl(c)).filter(Boolean).join('\n');
+    const couponsData = validCoupons.map(c => ({
+      couponId: c.id,
+      inputUrl: getCouponPrimaryUrl(c) || "",
+      couponCode: c.code || null,
+      couponLabel: c.coupon_label || null,
+      couponType: c.coupon_type || null,
+      redemptionUrl: c.redemption_url || null,
+      sourceUrl: c.source_url || null
+    }));
+
+    validCoupons.forEach(c => {
+      console.log('[COUPON-CARD-ACTION]', {
+        action: 'quick_send',
+        couponId: c.id,
+        couponCode: c.code || null,
+        couponLabel: c.coupon_label || null,
+        primaryUrl: getCouponPrimaryUrl(c),
+        redemptionUrl: c.redemption_url || null,
+        sourceUrl: c.source_url || null
+      });
+    });
 
     // Salvar no localStorage para o Envio Rápido consumir
     localStorage.setItem('quick_send_draft', JSON.stringify({
-      message,
-      marketplace: 'shopee',
-      type: 'coupon',
+      links,
+      coupons: couponsData,
       timestamp: Date.now()
     }));
 
     toast.success(`${validCoupons.length} cupons preparados para o Envio Rápido!`);
+    router.push('/envio-rapido');
+  };
+
+  const handleTogglePromoPageSelection = (id: string) => {
+    setSelectedPromoPageIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkRejectPromoPages = async (idsToReject?: string[]) => {
+    const ids = idsToReject || selectedPromoPageIds;
+    if (ids.length === 0 || isBulkProcessing) return;
+    
+    if (idsToReject && !confirm(`Remover esta página promocional da lista? Ela não será enviada pela automação.`)) {
+      return;
+    }
+
+    setIsBulkProcessing(true);
+    try {
+      const res = await fetch('/api/shopee/discovered-promo-pages/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'reject' })
+      });
+
+      if (!res.ok) throw new Error('Falha ao remover páginas promocionais');
+
+      toast.success(`${ids.length} página(s) removida(s) com sucesso`);
+      setSelectedPromoPageIds(prev => prev.filter(id => !ids.includes(id)));
+      queryClient.invalidateQueries({ queryKey: ['discovered-promo-pages'] });
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkQuickSendPromoPages = () => {
+    if (selectedPromoPageIds.length === 0) return;
+
+    const selectedPages = discoveredPromoData?.data?.filter((p: any) => 
+      selectedPromoPageIds.includes(p.id)
+    ) || [];
+
+    if (selectedPages.length === 0) {
+      toast.error('Não foi possível recuperar os dados das páginas selecionadas.');
+      return;
+    }
+
+    const validPages = selectedPages.filter((p: any) => !!getCouponPrimaryUrl(p));
+    
+    if (validPages.length === 0) {
+      toast.error('Nenhuma das páginas selecionadas possui um link de resgate válido.');
+      return;
+    }
+
+    if (validPages.length < selectedPages.length) {
+      toast.warning(`${selectedPages.length - validPages.length} página(s) foram ignoradas por falta de link.`);
+    }
+
+    const links = validPages.map(p => getCouponPrimaryUrl(p)).filter(Boolean).join('\n');
+    const couponsData = validPages.map(p => ({
+      couponId: p.id,
+      inputUrl: getCouponPrimaryUrl(p) || "",
+      couponCode: null,
+      couponLabel: p.title || null,
+      couponType: 'pagina_oferta',
+      redemptionUrl: p.canonical_url || null,
+      sourceUrl: p.source_url || null
+    }));
+
+    validPages.forEach(p => {
+      console.log('[PROMO-CARD-ACTION]', {
+        action: 'quick_send',
+        pageId: p.id,
+        title: p.title || null,
+        primaryUrl: getCouponPrimaryUrl(p),
+        redemptionUrl: p.canonical_url || null,
+        sourceUrl: p.source_url || null
+      });
+    });
+
+    localStorage.setItem('quick_send_draft', JSON.stringify({
+      links,
+      coupons: couponsData,
+      timestamp: Date.now()
+    }));
+
+    toast.success(`${validPages.length} páginas preparadas para o Envio Rápido!`);
     router.push('/envio-rapido');
   };
 
@@ -489,6 +624,127 @@ export default function RadarOfertasPage() {
     setSortBy('score_desc');
     setActivePageData(null); // Limpa resultados do garimpo para voltar ao banco
   };
+
+  // --- MANUAL VALIDATION & SAVE HANDLERS ---
+  const handleValidateManualLinks = useCallback(async () => {
+    if (!manualLinksInput.trim()) {
+      toast.error('Por favor, cole algum link ou texto de cupom para validar.');
+      return;
+    }
+
+    setIsAnalyzingManual(true);
+    setManualAnalysisResults([]);
+    setManualAnalysisErrors([]);
+
+    try {
+      const res = await fetch('/api/shopee/discovered-coupons/manual-validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText: manualLinksInput })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao validar links.');
+      }
+
+      setManualAnalysisResults(data.results || []);
+      setManualAnalysisErrors(data.errors || []);
+      
+      if ((data.results?.length || 0) > 0) {
+        toast.success(`Análise concluída: ${data.results.length} item(ns) identificado(s).`);
+      } else if ((data.errors?.length || 0) > 0) {
+        toast.error('Nenhum item válido identificado, veja os erros abaixo.');
+      } else {
+        toast.info('Nenhum link ou cupom detectado no texto fornecido.');
+      }
+    } catch (err: any) {
+      console.error('[MANUAL-VALIDATE] Erro:', err);
+      toast.error(err.message || 'Erro técnico ao validar links.');
+    } finally {
+      setIsAnalyzingManual(false);
+    }
+  }, [manualLinksInput]);
+
+  const handleSaveManualItem = useCallback(async (item: any, index: number) => {
+    const itemKey = `${index}-${item.original_url || item.resolved_url || 'item'}`;
+    
+    setIsSavingManualItem(prev => ({ ...prev, [itemKey]: true }));
+
+    try {
+      const res = await fetch('/api/shopee/discovered-coupons/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao salvar item.');
+      }
+
+      setSavedManualKeys(prev => ({ ...prev, [itemKey]: data.id }));
+      toast.success(item.accepted_target === 'coupons' ? 'Cupom salvo e re-afiliado com sucesso!' : 'Página promocional salva com sucesso!');
+      
+      // Invalidate queries to trigger clean refetches
+      queryClient.invalidateQueries({ queryKey: ['discovered-coupons'] });
+      queryClient.invalidateQueries({ queryKey: ['discovered-promo-pages'] });
+      
+      refetchDiscovered();
+      refetchPromoPages();
+    } catch (err: any) {
+      console.error('[SAVE-MANUAL-ITEM] Erro:', err);
+      toast.error(err.message || 'Erro técnico ao salvar item.');
+    } finally {
+      setIsSavingManualItem(prev => ({ ...prev, [itemKey]: false }));
+    }
+  }, [queryClient, refetchDiscovered, refetchPromoPages]);
+
+  // --- CLEANUP HANDLERS (DRY-RUN + MODAL CONFIRM) ---
+  const handleStartCleanup = useCallback(async () => {
+    setIsFetchingCleanupCount(true);
+    try {
+      const res = await fetch('/api/shopee/discovered-coupons/clean-test-data?onlyCount=1', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao buscar quantidade de itens para limpeza.');
+      
+      setCleanupAffectedCount(data.count || 0);
+      setIsCleanupModalOpen(true);
+    } catch (err: any) {
+      console.error('[CLEANUP-START] Erro:', err);
+      toast.error(err.message || 'Erro ao checar dados de teste.');
+    } finally {
+      setIsFetchingCleanupCount(false);
+    }
+  }, []);
+
+  const handleConfirmCleanup = useCallback(async () => {
+    setIsCleaningTestData(true);
+    try {
+      const res = await fetch('/api/shopee/discovered-coupons/clean-test-data', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao limpar dados de teste.');
+      
+      toast.success(`Limpeza concluída! ${data.deletedCount || cleanupAffectedCount} item(ns) removido(s).`);
+      setIsCleanupModalOpen(false);
+      
+      // Invalidate and refetch discovered lists
+      queryClient.invalidateQueries({ queryKey: ['discovered-coupons'] });
+      queryClient.invalidateQueries({ queryKey: ['discovered-promo-pages'] });
+      
+      refetchDiscovered();
+      refetchPromoPages();
+    } catch (err: any) {
+      console.error('[CLEANUP-CONFIRM] Erro:', err);
+      toast.error(err.message || 'Erro ao executar a limpeza de dados.');
+    } finally {
+      setIsCleaningTestData(false);
+    }
+  }, [cleanupAffectedCount, queryClient, refetchDiscovered, refetchPromoPages]);
 
   return (
     <LayoutContainer type="operational">
@@ -985,6 +1241,163 @@ export default function RadarOfertasPage() {
         /* Aba de Cupons (Capturados + Páginas) */
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8">
            
+           {/* BLOCO DE VALIDAÇÃO MANUAL */}
+           <div className="bg-anthracite-surface p-8 rounded-[40px] shadow-skeuo-flat relative overflow-hidden space-y-6">
+             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
+             
+             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+               <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-kinetic-orange/10 rounded-2xl flex items-center justify-center shadow-skeuo-elevated">
+                   <PackageSearch size={24} className="text-kinetic-orange" />
+                 </div>
+                 <div>
+                   <h3 className="text-xl font-black uppercase tracking-widest text-white/90 italic font-headline">Validar Links Manualmente</h3>
+                   <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Cole links curtos, URLs resolvidas ou blocos de texto de cupons para análise</p>
+                 </div>
+               </div>
+             </div>
+
+             <div className="space-y-4">
+               <textarea
+                 value={manualLinksInput}
+                 onChange={(e) => setManualLinksInput(e.target.value)}
+                 placeholder="Cole aqui os links ou texto dos cupons (ex: https://s.shopee.com.br/20sLVqOdts ou 'Cupom de R$20 código COLISEUM')..."
+                 className="w-full h-32 p-4 bg-deep-void shadow-skeuo-pressed rounded-2xl text-white text-xs placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-kinetic-orange/30 transition-all resize-none border-none font-medium leading-relaxed"
+               />
+               
+               <div className="flex justify-end">
+                 <KineticButton
+                   onClick={handleValidateManualLinks}
+                   disabled={isAnalyzingManual || !manualLinksInput.trim()}
+                   className="h-12 px-8 rounded-xl bg-kinetic-orange text-white shadow-glow-orange text-[10px] font-black uppercase tracking-widest gap-2"
+                 >
+                   {isAnalyzingManual ? (
+                     <>
+                       <Loader2 size={14} className="animate-spin" />
+                       Analisando...
+                     </>
+                   ) : (
+                     <>
+                       <Search size={14} />
+                       Validar Links
+                     </>
+                   )}
+                 </KineticButton>
+               </div>
+             </div>
+
+             {/* RESULTADOS DA ANÁLISE MANUAL */}
+             {(manualAnalysisResults.length > 0 || manualAnalysisErrors.length > 0) && (
+               <div className="mt-8 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                 <div className="h-px bg-white/5" />
+                 <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Resultados da Análise</h4>
+                 
+                 {manualAnalysisErrors.length > 0 && (
+                   <div className="p-4 bg-red-500/5 rounded-2xl shadow-skeuo-pressed space-y-2">
+                     <div className="flex items-center gap-2 text-red-400">
+                       <AlertCircle size={14} />
+                       <span className="text-[9px] font-black uppercase tracking-widest">Erros Encontrados</span>
+                     </div>
+                     {manualAnalysisErrors.map((err, i) => (
+                       <div key={i} className="text-[10px] text-white/60 font-medium">
+                         <span className="text-red-400/80 font-mono">&quot;{err.input}&quot;</span>: {err.error}
+                       </div>
+                     ))}
+                   </div>
+                 )}
+
+                 {manualAnalysisResults.length > 0 && (
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     {manualAnalysisResults.map((result, index) => {
+                       const itemKey = `${index}-${result.original_url || result.resolved_url || 'item'}`;
+                       const isSaved = !!savedManualKeys[itemKey];
+                       const isSaving = !!isSavingManualItem[itemKey];
+                       const isCoupon = result.accepted_target === 'coupons';
+                       const isProduct = result.content_type === 'product_offer' || result.content_type === 'product_link';
+
+                       return (
+                         <div 
+                           key={index} 
+                           className="bg-deep-void p-5 rounded-3xl shadow-skeuo-pressed relative overflow-hidden flex flex-col justify-between min-h-[160px] space-y-4"
+                         >
+                           <div className="flex items-start justify-between">
+                             <div className="space-y-1">
+                               <div className="flex items-center gap-2 flex-wrap">
+                                 <Badge className={cn(
+                                   "border-none text-[8px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider",
+                                   isCoupon ? "bg-kinetic-orange/10 text-kinetic-orange shadow-glow-orange" : 
+                                   isProduct ? "bg-red-500/10 text-red-400" : "bg-white/10 text-white/50"
+                                 )}>
+                                   {result.content_type === 'verified_coupon' ? 'Cupom Verificado' : 
+                                    result.content_type === 'promo_landing' ? 'Página de Oferta' : 
+                                    result.content_type === 'rejected' ? 'Rejeitado / Inválido' : result.content_type}
+                                 </Badge>
+                                 
+                                 <span className="text-[8px] font-black uppercase text-white/20 tracking-widest">
+                                   {(result.confidence * 100).toFixed(0)}% Confiança
+                                 </span>
+                               </div>
+
+                               <div className="text-[11px] font-bold text-white/90 truncate max-w-[200px] mt-2">
+                                 {result.coupon_code ? `Código: ${result.coupon_code}` : 'Link de Resgate Manual'}
+                               </div>
+
+                               <div className="text-[9px] text-white/40 truncate max-w-[220px] font-mono">
+                                 {result.resolved_url || result.original_url}
+                               </div>
+                             </div>
+                           </div>
+
+                           {/* Razões da Classificação */}
+                           {result.reasons && result.reasons.length > 0 && (
+                             <div className="text-[9px] text-white/30 leading-relaxed font-medium space-y-0.5">
+                               {result.reasons.map((reason: string, rIdx: number) => (
+                                 <div key={rIdx} className="flex items-center gap-1.5">
+                                   <span className="w-1 h-1 rounded-full bg-white/10 shrink-0" />
+                                   <span className="truncate">{reason}</span>
+                                 </div>
+                               ))}
+                             </div>
+                           )}
+
+                           {/* Ações do item da análise */}
+                           <div className="flex items-center justify-between gap-2 pt-2">
+                             {result.content_type === 'rejected' ? (
+                               <span className="text-[9px] font-black uppercase tracking-widest text-red-400/50 flex items-center gap-1.5">
+                                 <X size={12} />
+                                 Classificação Inválida
+                               </span>
+                             ) : isSaved ? (
+                               <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
+                                 ✓ Pronto no Radar
+                               </span>
+                             ) : (
+                               <Button
+                                 onClick={() => handleSaveManualItem(result, index)}
+                                 disabled={isSaving}
+                                 className={cn(
+                                   "h-10 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest border-none gap-2 w-full",
+                                   isCoupon ? "bg-kinetic-orange text-white shadow-glow-orange" : "bg-white/5 text-white hover:bg-white/10"
+                                 )}
+                               >
+                                 {isSaving ? (
+                                   <Loader2 size={12} className="animate-spin" />
+                                 ) : (
+                                   <SendHorizonal size={12} />
+                                 )}
+                                 {isCoupon ? 'Adicionar em Cupons' : 'Adicionar em Páginas'}
+                               </Button>
+                             )}
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 )}
+               </div>
+             )}
+           </div>
+
            {/* Seletor de Sub-Aba Estilo Tactical */}
            <div className="flex bg-anthracite-surface/30 p-1.5 rounded-[20px] border border-white/[0.02] shadow-skeuo-pressed w-fit mx-auto mb-2">
               <button
@@ -1034,9 +1447,9 @@ export default function RadarOfertasPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
-                        onClick={() => handleBulkReject()}
+                        onClick={() => setIsBulkDeleteModalOpen(true)}
                         disabled={isBulkProcessing}
-                        className="h-10 bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest gap-2"
+                        className="h-10 bg-red-500/10 text-red-500 hover:bg-red-500/20 border-none rounded-xl text-[9px] font-black uppercase tracking-widest gap-2"
                       >
                         <Trash2 size={14} /> Remover
                       </Button>
@@ -1065,16 +1478,6 @@ export default function RadarOfertasPage() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2 mr-4 bg-deep-void/40 p-2 rounded-xl border border-white/5">
-                        <Switch 
-                          id="verified-only" 
-                          checked={showVerifiedOnly} 
-                          onCheckedChange={setShowVerifiedOnly} 
-                          className="data-[state=checked]:bg-kinetic-orange scale-75"
-                        />
-                        <Label htmlFor="verified-only" className="text-[9px] font-black uppercase tracking-widest text-white/40 cursor-pointer">Apenas Verificados</Label>
-                      </div>
-
                       <Button 
                         onClick={() => refetchDiscovered()}
                         variant="ghost" 
@@ -1120,6 +1523,40 @@ export default function RadarOfertasPage() {
              </div>
            ) : (
              <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
+                {/* Barra de Ações em Lote */}
+                {selectedPromoPageIds.length > 0 && (
+                  <div className="flex items-center justify-between p-4 bg-kinetic-orange/10 border border-kinetic-orange/20 rounded-3xl animate-in slide-in-from-top-2 flex-wrap md:flex-nowrap gap-4 mb-4">
+                    <div className="flex items-center gap-4 ml-4">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-kinetic-orange">
+                        {selectedPromoPageIds.length} item(ns) selecionado(s)
+                      </span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setSelectedPromoPageIds([])}
+                        className="text-[9px] font-bold uppercase text-white/40 hover:text-white"
+                      >
+                        Limpar seleção
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => handleBulkRejectPromoPages()}
+                        disabled={isBulkProcessing}
+                        className="h-10 bg-red-500/10 text-red-500 hover:bg-red-500/20 border-none rounded-xl text-[9px] font-black uppercase tracking-widest gap-2"
+                      >
+                        <Trash2 size={14} /> Remover
+                      </Button>
+                      <Button
+                        onClick={handleBulkQuickSendPromoPages}
+                        className="h-10 bg-kinetic-orange text-white shadow-glow-orange rounded-xl text-[9px] font-black uppercase tracking-widest gap-2 border-none"
+                      >
+                        <SendHorizonal size={14} /> Usar no Envio Rápido
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-anthracite-surface p-8 rounded-[40px] shadow-skeuo-flat border border-white/[0.02] relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-30" />
                   
@@ -1157,6 +1594,9 @@ export default function RadarOfertasPage() {
                         <DiscoveredPromoCard 
                           key={page.id}
                           page={page}
+                          isSelected={selectedPromoPageIds.includes(page.id)}
+                          onToggleSelection={handleTogglePromoPageSelection}
+                          onReject={(id) => handleBulkRejectPromoPages([id])}
                         />
                       ))}
                     </div>
@@ -1242,6 +1682,102 @@ export default function RadarOfertasPage() {
            />
         </div>
       )}
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO EM LOTE */}
+      <AlertDialog open={isBulkDeleteModalOpen} onOpenChange={setIsBulkDeleteModalOpen}>
+        <AlertDialogContent className="bg-anthracite-surface border-none rounded-[32px] shadow-skeuo-elevated max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-black uppercase tracking-widest text-kinetic-orange italic font-headline flex items-center gap-3">
+              <Trash2 className="text-red-500" />
+              Confirmar Exclusão?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-white/40 text-xs font-bold uppercase tracking-widest leading-relaxed mt-4">
+              Você selecionou <span className="text-white">{selectedCouponIds.length} item(ns)</span> para exclusão.<br/>
+              Estes cupons serão removidos da lista do Radar e não serão enviados pela automação.
+              
+              <div className="mt-6 p-4 bg-red-500/5 rounded-2xl flex items-center gap-3">
+                <AlertCircle size={16} className="text-red-400 shrink-0" />
+                <span className="text-[9px] font-black text-red-400/60 uppercase tracking-widest">
+                  Esta ação é irreversível no painel do Radar.
+                </span>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-8 gap-3">
+            <AlertDialogCancel 
+              className="bg-white/5 border-none text-white/40 hover:bg-white/10 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest h-12 px-6 transition-all"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async (e) => {
+                e.preventDefault();
+                await handleBulkReject();
+                setIsBulkDeleteModalOpen(false);
+              }}
+              className="bg-red-600 text-white shadow-glow-orange border-none rounded-xl text-[10px] font-black uppercase tracking-widest h-12 px-8 transition-all flex items-center gap-2 hover:bg-red-700"
+            >
+              {isBulkProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 size={14} />}
+              Confirmar Exclusão
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* MODAL DE CONFIRMAÇÃO DE LIMPEZA DE DADOS DE TESTE */}
+      <AlertDialog open={isCleanupModalOpen} onOpenChange={setIsCleanupModalOpen}>
+        <AlertDialogContent className="bg-anthracite-surface border-none rounded-[32px] shadow-skeuo-elevated max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-black uppercase tracking-widest text-kinetic-orange italic font-headline flex items-center gap-3">
+              <AlertCircle className="text-amber-500 animate-pulse" />
+              Limpar Dados de Teste
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-white/40 text-xs font-bold uppercase tracking-widest leading-relaxed mt-4">
+              {cleanupAffectedCount === 0 ? (
+                <>
+                  Nenhum dado de teste ou cupom passível de limpeza foi encontrado para o seu usuário.
+                  <div className="mt-6 p-4 bg-white/5 rounded-2xl flex items-center gap-3">
+                    <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">
+                      Tudo limpo! Nenhum item de teste pendente.
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  Foram identificados <span className="text-white">{cleanupAffectedCount} cupom(ns)/item(ns) de teste</span> elegíveis para limpeza.<br/>
+                  Esta operação fará a exclusão lógica (soft-delete) destes registros associados ao seu usuário.
+                  
+                  <div className="mt-6 p-4 bg-amber-500/5 rounded-2xl flex items-center gap-3">
+                    <AlertCircle size={16} className="text-amber-400 shrink-0" />
+                    <span className="text-[9px] font-black text-amber-400/60 uppercase tracking-widest">
+                      Apenas dados de teste do seu usuário serão apagados.
+                    </span>
+                  </div>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-8 gap-3">
+            <AlertDialogCancel 
+              className="bg-white/5 border-none text-white/40 hover:bg-white/10 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest h-12 px-6 transition-all"
+            >
+              Fechar
+            </AlertDialogCancel>
+            {cleanupAffectedCount > 0 && (
+              <AlertDialogAction
+                onClick={async (e) => {
+                  e.preventDefault();
+                  await handleConfirmCleanup();
+                }}
+                className="bg-kinetic-orange text-white shadow-glow-orange border-none rounded-xl text-[10px] font-black uppercase tracking-widest h-12 px-8 transition-all flex items-center gap-2 hover:bg-kinetic-orange/80"
+              >
+                {isCleaningTestData ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 size={14} />}
+                Confirmar Limpeza
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </LayoutContainer>
   );
 }

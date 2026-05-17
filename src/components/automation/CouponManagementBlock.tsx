@@ -43,10 +43,14 @@ interface CouponRule {
     coupon_label: string;
     code: string | null;
     redemption_url: string;
+    affiliate_url?: string;
+    source_url?: string;
   };
   promo_page?: {
     title: string;
-    url: string;
+    canonical_url?: string;
+    raw_url?: string;
+    source_url?: string;
   };
 }
 
@@ -160,6 +164,16 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
     return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   };
 
+  const getCouponUrl = (coupon: any) => {
+    if (!coupon) return undefined;
+    return coupon.redemption_url || coupon.affiliate_url || coupon.source_url;
+  };
+
+  const getPromoPageUrl = (promoPage: any) => {
+    if (!promoPage) return undefined;
+    return promoPage.canonical_url || promoPage.raw_url || promoPage.source_url;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -197,100 +211,114 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
             <Button variant="outline" size="sm" onClick={handleSync} className="bg-anthracite-surface border-none text-white hover:bg-deep-void">Sincronizar Agora</Button>
           </div>
         ) : (
-          rules.map((rule) => (
-            <TactileCard 
-              key={rule.id} 
-              className={`p-4 transition-all duration-300 ${!rule.is_active ? 'opacity-60 grayscale' : ''} ${rule.is_selected ? 'ring-1 ring-kinetic-orange/30' : ''}`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Enviar?</div>
-                  <Switch 
-                    checked={rule.is_selected} 
-                    onCheckedChange={(val) => handleToggle(rule.id, 'is_selected', val)}
-                    className="data-[state=checked]:bg-kinetic-orange"
-                  />
-                </div>
+          rules.map((rule) => {
+            const hasRuleLink = rule.item_type === 'coupon' 
+              ? !!getCouponUrl(rule.coupon) 
+              : !!getPromoPageUrl(rule.promo_page);
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${rule.item_type === 'coupon' ? 'border-kinetic-orange text-kinetic-orange' : 'border-blue-500 text-blue-500'}`}>
-                      {rule.item_type === 'coupon' ? 'CUPOM' : 'PROMO'}
-                    </Badge>
-                    <span className="text-white font-medium text-sm truncate">
-                      {rule.item_type === 'coupon' ? rule.coupon?.coupon_label : rule.promo_page?.title}
-                    </span>
-                    {rule.item_type === 'coupon' && rule.coupon?.code && (
-                      <span className="bg-deep-void px-1.5 py-0.5 rounded text-[10px] font-mono text-gray-400 border border-gray-800">
-                        {rule.coupon.code}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-4 text-[10px] text-gray-500">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      Último: {formatTime(rule.last_sent_at)} ({formatDate(rule.last_sent_at)})
-                    </div>
-                    <div className="flex items-center gap-1 text-kinetic-orange">
-                      <Calendar className="w-3 h-3" />
-                      Próximo: {formatTime(rule.next_run_at)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-6">
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Intervalo (min)</div>
-                    <div className="flex items-center gap-2">
-                      <Input 
-                        type="number"
-                        className="h-7 w-16 bg-deep-void border-none text-[12px] text-center p-0"
-                        value={rule.interval_minutes}
-                        onChange={(e) => setRules(prev => prev.map(r => r.id === rule.id ? { ...r, interval_minutes: parseInt(e.target.value) || 1 } : r))}
-                        onBlur={(e) => handleIntervalChange(rule.id, parseInt(e.target.value) || 30)}
-                      />
-                    </div>
-                  </div>
-
+            return (
+              <TactileCard 
+                key={rule.id} 
+                className={`p-4 transition-all duration-300 ${!rule.is_active ? 'opacity-60 grayscale' : ''} ${rule.is_selected ? 'ring-1 ring-kinetic-orange/30' : ''}`}
+              >
+                <div className="flex items-center gap-4">
                   <div className="flex flex-col items-center gap-2">
-                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Ativo</div>
+                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Enviar?</div>
                     <Switch 
-                      checked={rule.is_active} 
-                      onCheckedChange={(val) => handleToggle(rule.id, 'is_active', val)}
-                      className="data-[state=checked]:bg-green-500"
+                      checked={rule.is_selected} 
+                      onCheckedChange={(val) => handleToggle(rule.id, 'is_selected', val)}
+                      className="data-[state=checked]:bg-kinetic-orange"
                     />
                   </div>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-transparent">
-                        <MoreVertical className="w-4 h-4 text-gray-500" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-anthracite-surface border-none text-white">
-                      <DropdownMenuItem 
-                        onClick={() => window.open(rule.item_type === 'coupon' ? rule.coupon?.redemption_url : rule.promo_page?.url, '_blank')}
-                        className="gap-2"
-                      >
-                        <ExternalLink className="w-4 h-4" /> Ver Origem
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="gap-2 text-red-500">
-                        <Trash2 className="w-4 h-4" /> Remover Regra
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${rule.item_type === 'coupon' ? 'border-kinetic-orange text-kinetic-orange' : 'border-blue-500 text-blue-500'}`}>
+                        {rule.item_type === 'coupon' ? 'CUPOM' : 'PROMO'}
+                      </Badge>
+                      <span className="text-white font-medium text-sm truncate">
+                        {rule.item_type === 'coupon' ? rule.coupon?.coupon_label : rule.promo_page?.title}
+                      </span>
+                      {rule.item_type === 'coupon' && rule.coupon?.code && (
+                        <span className="bg-deep-void px-1.5 py-0.5 rounded text-[10px] font-mono text-gray-400 border border-gray-800">
+                          {rule.coupon.code}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-4 text-[10px] text-gray-500">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Último: {formatTime(rule.last_sent_at)} ({formatDate(rule.last_sent_at)})
+                      </div>
+                      <div className="flex items-center gap-1 text-kinetic-orange">
+                        <Calendar className="w-3 h-3" />
+                        Próximo: {formatTime(rule.next_run_at)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6">
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Intervalo (min)</div>
+                      <div className="flex items-center gap-2">
+                        <Input 
+                          type="number"
+                          className="h-7 w-16 bg-deep-void border-none text-[12px] text-center p-0"
+                          value={rule.interval_minutes}
+                          onChange={(e) => setRules(prev => prev.map(r => r.id === rule.id ? { ...r, interval_minutes: parseInt(e.target.value) || 1 } : r))}
+                          onBlur={(e) => handleIntervalChange(rule.id, parseInt(e.target.value) || 30)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Ativo</div>
+                      <Switch 
+                        checked={rule.is_active} 
+                        onCheckedChange={(val) => handleToggle(rule.id, 'is_active', val)}
+                        className="data-[state=checked]:bg-green-500"
+                      />
+                    </div>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-transparent">
+                          <MoreVertical className="w-4 h-4 text-gray-500" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-anthracite-surface border-none text-white">
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            const url = rule.item_type === 'coupon' 
+                              ? getCouponUrl(rule.coupon) 
+                              : getPromoPageUrl(rule.promo_page);
+                            if (url) {
+                              window.open(url, '_blank');
+                            }
+                          }}
+                          disabled={!hasRuleLink}
+                          className={`gap-2 ${!hasRuleLink ? 'opacity-50 cursor-not-allowed text-white/20' : ''}`}
+                        >
+                          <ExternalLink className="w-4 h-4" /> Ver Origem
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2 text-red-500">
+                          <Trash2 className="w-4 h-4" /> Remover Regra
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
-              </div>
-              
-              {rule.item_type === 'promo_landing' && (
-                <div className="mt-2 p-2 rounded bg-kinetic-orange/5 border border-kinetic-orange/10 flex items-center gap-2 text-[10px] text-kinetic-orange/80">
-                  <AlertCircle className="w-3 h-3" />
-                  Promo pages requerem validação manual por questões de segurança na versão atual.
-                </div>
-              )}
-            </TactileCard>
-          ))
+                
+                {rule.item_type === 'promo_landing' && (
+                  <div className="mt-2 p-2 rounded bg-green-500/5 border border-green-500/10 flex items-center gap-2 text-[10px] text-green-500/80">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                    Envio recorrente automático ativado e totalmente suportado.
+                  </div>
+                )}
+              </TactileCard>
+            );
+          })
         )}
       </div>
     </div>

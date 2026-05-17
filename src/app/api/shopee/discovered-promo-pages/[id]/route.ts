@@ -3,8 +3,8 @@ import { requireAuthenticatedUser } from '@/lib/access/require-operational-acces
 import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
- * DELETE /api/shopee/discovered-coupons/[id]
- * Remove um cupom capturado do usuário.
+ * DELETE /api/shopee/discovered-promo-pages/[id]
+ * Remove uma página de promoção capturada do usuário.
  */
 export async function DELETE(
   request: Request,
@@ -17,34 +17,33 @@ export async function DELETE(
   const { id } = params;
 
   try {
-    // 1. Verificar ownership e existência do cupom
-    const { data: coupon, error: fetchError } = await adminClient
-      .from('discovered_coupons')
+    // 1. Verificar ownership e existência da página
+    const { data: page, error: fetchError } = await adminClient
+      .from('discovered_promo_pages')
       .select('id, user_id')
       .eq('id', id)
       .eq('user_id', user.id)
       .single();
 
-    if (fetchError || !coupon) {
-      return NextResponse.json({ error: 'Cupom não encontrado ou não pertence ao usuário.' }, { status: 404 });
+    if (fetchError || !page) {
+      return NextResponse.json({ error: 'Página promocional não encontrada ou não pertence ao usuário.' }, { status: 404 });
     }
 
     // 2. Remover regras de automação vinculadas para evitar quebra de FK
-    // Se a FK tiver ON DELETE CASCADE, isso é automático, mas faremos explícito por segurança se pedido.
     const { error: rulesError } = await adminClient
       .from('automation_coupon_rules')
       .delete()
       .eq('user_id', user.id)
-      .eq('coupon_id', id);
+      .eq('promo_page_id', id);
 
     if (rulesError) {
-      console.error('[DELETE-COUPON] Erro ao remover regras vinculadas:', rulesError);
+      console.error('[DELETE-PROMO-PAGE] Erro ao remover regras vinculadas:', rulesError);
       return NextResponse.json({ error: 'Falha ao remover regras de automação vinculadas.' }, { status: 500 });
     }
 
-    // 3. Remover o cupom (Hard Delete conforme solicitado)
+    // 3. Remover a página promocional (Hard Delete)
     const { error: deleteError } = await adminClient
-      .from('discovered_coupons')
+      .from('discovered_promo_pages')
       .delete()
       .eq('id', id)
       .eq('user_id', user.id);
@@ -53,17 +52,17 @@ export async function DELETE(
       throw deleteError;
     }
 
-    return NextResponse.json({ success: true, message: 'Cupom removido com sucesso.' });
+    return NextResponse.json({ success: true, message: 'Página promocional removida com sucesso.' });
 
   } catch (error: any) {
-    console.error('[DELETE-COUPON] Erro crítico:', error);
+    console.error('[DELETE-PROMO-PAGE] Erro crítico:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 /**
- * PATCH /api/shopee/discovered-coupons/[id]
- * Atualiza o nome/título de um cupom capturado.
+ * PATCH /api/shopee/discovered-promo-pages/[id]
+ * Atualiza o título/label de uma página de promoção capturada.
  */
 export async function PATCH(
   request: Request,
@@ -77,29 +76,29 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const newLabel = body.coupon_label ?? body.label ?? body.title ?? body.display_name ?? body.manual_name;
+    const newTitle = body.title ?? body.coupon_label ?? body.label ?? body.display_name;
 
-    if (newLabel === undefined) {
+    if (newTitle === undefined) {
       return NextResponse.json({ error: 'Nenhum campo de edição válido fornecido.' }, { status: 400 });
     }
 
-    // 1. Verificar ownership e existência do cupom
-    const { data: coupon, error: fetchError } = await adminClient
-      .from('discovered_coupons')
+    // 1. Verificar ownership e existência da página
+    const { data: page, error: fetchError } = await adminClient
+      .from('discovered_promo_pages')
       .select('id, user_id')
       .eq('id', id)
       .eq('user_id', user.id)
       .single();
 
-    if (fetchError || !coupon) {
-      return NextResponse.json({ error: 'Cupom não encontrado ou não pertence ao usuário.' }, { status: 404 });
+    if (fetchError || !page) {
+      return NextResponse.json({ error: 'Página promocional não encontrada ou não pertence ao usuário.' }, { status: 404 });
     }
 
-    // 2. Atualizar apenas o campo seguro (coupon_label)
-    const { data: updatedCoupon, error: updateError } = await adminClient
-      .from('discovered_coupons')
+    // 2. Atualizar o título
+    const { data: updatedPage, error: updateError } = await adminClient
+      .from('discovered_promo_pages')
       .update({
-        coupon_label: newLabel,
+        title: newTitle,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -111,10 +110,10 @@ export async function PATCH(
       throw updateError;
     }
 
-    return NextResponse.json({ success: true, coupon: updatedCoupon });
+    return NextResponse.json({ success: true, page: updatedPage });
 
   } catch (error: any) {
-    console.error('[PATCH-COUPON] Erro crítico:', error);
+    console.error('[PATCH-PROMO-PAGE] Erro crítico:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

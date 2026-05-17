@@ -364,6 +364,32 @@ export class ShopeeAdapter extends MarketplaceAdapter {
     const hasCredentials = connection?.shopee_app_id && connection?.shopee_app_secret;
     if (!hasCredentials) return this.fallback(nameFallback, 'Missing credentials');
 
+    const isProduct = !!(shopId && itemId);
+    const lowerUrl = url.toLowerCase();
+    const isCouponOrPromo = lowerUrl.includes('/m/') || 
+                            lowerUrl.includes('/events/') || 
+                            lowerUrl.includes('/voucher-wallet') || 
+                            lowerUrl.includes('/user/voucher') ||
+                            lowerUrl.includes('cupom') ||
+                            lowerUrl.includes('/m/super-ofertas');
+
+    if (!isProduct && isCouponOrPromo) {
+      console.log(`[SHOPEE-ADAPTER] Ignorando busca de produto por palavra-chave para link de cupom ou promoção: ${url}`);
+      return {
+        name: lowerUrl.includes('/m/super-ofertas') ? 'Acesso VIP Shopee: Super Ofertas' : nameFallback,
+        originalPrice: 0,
+        currentPrice: 0,
+        currentPriceFactual: 0,
+        currentPriceSource: 'fallback',
+        commissionValueFactual: 0,
+        commissionSource: 'fallback',
+        discountPercent: 0,
+        imageUrl: '',
+        marketplace: 'Shopee',
+        fetchedAt: new Date().toISOString()
+      };
+    }
+
     try {
       const client = new ShopeeAffiliateClient({
         appId: connection!.shopee_app_id!,

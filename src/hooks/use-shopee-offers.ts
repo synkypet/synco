@@ -18,7 +18,9 @@ export interface OffersResponse {
   testedAt: string;
 }
 
-export function useShopeeOffers(keyword?: string) {
+export function useShopeeOffers(keyword?: string, options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options;
+  
   return useQuery<OffersResponse, Error>({
     queryKey: ['shopee-offers', keyword],
     queryFn: async () => {
@@ -35,11 +37,12 @@ export function useShopeeOffers(keyword?: string) {
       
       return res.json();
     },
-    refetchInterval: () => {
+    enabled,
+    refetchInterval: enabled ? () => {
       // 5 minutos base + jitter de ±30s
       const jitter = Math.floor(Math.random() * 60000) - 30000;
       return 300000 + jitter;
-    },
+    } : false,
     staleTime: 240000, // 4 minutos
   });
 }

@@ -3,10 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { productService } from '@/services/supabase/product-service';
 import { ProductFilter } from '@/types/product';
 
-export function useProducts(filters?: ProductFilter) {
+export function useProducts(filters: ProductFilter & { enabled?: boolean } = {}) {
+  const { enabled = true, ...rest } = filters;
+  
   return useQuery({
-    queryKey: ['products', filters],
-    queryFn: () => productService.list(filters),
+    queryKey: ['products', rest],
+    queryFn: () => productService.list(rest),
+    enabled,
   });
 }
 

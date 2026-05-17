@@ -13,7 +13,9 @@ export interface ShopeeCouponPage {
   created_at: string;
 }
 
-export function useShopeeCouponPages() {
+export function useShopeeCouponPages(options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options;
+  
   return useQuery<ShopeeCouponPage[], Error>({
     queryKey: ['shopee-coupon-pages'],
     queryFn: async () => {
@@ -24,6 +26,7 @@ export function useShopeeCouponPages() {
       }
       return res.json();
     },
+    enabled,
     staleTime: 600000, // 10 minutos
   });
 }

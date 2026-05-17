@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { 
-  Calendar, 
   Tag, 
   ExternalLink, 
   Info, 
@@ -10,52 +9,106 @@ import {
   ZapOff, 
   Activity,
   CheckCircle2,
-  Clock,
   Link as LinkIcon,
-  Trash2
+  Pencil,
+  Loader2,
+  Zap
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { KineticButton } from '@/components/ui/KineticButton';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { DiscoveredCoupon } from '@/hooks/use-discovered-coupons';
-import { formatShopeeCouponMessage } from '@/lib/marketplaces/shopee/coupon-formatter';
+import { formatShopeeCouponMessage, getCouponPrimaryUrl } from '@/lib/marketplaces/shopee/coupon-formatter';
 
 interface DiscoveredCouponCardProps {
   coupon: DiscoveredCoupon;
   isSelected?: boolean;
   onToggleSelection?: (id: string) => void;
   onReject?: (id: string) => void;
+  onReaffiliate?: (id: string) => void;
 }
 
 /**
  * Card para exibição de cupons detectados pelo radar.
- * Focado em curadoria manual segura, sem botões de disparo automático.
+ * Redesenhado para ser limpo e operacional (Fase B).
  */
 export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({ 
   coupon, 
   isSelected = false, 
   onToggleSelection,
-  onReject
+  onReject,
+  onReaffiliate
 }) => {
+  const router = useRouter();
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editLabel, setEditLabel] = React.useState(coupon.coupon_label || '');
+  const [currentLabel, setCurrentLabel] = React.useState(coupon.coupon_label || '');
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    setCurrentLabel(coupon.coupon_label || '');
+  }, [coupon.coupon_label]);
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editLabel.trim()) {
+      toast.error('O título do cupom não pode ser vazio.');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/shopee/discovered-coupons/${coupon.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coupon_label: editLabel.trim() })
+      });
+      
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao salvar alterações.');
+      }
+      
+      setCurrentLabel(editLabel.trim());
+      setIsEditing(false);
+      toast.success('Nome do cupom atualizado com sucesso!', {
+        icon: <CheckCircle2 className="text-emerald-400" size={16} />
+      });
+    } catch (err: any) {
+      console.error('[UI-EDIT-COUPON] Erro:', err);
+      toast.error(err.message || 'Falha ao salvar. Tente novamente.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
   
-  const hasLink = !!(coupon.effective_redemption_url || coupon.redemption_url);
+  const primaryLink = getCouponPrimaryUrl(coupon);
+  const hasLink = !!primaryLink;
 
   const handleCopyMessage = (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    const link = coupon.effective_redemption_url || coupon.redemption_url;
-    if (!link || link === 'undefined') {
+    if (!primaryLink || primaryLink === 'undefined') {
       toast.error('Não é possível copiar: link de resgate ausente ou inválido.');
       return;
     }
+
+    console.log('[COUPON-CARD-ACTION]', {
+      action: 'copy',
+      couponId: coupon.id,
+      couponCode: coupon.code,
+      couponLabel: currentLabel,
+      primaryUrl: primaryLink
+    });
 
     const formattedMessage = formatShopeeCouponMessage({
       marketplace: 'shopee',
       type: coupon.coupon_type,
       code: coupon.code,
-      couponLabel: coupon.coupon_label,
-      redemptionUrl: link,
+      couponLabel: currentLabel,
+      redemptionUrl: primaryLink,
       confidence: coupon.confidence,
       status: coupon.status,
       dedupeKey: coupon.dedupe_key
@@ -77,12 +130,61 @@ export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({
 
   const handleOpenLink = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const targetUrl = coupon.effective_redemption_url || coupon.redemption_url;
-    if (targetUrl) {
-      window.open(targetUrl, '_blank');
+    if (primaryLink) {
+      console.log('[COUPON-CARD-ACTION]', {
+        action: 'open',
+        couponId: coupon.id,
+        couponCode: coupon.code,
+        couponLabel: currentLabel,
+        primaryUrl: primaryLink
+      });
+      window.open(primaryLink, '_blank');
     } else {
       toast.error('URL de resgate não disponível.');
     }
+  };
+
+  const handleQuickSend = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!primaryLink) {
+      toast.error('Não é possível enviar: link de resgate ausente ou inválido.');
+      return;
+    }
+
+    console.log('[COUPON-CARD-ACTION]', {
+      action: 'quick_send',
+      couponId: coupon.id,
+      couponCode: coupon.code || null,
+      couponLabel: currentLabel || null,
+      primaryUrl: primaryLink,
+      redemptionUrl: coupon.redemption_url || null,
+      sourceUrl: coupon.source_url || null
+    });
+
+    const stored = {
+      links: primaryLink,
+      coupons: [
+        {
+          couponId: coupon.id,
+          inputUrl: primaryLink,
+          couponCode: coupon.code ?? null,
+          couponLabel: currentLabel ?? null,
+          couponType: coupon.coupon_type ?? null,
+          redemptionUrl: coupon.redemption_url ?? null,
+          sourceUrl: coupon.source_url ?? null
+        }
+      ],
+      timestamp: Date.now()
+    };
+    
+    localStorage.setItem('quick_send_draft', JSON.stringify(stored));
+    toast.success('Cupom preparado para o Envio Rápido!');
+    router.push('/envio-rapido');
+  };
+
+  const handleReaffiliate = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onReaffiliate?.(coupon.id);
   };
 
   const statusConfig = {
@@ -98,7 +200,6 @@ export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({
     pagina_cupons: { label: 'Página de Cupons', icon: <Activity size={12} /> },
   };
 
-  const currentStatus = statusConfig[coupon.status] || statusConfig.unknown;
   const currentType = typeConfig[coupon.coupon_type] || { label: 'Outro', icon: <Tag size={12} /> };
 
   return (
@@ -124,107 +225,141 @@ export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({
           {isSelected && <CheckCircle2 size={12} strokeWidth={4} />}
         </div>
 
-        {/* Botão de Rejeição Rápida */}
+        {/* Botão de Rejeição Rápida / Lixeira */}
         <button
+          id={`delete-coupon-${coupon.id}`}
           onClick={(e) => {
             e.stopPropagation();
+            e.preventDefault();
+            console.log(`[UI] Clicado em excluir cupom: ${coupon.id}`);
             onReject?.(coupon.id);
           }}
-          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-lg bg-red-500/10 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all flex items-center justify-center border border-red-500/20"
-          title="Remover cupom"
+          className="absolute top-4 right-4 z-20 w-10 h-10 rounded-xl bg-red-500/10 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 active:scale-95 transition-all flex items-center justify-center border border-red-500/20 shadow-skeuo-flat"
+          title="Remover cupom permanentemente"
         >
-          <Trash2 size={14} />
+          <Trash2Icon size={18} />
         </button>
 
-        {/* Header: Tipo e Status */}
-        <div className="flex items-center justify-between mb-4 pl-6">
-          <Badge className={cn("px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border-none flex items-center gap-1.5", currentStatus.color)}>
-            <div className={cn("w-1.5 h-1.5 rounded-full bg-current animate-pulse")} />
-            {currentStatus.label}
-          </Badge>
-
-          <div className="flex items-center gap-2">
-             <Badge className="bg-white/5 text-white/40 border-white/10 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1.5">
-               {currentType.icon}
-               {currentType.label}
-             </Badge>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex flex-col gap-4">
-          <div>
-            <h4 className="text-[14px] font-black text-white/90 uppercase tracking-wider leading-tight line-clamp-2 min-h-[36px] font-headline italic">
-              {coupon.coupon_label || (coupon.code ? `Cupom: ${coupon.code}` : 'Cupom Shopee Detectado')}
-            </h4>
-            
-            <div className="flex flex-wrap items-center gap-4 mt-3">
-              <div className="flex items-center gap-1.5 text-white/30">
-                <Clock size={10} className="text-kinetic-orange" />
-                <span className="text-[9px] font-bold uppercase tracking-widest">
-                  Visto em: {new Date(coupon.last_seen_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-white/30">
-                <CheckCircle2 size={10} className="text-kinetic-orange" />
-                <span className="text-[9px] font-bold uppercase tracking-widest">
-                  Confiança: {(coupon.confidence * 100).toFixed(0)}%
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Código e Capturas */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-deep-void/40 p-3 rounded-xl border border-white/5 shadow-skeuo-pressed flex flex-col justify-center">
-              <span className="text-[7px] font-black text-white/20 uppercase tracking-widest mb-1">Código</span>
-              <span className="text-[11px] font-black text-kinetic-orange tracking-widest truncate">
-                {coupon.code || 'N/A'}
-              </span>
-            </div>
-            <div className="bg-deep-void/40 p-3 rounded-xl border border-white/5 shadow-skeuo-pressed flex flex-col justify-center">
-              <span className="text-[7px] font-black text-white/20 uppercase tracking-widest mb-1">Capturas</span>
-              <span className="text-[11px] font-black text-white/60 tracking-widest">
-                {coupon.capture_count}x
-              </span>
-            </div>
-          </div>
-
-          {/* Badge de Segurança Obrigatória e Re-afiliação */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/10 rounded-xl">
-               <ZapOff size={12} className="text-amber-500/50" />
-               <span className="text-[9px] font-black uppercase tracking-widest text-amber-500/60 leading-none">
-                 🔒 Envio automático bloqueado
-               </span>
-            </div>
-
-            {coupon.redemption_url && (
-              <div className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-xl border",
-                coupon.reaffiliation_status === 'reaffiliated' 
-                  ? "bg-emerald-500/5 border-emerald-500/10" 
-                  : "bg-red-500/5 border-red-500/10"
+        {/* Header Simplificado: Status de Afiliação */}
+        <div className="flex items-center justify-between mb-6 pl-6">
+          <div className="flex flex-col gap-1.5">
+            {coupon.redemption_url ? (
+              <Badge className={cn(
+                "px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border-none flex items-center gap-1.5 w-fit shadow-sm", 
+                coupon.reaffiliation_status === 'reaffiliated' ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
               )}>
-                {coupon.reaffiliation_status === 'reaffiliated' ? (
-                  <CheckCircle2 size={12} className="text-emerald-500/50" />
-                ) : (
-                  <Info size={12} className="text-red-500/50" />
-                )}
-                <span className={cn(
-                  "text-[9px] font-black uppercase tracking-widest leading-none",
-                  coupon.reaffiliation_status === 'reaffiliated' ? "text-emerald-500/60" : "text-red-500/60"
-                )}>
-                  {coupon.reaffiliation_status === 'reaffiliated' 
-                    ? "✓ Link re-afiliado" 
-                    : "⚠ Link ainda não re-afiliado"}
-                </span>
-              </div>
+                <div className={cn("w-1.5 h-1.5 rounded-full bg-current", coupon.reaffiliation_status === 'reaffiliated' && "animate-pulse")} />
+                {coupon.reaffiliation_status === 'reaffiliated' ? 'Pronto para uso' : 'Necessita Re-afiliação'}
+              </Badge>
+            ) : (
+              <Badge className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border-none bg-red-500/10 text-red-400">
+                Link Inválido
+              </Badge>
             )}
           </div>
 
+          <Badge className="bg-white/5 text-white/40 border-white/10 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1.5">
+            {currentType.icon}
+            {currentType.label}
+          </Badge>
+        </div>
+
+        {/* Content Principal: Código e Label */}
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[28px] font-black text-kinetic-orange tracking-tighter font-headline italic leading-none">
+                {coupon.code || 'SEM CÓDIGO'}
+              </span>
+              {coupon.capture_count > 1 && (
+                <span className="text-[10px] text-white/20 font-black uppercase tracking-widest">
+                  {coupon.capture_count}x visto
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <h4 className="text-[12px] font-bold text-white/70 uppercase tracking-wide leading-tight line-clamp-1">
+                {currentLabel || 'Cupom Shopee'}
+              </h4>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditLabel(currentLabel);
+                  setIsEditing(true);
+                }}
+                className="p-1 rounded bg-white/5 text-white/40 hover:text-kinetic-orange hover:bg-white/10 active:scale-95 transition-all"
+                title="Editar nome do cupom"
+              >
+                <Pencil size={10} />
+              </button>
+            </div>
+          </div>
+
+          {/* Seção Expansível: Detalhes Técnicos */}
+          <details className="group">
+            <summary className="text-[8px] font-black uppercase tracking-[0.2em] text-white/10 cursor-pointer list-none flex items-center gap-2 group-open:mb-4">
+              <Info size={10} className="group-open:rotate-180 transition-transform" />
+              Detalhes Técnicos
+            </summary>
+            
+            <div className="space-y-4 p-4 bg-deep-void/40 rounded-2xl border border-white/5 shadow-skeuo-pressed">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Confiança</span>
+                  <span className="text-[10px] font-black text-white/60 tracking-widest">
+                    {(coupon.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Visto em</span>
+                  <span className="text-[10px] font-black text-white/60 tracking-widest">
+                    {new Date(coupon.last_seen_at).toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+              </div>
+
+              { (coupon as any).classification && (
+                <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+                  <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Classificação</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge className="bg-white/5 text-white/40 border-none text-[7px] font-bold px-1.5 py-0.5 rounded uppercase">
+                      {(coupon as any).classification}
+                    </Badge>
+                    {(coupon as any).classification_reasons?.map((r: string, i: number) => (
+                      <span key={i} className="text-[7px] text-white/20 border border-white/5 px-1 rounded">{r}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+                <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Rastreio de URLs</span>
+                <div className="space-y-1.5 overflow-hidden">
+                   <div className="flex flex-col">
+                      <span className="text-[6px] text-white/10 uppercase font-black">Entrada:</span>
+                      <span className="text-[8px] text-white/20 font-mono truncate">{coupon.source_url || 'N/A'}</span>
+                   </div>
+                   <div className="flex flex-col">
+                      <span className="text-[6px] text-white/10 uppercase font-black">Redenção:</span>
+                      <span className="text-[8px] text-white/20 font-mono truncate">{coupon.redemption_url || 'N/A'}</span>
+                   </div>
+                </div>
+              </div>
+            </div>
+          </details>
+
           {/* Ações */}
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2">
+            {coupon.reaffiliation_status !== 'reaffiliated' && (
+              <button 
+                onClick={handleReaffiliate}
+                className="h-12 px-4 rounded-2xl bg-kinetic-orange/5 text-kinetic-orange hover:bg-kinetic-orange/10 transition-all border border-kinetic-orange/20 text-[9px] font-black uppercase tracking-widest whitespace-nowrap shadow-skeuo-flat"
+              >
+                Re-afiliar
+              </button>
+            )}
+            
             <KineticButton 
               onClick={handleCopyMessage}
               disabled={!hasLink}
@@ -244,13 +379,17 @@ export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({
             >
               <ExternalLink size={16} />
             </button>
-            
+
             <button 
-              className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white/5 text-white/20 hover:text-white/40 transition-all shadow-skeuo-flat border-white/5"
-              title="Detalhes Técnicos"
-              onClick={() => toast.info('Chave Dedupe: ' + coupon.dedupe_key)}
+              onClick={handleQuickSend}
+              disabled={!hasLink}
+              className={cn(
+                "h-12 w-12 flex items-center justify-center rounded-2xl bg-kinetic-orange text-white hover:shadow-glow-orange transition-all shadow-skeuo-flat border-none",
+                !hasLink && "opacity-50 cursor-not-allowed"
+              )}
+              title="Enviar para Envio Rápido"
             >
-              <Info size={16} />
+              <Zap size={16} />
             </button>
           </div>
         </div>
@@ -258,6 +397,105 @@ export const DiscoveredCouponCard: React.FC<DiscoveredCouponCardProps> = ({
         {/* Efeito de Gloss Inferior */}
         <div className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-kinetic-orange/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
+
+      {/* Modal Skeuomórfico de Edição */}
+      {isEditing && (
+        <div 
+          className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsEditing(false);
+          }}
+        >
+          <div 
+            className="w-full max-w-md bg-anthracite-surface rounded-[24px] shadow-skeuo-elevated border border-white/[0.05] p-6 relative overflow-hidden text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Gloss de Luz */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-kinetic-orange to-transparent" />
+            
+            <h3 className="text-sm font-black uppercase tracking-wider text-white mb-4">
+              Editar Nome do Cupom
+            </h3>
+            
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-white/40 mb-1.5">
+                  Código do Cupom (Não Editável)
+                </label>
+                <input 
+                  type="text" 
+                  disabled 
+                  value={coupon.code || 'SEM CÓDIGO'} 
+                  className="w-full h-12 px-4 bg-deep-void/60 text-white/50 rounded-2xl border border-white/5 font-mono font-bold text-[13px] cursor-not-allowed shadow-skeuo-pressed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-white/40 mb-1.5">
+                  Título / Nome do Cupom
+                </label>
+                <input 
+                  type="text" 
+                  value={editLabel} 
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  required
+                  placeholder="Ex: Cupom de R$ 15 OFF"
+                  className="w-full h-12 px-4 bg-deep-void text-white rounded-2xl border border-white/5 focus:border-kinetic-orange focus:outline-none font-bold text-[13px] shadow-skeuo-pressed transition-colors"
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="h-10 px-4 rounded-xl text-white/50 bg-white/5 hover:bg-white/10 active:scale-95 transition-all text-[10px] font-black uppercase tracking-wider"
+                  disabled={isSaving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="h-10 px-4 rounded-xl bg-kinetic-orange text-white hover:shadow-glow-orange active:scale-95 transition-all text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="animate-spin" size={12} />
+                      Salvando...
+                    </>
+                  ) : (
+                    'Salvar'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+function Trash2Icon({ size }: { size: number }) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      <line x1="10" x2="10" y1="11" y2="17" />
+      <line x1="14" x2="14" y1="11" y2="17" />
+    </svg>
+  );
+}

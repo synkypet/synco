@@ -58,6 +58,6 @@ export function useDiscoveredPromoPages(options: UseDiscoveredPromoPagesOptions 
       return json as { status: string; data: DiscoveredPromoPage[] };
     },
     enabled,
-    refetchInterval: 30000, // Atualiza a cada 30 segundos
+    refetchInterval: enabled ? 30000 : false, // Atualiza a cada 30 segundos apenas se habilitado
   });
 }

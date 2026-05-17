@@ -67,8 +67,11 @@ export function classifyShopeeContentForCoupon(
   const hasCouponCode = potentialCode && !isGenericCode && hasCouponContext;
   
   const isCouponLanding = factual.canonical_url?.includes('/m/cupom') || 
+                          factual.canonical_url?.includes('/m/cupom-de-desconto') ||
                           factual.canonical_url?.includes('voucher') || 
                           factual.canonical_url?.includes('/user/voucher') ||
+                          factual.canonical_url?.includes('/user/voucher-wallet') ||
+                          factual.canonical_url?.includes('type=0418') ||
                           content.includes('resgate seu cupom');
 
   // REGRA DE OURO: verified_coupon EXIGE um link (canonical_url)
@@ -94,8 +97,23 @@ export function classifyShopeeContentForCoupon(
       };
     }
 
-    if (lowerUrl.includes('/m/super-ofertas')) {
-      return { classification: 'promo_landing', reasons: ['Landing page de Super Ofertas'] };
+    // Se for uma página promocional/landing (/m/, /events/, etc.) e não for produto
+    const isPromoLandingUrl = lowerUrl.includes('/m/') || 
+                              lowerUrl.includes('/events/') || 
+                              lowerUrl.includes('voucher') || 
+                              lowerUrl.includes('/user/voucher');
+    
+    if (isPromoLandingUrl) {
+      if (lowerUrl.includes('voucher') || lowerUrl.includes('cupom') || hasCouponCode) {
+        return { 
+          classification: 'verified_coupon', 
+          reasons: ['URL de resgate de cupom identificada'] 
+        };
+      }
+      return { 
+        classification: 'promo_landing', 
+        reasons: ['Página promocional ou evento Shopee detectado'] 
+      };
     }
   }
 
