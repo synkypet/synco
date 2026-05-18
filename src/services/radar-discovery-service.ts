@@ -230,7 +230,7 @@ export const radarDiscoveryService = {
               kw.last_used_at = new Date().toISOString();
 
               // --- CAMADA DE CACHE (RAW Data) ---
-              let rawProducts = radarCacheService.get(kw.term, sortType, listType);
+              let rawProducts = radarCacheService.get(kw.term, sortType, listType, pageToUse || 1);
               if (rawProducts) {
                 batchCacheHits++;
               } else {
@@ -242,7 +242,7 @@ export const radarDiscoveryService = {
                   page: pageToUse || 1,
                   connection: shopeeConnection
                 });
-                radarCacheService.set(kw.term, sortType, listType, rawProducts);
+                radarCacheService.set(kw.term, sortType, listType, pageToUse || 1, rawProducts);
               }
 
               let kwNewLinks = 0;
