@@ -39,6 +39,11 @@ import {
 } from '@/hooks/use-automations';
 import { useCampaigns, useQueuePosition } from '@/hooks/use-campaigns';
 import Link from 'next/link';
+import { Calendar as CalendarIcon } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar as DashboardCalendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format as formatDate, parseISO } from 'date-fns';
 
 // ─── Component: Live Queue Item ─────────────────────────────────────────────
 
@@ -84,11 +89,14 @@ export default function MonitoramentoPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('general');
   const [searchTerm, setSearchTerm] = useState('');
+  const [period, setPeriod] = useState('week');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Data Hooks
   const { data: sources, isLoading: isLoadingSources } = useAutomationSources(user?.id as string);
   const { data: logs, isLoading: isLoadingLogs } = useAllAutomationLogs(user?.id as string, 30);
-  const { data: summary, isLoading: isLoadingSummary } = useAutomationSummary(user?.id as string);
+  const { data: summary, isLoading: isLoadingSummary } = useAutomationSummary(user?.id as string, { period, startDate, endDate });
   const { data: campaignsData } = useCampaigns(user?.id, 1, 50); // Monitoramento busca as 50 mais recentes
   const updateSource = useUpdateAutomationSource();
 
@@ -113,37 +121,9 @@ export default function MonitoramentoPage() {
     );
   }
 
-  // KPIs
-  const KPI_GRID = [
-    {
-      label: 'Eventos Capturados',
-      value: (summary?.captured || 0).toLocaleString(),
-      description: 'Total de leads/links ingeridos',
-      icon: <Layers size={16} />,
-      colorScheme: 'default' as const,
-    },
-    {
-      label: 'Mensagens Distribuídas',
-      value: (summary?.processed || 0).toLocaleString(),
-      description: 'Saídas via automação',
-      icon: <CheckCircle2 size={16} />,
-      colorScheme: 'success' as const,
-    },
-    {
-      label: 'Falhas/Filtrados',
-      value: (summary?.error || 0).toLocaleString(),
-      description: 'Itens bloqueados ou erro',
-      icon: <AlertCircle size={16} />,
-      colorScheme: 'destructive' as const,
-    },
-    {
-      label: 'Taxa de Conversão',
-      value: summary?.captured ? `${Math.round((summary.processed / summary.captured) * 100)}%` : '0%',
-      description: 'Conversão Ingestão -> Envio',
-      icon: <TrendingUp size={16} />,
-      colorScheme: 'kinetic' as const,
-    },
-  ];
+  const totalAttempts = (summary?.processed || 0) + (summary?.error || 0);
+  const successRate = totalAttempts > 0 ? (summary!.processed / totalAttempts) * 100 : 0;
+  const failureRate = totalAttempts > 0 ? (summary!.error / totalAttempts) * 100 : 0;
 
   return (
     <LayoutContainer type="analytical">
@@ -153,26 +133,135 @@ export default function MonitoramentoPage() {
           description="Acompanhe o fluxo de ingestão, processamento e distribuição de ofertas em tempo real."
           icon={<Activity size={24} />}
         />
-        <div className="flex items-center gap-2">
-            <Badge variant="outline" className="px-3 py-1 gap-1.5 bg-kinetic-orange/5 border-kinetic-orange/20 text-kinetic-orange animate-pulse">
-                <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-kinetic-orange opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-kinetic-orange"></span>
-                </span>
-                LIVE ENGINE
-            </Badge>
-        </div>
       </div>
 
-      {/* Primary Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {KPI_GRID.map((item) => (
-          <StatCard 
-            key={item.label}
-            {...item}
-          />
-        ))}
-      </div>
+      {/* Resumo de Envios (Dashboard Style) */}
+      <TactileCard className={cn(
+        "p-6 border-none bg-gradient-to-r from-anthracite-surface/60 to-anthracite-surface/20 relative overflow-hidden transition-all duration-500 mb-8",
+        isLoadingSummary && "before:absolute before:inset-0 before:bg-kinetic-orange/5 before:animate-pulse z-0"
+      )}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-8 h-8 rounded-lg bg-kinetic-orange/20 flex items-center justify-center transition-all",
+                  isLoadingSummary && "animate-spin"
+                )}>
+                    <TrendingUp className="w-4 h-4 text-kinetic-orange" />
+                </div>
+                <div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-white/90">Resumo de Envios</h3>
+                </div>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-4">
+                {/* Filtro Móvel (Docked ao Card) */}
+                <div className="flex items-center gap-2">
+                    {period === 'custom' && (
+                        <div className="flex items-center gap-2 mr-2">
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="h-7 px-3 text-[9px] font-black uppercase bg-black/20 border border-white/5 rounded text-white/60 hover:bg-white/5 transition-colors flex items-center gap-2">
+                                  <CalendarIcon size={10} className="text-kinetic-orange" />
+                                  {startDate ? formatDate(parseISO(startDate), 'dd/MM/yyyy') : 'INÍCIO'}
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0 border-white/5" align="start">
+                                <DashboardCalendar
+                                  mode="single"
+                                  selected={startDate ? parseISO(startDate) : undefined}
+                                  onSelect={(date: any) => setStartDate(date ? formatDate(date, 'yyyy-MM-dd') : '')}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+
+                            <span className="text-[8px] font-black text-white/20">ATÉ</span>
+
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="h-7 px-3 text-[9px] font-black uppercase bg-black/20 border border-white/5 rounded text-white/60 hover:bg-white/5 transition-colors flex items-center gap-2">
+                                  <CalendarIcon size={10} className="text-kinetic-orange" />
+                                  {endDate ? formatDate(parseISO(endDate), 'dd/MM/yyyy') : 'FIM'}
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0 border-white/5" align="start">
+                                <DashboardCalendar
+                                  mode="single"
+                                  selected={endDate ? parseISO(endDate) : undefined}
+                                  onSelect={(date: any) => setEndDate(date ? formatDate(date, 'yyyy-MM-dd') : '')}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                        </div>
+                    )}
+                    <Select value={period} onValueChange={(val) => {
+                      setPeriod(val);
+                      if (val !== 'custom') {
+                        setStartDate('');
+                        setEndDate('');
+                      }
+                    }}>
+                        <SelectTrigger className="w-[140px] h-7 text-[9px] font-black uppercase tracking-widest bg-white/5 border-none hover:bg-white/10 transition-colors">
+                            <div className="flex items-center gap-2">
+                                <CalendarIcon size={10} className="text-kinetic-orange" />
+                                <SelectValue placeholder="Período" />
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent className="bg-anthracite-surface border-white/5">
+                            <SelectItem value="today" className="text-[9px] font-black uppercase">Hoje</SelectItem>
+                            <SelectItem value="week" className="text-[9px] font-black uppercase">Últimos 7 dias</SelectItem>
+                            <SelectItem value="15d" className="text-[9px] font-black uppercase">Últimos 15 dias</SelectItem>
+                            <SelectItem value="30d" className="text-[9px] font-black uppercase">Últimos 30 dias</SelectItem>
+                            <SelectItem value="custom" className="text-[9px] font-black uppercase">Personalizado</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="flex items-center gap-6 border-l border-white/5 pl-4">
+                    <div className="text-right">
+                        <span className="block text-[8px] font-black text-white/20 uppercase tracking-widest">Enviados</span>
+                        <span className="text-sm font-black text-emerald-400">{successRate.toFixed(1)}%</span>
+                    </div>
+                    <div className="text-right">
+                        <span className="block text-[8px] font-black text-white/20 uppercase tracking-widest">Tentativas</span>
+                        <span className="text-sm font-black text-white">{totalAttempts.toLocaleString()}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div className="space-y-4">
+            {/* Linha de Sucessos */}
+            <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/40">Concluídos</span>
+                    <span className="text-[10px] font-black text-white">{summary?.processed.toLocaleString()}</span>
+                </div>
+                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div 
+                        className="h-full bg-emerald-500 rounded-full transition-all duration-1000 ease-out"
+                        style={{ width: `${successRate}%` }}
+                    />
+                </div>
+            </div>
+
+            {/* Linha de Erros */}
+            <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/40">Falhas</span>
+                    <span className="text-[10px] font-black text-white">{summary?.error.toLocaleString()}</span>
+                </div>
+                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div 
+                        className="h-full bg-red-500/60 rounded-full transition-all duration-1000 ease-out"
+                        style={{ width: `${failureRate}%` }}
+                    />
+                </div>
+            </div>
+        </div>
+      </TactileCard>
+
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
         <div className="flex items-center justify-between gap-4 flex-wrap">

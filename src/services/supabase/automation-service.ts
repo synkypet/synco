@@ -179,7 +179,7 @@ export const automationService = {
   /**
    * Helper centralizado para deduplicação com TTL e Cleanup oportunístico.
    */
-  async handleDedupeWithTTL(hashKey: string, ttlHours: number, client: SupabaseClient): Promise<boolean> {
+  async handleDedupeWithTTL(hashKey: string, ttlHours: number, client: SupabaseClient, sourceId?: string): Promise<boolean> {
     // 1. Cleanup Oportunístico Global (5% de chance)
     if (Math.random() < 0.05) {
       // Fire-and-forget cleanup global de registros muito antigos (> 15 dias)
@@ -202,9 +202,12 @@ export const automationService = {
         .lt('created_at', expirationDate);
 
       // 3. Tentativa de inserção
+      const payload: any = { hash_key: hashKey };
+      if (sourceId) payload.source_id = sourceId;
+
       const { error } = await client
         .from('automation_dedupe')
-        .insert({ hash_key: hashKey });
+        .insert(payload);
 
       if (error) {
         if (error.code === '23505') return true; // Ainda é duplicata (dentro do TTL)
@@ -470,14 +473,35 @@ export const automationService = {
   /**
    * Obtém resumo de métricas factuais das automações
    */
-  async getAutomationSummary(userId: string, client?: SupabaseClient): Promise<{ captured: number; processed: number; error: number }> {
+  async getAutomationSummary(
+    userId: string, 
+    options?: { days?: number; startDate?: string; endDate?: string },
+    client?: SupabaseClient
+  ): Promise<{ captured: number; processed: number; error: number }> {
     const supabase = client || createClient();
     
-    // Contagem simples por status
-    const { data: counts, error } = await supabase
+    let query = supabase
       .from('automation_logs')
       .select('status')
       .eq('user_id', userId);
+
+    if (options) {
+      if (options.startDate) {
+        const end = options.endDate || new Date().toISOString();
+        query = query.gte('created_at', options.startDate).lte('created_at', end);
+      } else {
+        const days = options.days || 7;
+        const date = new Date();
+        if (days === 1) { // Today
+          date.setHours(0, 0, 0, 0);
+        } else {
+          date.setDate(date.getDate() - days);
+        }
+        query = query.gte('created_at', date.toISOString());
+      }
+    }
+    
+    const { data: counts, error } = await query;
 
     if (error) {
       console.error('Error fetching automation summary:', error);
@@ -485,9 +509,9 @@ export const automationService = {
     }
 
     return {
-      captured: counts.filter(c => c.status === 'captured').length,
-      processed: counts.filter(c => c.status === 'processed').length,
-      error: counts.filter(c => c.status === 'error').length
+      captured: counts ? counts.filter(c => c.status === 'captured').length : 0,
+      processed: counts ? counts.filter(c => c.status === 'processed').length : 0,
+      error: counts ? counts.filter(c => c.status === 'error').length : 0
     };
   },
 

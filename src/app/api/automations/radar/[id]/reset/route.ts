@@ -70,6 +70,17 @@ export async function POST(
       throw new Error(`Erro ao limpar produtos vinculados: ${deleteError.message}`);
     }
 
+    // 5. Limpar hashes de deduplicação vinculadas a este radar
+    console.log(`${logPrefix} Removendo registros da tabela automation_dedupe...`);
+    const { error: dedupeError } = await supabaseAdmin
+      .from('automation_dedupe')
+      .delete()
+      .eq('source_id', id);
+
+    if (dedupeError) {
+      throw new Error(`Erro ao limpar deduplicação: ${dedupeError.message}`);
+    }
+
     console.log(`${logPrefix} Radar resetado com sucesso!`);
     return NextResponse.json({ 
       success: true, 

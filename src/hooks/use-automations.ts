@@ -121,10 +121,23 @@ export function useAllAutomationLogs(userId: string, limit: number = 50) {
   });
 }
 
-export function useAutomationSummary(userId: string) {
+export function useAutomationSummary(userId: string, options?: { period?: string; startDate?: string; endDate?: string }) {
+  const period = options?.period || 'week';
+  const startDate = options?.startDate;
+  const endDate = options?.endDate;
+
+  const PERIOD_MAP: Record<string, number> = {
+    today: 1,
+    week: 7,
+    '15d': 15,
+    '30d': 30,
+    month: 30,
+  };
+  const days = PERIOD_MAP[period];
+
   return useQuery({
-    queryKey: ['automation-summary', userId],
-    queryFn: () => automationService.getAutomationSummary(userId),
+    queryKey: ['automation-summary', userId, period, startDate, endDate],
+    queryFn: () => automationService.getAutomationSummary(userId, { days, startDate, endDate }),
     enabled: !!userId,
     refetchInterval: 10000
   });

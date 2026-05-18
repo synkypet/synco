@@ -555,6 +555,12 @@ export const radarDiscoveryService = {
                 .delete()
                 .eq('source_id', s.id);
                 
+              // 1.5 Limpar tabela de deduplicação para este radar
+              await supabase
+                .from('automation_dedupe')
+                .delete()
+                .eq('source_id', s.id);
+                
               // 2. Limpar o cache de memória para os termos deste radar
               keywords.forEach(kw => {
                 radarCacheService.clearKeyword(kw.term);

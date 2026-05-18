@@ -354,7 +354,7 @@ export const radarDispatcherService = {
           // Usamos a stable_product_key se disponível, caso contrário fallback para ID
           const productKey = product.stable_product_key || product.id;
           const hashKey = this.generateHash(`radar_v3:${source.id}:${productKey}:${route.id}`);
-          const isDuplicate = await automationService.handleDedupeWithTTL(hashKey, 168, supabase);
+          const isDuplicate = await automationService.handleDedupeWithTTL(hashKey, 168, supabase, source.id);
 
           if (isDuplicate) {
             routeSkippedDedupe++;
@@ -494,6 +494,11 @@ export const radarDispatcherService = {
           console.log(`${sourceLogPrefix} [NO-ELIGIBLE] Rota ${route.id} percorreu ${candidates.length} candidatos mas todos foram filtrados ou já enviados.`);
           if (routeSkippedDedupe === candidates.length) {
             console.log(`${sourceLogPrefix} [NEEDS-RESTOCK] Esgotou candidatos 'pending' para esta rota.`);
+            
+            await supabase
+              .from('automation_sources')
+              .update({ needs_restock: true })
+              .eq('id', source.id);
           }
         }
       }
