@@ -296,6 +296,13 @@ export default function AutomacoesDashboardPage() {
       const data = await response.json();
       
       if (response.ok && data.success) {
+        // Atualiza otimisticamente a página de discovery para 1 no cache do React Query
+        queryClient.setQueryData(['automation-sources', user?.id], (old: any) => {
+          if (!old) return old;
+          return old.map((s: any) => 
+            s.id === sourceId ? { ...s, discovery_page: 1 } : s
+          );
+        });
         queryClient.invalidateQueries({ queryKey: ['automation-sources'] });
         toast.success(data.message || 'Radar de Ofertas resetado com sucesso.');
       } else {
@@ -821,6 +828,11 @@ export default function AutomacoesDashboardPage() {
                            <Badge variant="outline" className="text-[8px] font-black uppercase border-white/10 text-white/40 h-4">
                              {source.source_type === 'group_monitor' ? 'Monitor de Grupos' : (source.source_type === 'radar_offers' ? 'Radar de Produtos' : 'Cupons Shopee')}
                            </Badge>
+                           {source.source_type === 'radar_offers' && (
+                             <span className="text-[10px] font-bold text-white/40 flex items-center gap-1">
+                               📄 Página {source.discovery_page || 1} de discovery {(source.discovery_page || 1) === 1 && ' (início)'}
+                             </span>
+                           )}
                         </div>
                       </div>
                     </div>

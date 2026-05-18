@@ -17,15 +17,15 @@ class RadarCacheService {
   /**
    * Gera uma chave única para a combinação de busca.
    */
-  private generateKey(keyword: string, sortType: number, listType: number): string {
-    return `${keyword.toLowerCase().trim()}:${sortType}:${listType}`;
+  private generateKey(keyword: string, sortType: number, listType: number, page: number): string {
+    return `${keyword.toLowerCase().trim()}:${sortType}:${listType}:${page}`;
   }
 
   /**
    * Recupera dados do cache se válidos.
    */
-  get(keyword: string, sortType: number, listType: number): any[] | null {
-    const key = this.generateKey(keyword, sortType, listType);
+  get(keyword: string, sortType: number, listType: number, page: number): any[] | null {
+    const key = this.generateKey(keyword, sortType, listType, page);
     const entry = this.cache.get(key);
 
     if (entry && Date.now() - entry.timestamp < this.TTL_MS) {
@@ -42,8 +42,8 @@ class RadarCacheService {
   /**
    * Armazena dados no cache.
    */
-  set(keyword: string, sortType: number, listType: number, data: any[]): void {
-    const key = this.generateKey(keyword, sortType, listType);
+  set(keyword: string, sortType: number, listType: number, page: number, data: any[]): void {
+    const key = this.generateKey(keyword, sortType, listType, page);
     this.cache.set(key, {
       data,
       timestamp: Date.now()
