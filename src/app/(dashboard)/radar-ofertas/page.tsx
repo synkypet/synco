@@ -823,28 +823,28 @@ export default function RadarOfertasPage() {
         }
       />
 
-      <div className="mb-8">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-          <TabsList className="bg-anthracite-surface/50 p-1.5 rounded-2xl border border-white/[0.02] shadow-skeuo-pressed h-14">
+      <div className="mb-8 w-full max-w-full overflow-x-auto no-scrollbar">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full min-w-max sm:min-w-0">
+          <TabsList className="bg-anthracite-surface/50 p-1.5 rounded-2xl border border-white/[0.02] shadow-skeuo-pressed h-14 w-fit sm:w-full inline-flex">
             <TabsTrigger 
               value="products" 
-              className="rounded-xl px-8 h-11 data-[state=active]:bg-kinetic-orange data-[state=active]:text-white data-[state=active]:shadow-glow-orange font-black text-[10px] uppercase tracking-widest transition-all"
+              className="rounded-xl px-4 sm:px-8 h-11 data-[state=active]:bg-kinetic-orange data-[state=active]:text-white data-[state=active]:shadow-glow-orange font-black text-[10px] uppercase tracking-widest transition-all"
             >
-              <Search size={14} className="mr-2" />
+              <Search size={14} className="mr-2 hidden sm:block" />
               Produtos
             </TabsTrigger>
             <TabsTrigger 
               value="coupons" 
-              className="rounded-xl px-8 h-11 data-[state=active]:bg-kinetic-orange data-[state=active]:text-white data-[state=active]:shadow-glow-orange font-black text-[10px] uppercase tracking-widest transition-all"
+              className="rounded-xl px-4 sm:px-8 h-11 data-[state=active]:bg-kinetic-orange data-[state=active]:text-white data-[state=active]:shadow-glow-orange font-black text-[10px] uppercase tracking-widest transition-all"
             >
-              <BadgePercent size={14} className="mr-2" />
+              <BadgePercent size={14} className="mr-2 hidden sm:block" />
               Cupons
             </TabsTrigger>
             <TabsTrigger 
               value="campaigns" 
-              className="rounded-xl px-8 h-11 data-[state=active]:bg-kinetic-orange data-[state=active]:text-white data-[state=active]:shadow-glow-orange font-black text-[10px] uppercase tracking-widest transition-all"
+              className="rounded-xl px-4 sm:px-8 h-11 data-[state=active]:bg-kinetic-orange data-[state=active]:text-white data-[state=active]:shadow-glow-orange font-black text-[10px] uppercase tracking-widest transition-all"
             >
-              <Store size={14} className="mr-2" />
+              <Store size={14} className="mr-2 hidden sm:block" />
               Campanhas
             </TabsTrigger>
           </TabsList>
@@ -1155,18 +1155,18 @@ export default function RadarOfertasPage() {
               )}
 
               {/* SEQUENTIAL PAGINATION CONTROLS */}
-              <div className="mt-12 flex items-center justify-center gap-6">
+              <div className="mt-12 flex flex-wrap items-center justify-center gap-4 sm:gap-6">
                  <Button
                     variant="ghost"
                     disabled={garimpPage <= 1 || isGarimping}
                     onClick={() => handleGarimpShopee(garimpPage - 1)}
-                    className="h-14 px-6 bg-white/5 hover:bg-white/10 rounded-2xl shadow-skeuo-flat border-none group transition-all"
+                    className="h-14 px-4 sm:px-6 bg-white/5 hover:bg-white/10 rounded-2xl shadow-skeuo-flat border-none group transition-all flex-1 sm:flex-none"
                  >
-                    <ChevronLeft size={20} className={cn("mr-2 transition-transform", !isGarimping && "group-hover:-translate-x-1")} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Anterior</span>
+                    <ChevronLeft size={20} className={cn("mr-1 sm:mr-2 transition-transform", !isGarimping && "group-hover:-translate-x-1")} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Ant</span>
                  </Button>
 
-                 <div className="flex flex-col items-center gap-1">
+                 <div className="flex flex-col items-center gap-1 w-full sm:w-auto order-first sm:order-none mb-4 sm:mb-0">
                     <span className="text-[8px] font-black uppercase tracking-[0.4em] text-white/10">Navegação Sequencial</span>
                     <div className="h-14 px-8 bg-deep-void shadow-skeuo-pressed rounded-2xl flex items-center justify-center min-w-[140px]">
                        <span className="text-xl font-black font-headline text-kinetic-orange tracking-widest">
@@ -1184,10 +1184,10 @@ export default function RadarOfertasPage() {
                     variant="ghost"
                     disabled={!activePageData.hasNextPage || isGarimping}
                     onClick={() => handleGarimpShopee(garimpPage + 1)}
-                    className="h-14 px-6 bg-white/5 hover:bg-white/10 rounded-2xl shadow-skeuo-flat border-none group transition-all"
+                    className="h-14 px-4 sm:px-6 bg-white/5 hover:bg-white/10 rounded-2xl shadow-skeuo-flat border-none group transition-all flex-1 sm:flex-none"
                  >
-                    <span className="text-[10px] font-black uppercase tracking-widest">Próxima</span>
-                    <ChevronRight size={20} className={cn("ml-2 transition-transform", !isGarimping && "group-hover:translate-x-1")} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Próx</span>
+                    <ChevronRight size={20} className={cn("ml-1 sm:ml-2 transition-transform", !isGarimping && "group-hover:translate-x-1")} />
                  </Button>
               </div>
             </div>
@@ -1399,29 +1399,29 @@ export default function RadarOfertasPage() {
            </div>
 
            {/* Seletor de Sub-Aba Estilo Tactical */}
-           <div className="flex bg-anthracite-surface/30 p-1.5 rounded-[20px] border border-white/[0.02] shadow-skeuo-pressed w-fit mx-auto mb-2">
+           <div className="flex bg-anthracite-surface/30 p-1.5 rounded-[20px] border border-white/[0.02] shadow-skeuo-pressed w-fit mx-auto mb-2 max-w-full overflow-x-auto no-scrollbar">
               <button
                 onClick={() => setCouponSubTab('detected_coupons')}
                 className={cn(
-                  "px-8 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  "px-4 sm:px-8 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 min-w-max",
                   couponSubTab === 'detected_coupons' 
                     ? "bg-kinetic-orange text-white shadow-glow-orange" 
                     : "text-white/30 hover:text-white/60"
                 )}
               >
-                <Activity size={12} className={cn(couponSubTab === 'detected_coupons' ? "animate-pulse" : "")} />
+                <Activity size={12} className={cn(couponSubTab === 'detected_coupons' ? "animate-pulse hidden sm:block" : "hidden sm:block")} />
                 Cupons Capturados
               </button>
               <button
                 onClick={() => setCouponSubTab('detected_pages')}
                 className={cn(
-                  "px-8 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  "px-4 sm:px-8 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 min-w-max",
                   couponSubTab === 'detected_pages' 
                                         ? "bg-kinetic-orange text-white shadow-glow-orange" 
                     : "text-white/30 hover:text-white/60"
                 )}
               >
-                <Zap size={12} className={cn(couponSubTab === 'detected_pages' ? "animate-pulse" : "")} />
+                <Zap size={12} className={cn(couponSubTab === 'detected_pages' ? "animate-pulse hidden sm:block" : "hidden sm:block")} />
                 Páginas de Ofertas
               </button>
            </div>
