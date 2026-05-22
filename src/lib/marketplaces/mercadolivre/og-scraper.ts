@@ -3,6 +3,16 @@
  * Busca og:title e og:image do HTML público para contornar a autenticação exigida pela API.
  */
 export async function fetchOGMetadata(canonicalUrl: string): Promise<{ title: string | null, imageUrl: string | null }> {
+  let cleanUrl = canonicalUrl;
+  try {
+    const parsed = new URL(canonicalUrl);
+    parsed.search = '';
+    parsed.hash = '';
+    cleanUrl = parsed.toString();
+  } catch (e) {
+    // Mantém a original se falhar ao analisar a URL
+  }
+
   const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
   const headers = {
     "User-Agent": userAgent,
@@ -18,7 +28,7 @@ export async function fetchOGMetadata(canonicalUrl: string): Promise<{ title: st
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch(canonicalUrl, {
+      const response = await fetch(cleanUrl, {
         headers,
         signal: controller.signal
       });
@@ -51,7 +61,7 @@ export async function fetchOGMetadata(canonicalUrl: string): Promise<{ title: st
 
     } catch (error: any) {
       clearTimeout(timer);
-      console.warn(`[ML-OG-SCRAPER] Attempt ${attempt} failed for ${canonicalUrl}: ${error.message}`);
+      console.warn(`[ML-OG-SCRAPER] Attempt ${attempt} failed for ${cleanUrl}: ${error.message}`);
       
       if (attempt > maxRetries) {
         return { title: null, imageUrl: null };

@@ -122,7 +122,9 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
 
     const isCatalog = itemData.type === 'catalog';
     const hasValidImage = isCatalog ? true : (!!metadata.imageUrl && metadata.imageUrl.length > 5);
-    const hasValidTitle = !!metadata.name && metadata.name.length > 3 && metadata.name !== fallbackTitle;
+    const hasValidTitle = isCatalog
+      ? (!!metadata.name && metadata.name.length > 3)
+      : (!!metadata.name && metadata.name.length > 3 && metadata.name !== fallbackTitle);
 
     if (!hasValidImage || !hasValidTitle) {
       return this.createFallback(metadata.name || fallbackTitle, 'insufficient_metadata_quality');
