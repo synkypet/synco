@@ -40,7 +40,7 @@ export async function fetchOGMetadata(canonicalUrl: string): Promise<{ title: st
                          html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
 
       const title = titleMatch ? decodeHTMLEntities(titleMatch[1].trim()) : null;
-      const imageUrl = imageMatch ? imageMatch[1].trim() : null;
+      const imageUrl = imageMatch ? decodeHTMLEntities(imageMatch[1].trim()) : null;
 
       if (title || imageUrl) {
         return { title, imageUrl };

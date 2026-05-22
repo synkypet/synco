@@ -23,7 +23,7 @@ export class MLClient {
         imageUrl: ogData.imageUrl ?? '',
         marketplace: 'Mercado Livre',
         currentPriceFactual: 0,
-        currentPriceSource: 'unavailable',
+        currentPriceSource: 'fallback',
         commissionValueFactual: 0,
         commissionSource: 'fallback',
         itemId: itemData.id,
