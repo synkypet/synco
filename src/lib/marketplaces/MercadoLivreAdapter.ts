@@ -11,9 +11,9 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
   }
 
   async cleanUrl(url: string): Promise<string> {
-    const itemId = extractItemId(url);
-    if (itemId) {
-      return buildCanonicalUrl(itemId);
+    const itemData = extractItemId(url);
+    if (itemData) {
+      return buildCanonicalUrl(itemData);
     }
     try {
       const parsed = new URL(url);
@@ -46,8 +46,8 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
     }
 
     // 2. Extract itemId
-    const itemId = extractItemId(resolvedUrl);
-    if (!itemId) {
+    const itemData = extractItemId(resolvedUrl);
+    if (!itemData) {
       return {
         incoming_url: url,
         resolved_url: resolvedUrl,
@@ -58,7 +58,7 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
     }
 
     // 4. Build canonical
-    const canonicalUrl = buildCanonicalUrl(itemId);
+    const canonicalUrl = buildCanonicalUrl(itemData);
 
     // 5. Build affiliate
     let affiliateUrl = canonicalUrl;
@@ -105,15 +105,15 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
   }
 
   async fetchMetadata(url: string, connection?: UserMarketplaceConnection, sourceText?: string): Promise<ProductMetadata | null> {
-    const itemId = extractItemId(url);
+    const itemData = extractItemId(url);
     const fallbackTitle = 'Produto Mercado Livre';
 
-    if (!itemId) {
+    if (!itemData) {
       return this.createFallback(fallbackTitle, 'item_id_not_found');
     }
 
     const client = new MLClient();
-    const metadata = await client.fetchItemMetadata(itemId);
+    const metadata = await client.fetchItemMetadata(itemData);
 
     if (!metadata) {
       return this.createFallback(fallbackTitle, 'api_fetch_failed');
@@ -128,7 +128,7 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
 
     return {
       ...metadata,
-      marketplace: this.name,
+      marketplace: 'Mercado Livre',
       fetchedAt: new Date().toISOString()
     } as ProductMetadata;
   }
@@ -149,7 +149,7 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
       commissionSource: 'fallback',
       discountPercent: 0,
       imageUrl: '',
-      marketplace: this.name,
+      marketplace: 'Mercado Livre',
       metadata_failed: true,
       metadata_error: errorMsg
     };
@@ -160,35 +160,58 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
     const chain = [url];
     let redirects = 0;
     
+    const maxRetries = 2;
+    const timeoutMs = 8000;
+    
     while (redirects < maxRedirects) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      let attemptSuccess = false;
+      let lastError: any;
+      
+      for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-      try {
-        const res = await fetch(currentUrl, {
-          method: 'GET',
-          redirect: 'manual',
-          signal: controller.signal
-        });
-        clearTimeout(timeout);
+        try {
+          const res = await fetch(currentUrl, {
+            method: 'GET',
+            redirect: 'manual',
+            signal: controller.signal
+          });
+          clearTimeout(timeout);
 
-        if (res.status >= 300 && res.status < 400) {
-          const location = res.headers.get('location');
-          if (location) {
-            const nextUrl = new URL(location, currentUrl).toString();
-            if (chain.includes(nextUrl)) break;
-            currentUrl = nextUrl;
-            chain.push(currentUrl);
-            redirects++;
-            continue;
+          if (res.status >= 300 && res.status < 400) {
+            const location = res.headers.get('location');
+            if (location) {
+              const nextUrl = new URL(location, currentUrl).toString();
+              if (chain.includes(nextUrl)) {
+                attemptSuccess = true;
+                break;
+              }
+              currentUrl = nextUrl;
+              chain.push(currentUrl);
+              redirects++;
+              attemptSuccess = true;
+              break; // go to outer while loop for the next redirect
+            }
+          }
+          
+          // Se não houver redirect ou cair aqui, é o fim da chain
+          return { resolvedUrl: currentUrl, chain };
+          
+        } catch (error) {
+          clearTimeout(timeout);
+          lastError = error;
+          if (attempt <= maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 600));
           }
         }
-        return { resolvedUrl: currentUrl, chain };
-      } catch (error) {
-        clearTimeout(timeout);
-        throw error;
+      }
+      
+      if (!attemptSuccess) {
+        throw lastError;
       }
     }
+    
     return { resolvedUrl: currentUrl, chain };
   }
 }

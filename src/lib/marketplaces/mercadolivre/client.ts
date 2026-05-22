@@ -3,12 +3,15 @@ import { ProductMetadata } from '../BaseAdapter';
 export class MLClient {
   /**
    * Busca metadados da API pública do ML.
-   * Endpoint: GET https://api.mercadolibre.com/items/{MLB_ID}
+   * Endpoint: GET https://api.mercadolibre.com/items/{MLB_ID} ou /products/{MLB_ID}
    * Timeout: 8s
    * Retry: 2 tentativas
    */
-  async fetchItemMetadata(itemId: string): Promise<Partial<ProductMetadata> | null> {
-    const url = `https://api.mercadolibre.com/items/${itemId}`;
+  async fetchItemMetadata(itemData: { id: string, type: 'catalog' | 'item' }): Promise<Partial<ProductMetadata> | null> {
+    const url = itemData.type === 'catalog'
+      ? `https://api.mercadolibre.com/products/${itemData.id}`
+      : `https://api.mercadolibre.com/items/${itemData.id}`;
+      
     const maxRetries = 2;
     const timeoutMs = 8000;
     
@@ -26,7 +29,7 @@ export class MLClient {
 
         const data = await response.json();
         
-        let imageUrl = data.thumbnail;
+        let imageUrl = data.thumbnail || '';
         if (data.pictures && data.pictures.length > 0) {
           imageUrl = data.pictures[0].secure_url || data.pictures[0].url;
         }
@@ -40,21 +43,21 @@ export class MLClient {
         }
 
         return {
-          name: data.title,
+          name: data.title || data.name,
           currentPrice: currentPrice,
           originalPrice: originalPrice,
           discountPercent,
           imageUrl,
-          marketplace: 'mercadolivre',
+          marketplace: 'Mercado Livre',
           currentPriceFactual: currentPrice,
           currentPriceSource: 'api.price',
           commissionValueFactual: 0,
           commissionSource: 'fallback',
-          itemId: itemId
+          itemId: itemData.id
         };
       } catch (error: any) {
         clearTimeout(id);
-        console.warn(`[ML-CLIENT] Attempt ${attempt} failed for ${itemId}: ${error.message}`);
+        console.warn(`[ML-CLIENT] Attempt ${attempt} failed for ${itemData.id}: ${error.message}`);
         if (attempt > maxRetries) {
           return null;
         }

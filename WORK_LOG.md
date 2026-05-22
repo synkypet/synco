@@ -47,7 +47,7 @@ Use it to track completed blocks, known debt, active risks, and the next executi
 - Worker with 45s deadline, anti-loop (3 retrigger limit), channel locks — LIVE
 - Offer classification: `product_offer`, `coupon_offer`, `product_with_coupon` — LIVE
 - Cupom early-stop blocking — LIVE
-- Mercado Livre — LIVE
+- Mercado Livre — PENDING (BLOCO I)
 - PromoMetadata persistence — PLANNED (architecture defined in architecture_coupon_offers.md)
 - Payments — PENDING (after operational flow is fully stable)
 
