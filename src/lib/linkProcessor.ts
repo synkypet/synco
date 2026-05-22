@@ -223,10 +223,13 @@ export function classifyOffer(text: string, factual: Partial<FactualData>): { ty
   }
 
   // 2. Heurísticas Legadas (Fallback/Outros Marketplaces)
-  const couponKeywords = ['cupom', 'off', 'resgate', 'copie e cole', 'link carrinho', 'mínimo', '🎟', 'voucher'];
-  const hasCouponKeywords = couponKeywords.some(k => content.includes(k));
+  const couponKeywords = ['cupom', 'resgate', 'copie e cole', 'link carrinho', 'mínimo', '🎟', 'voucher'];
+  const hasOffKeyword = /\boff\b/i.test(content);
+  const hasCouponKeywords = couponKeywords.some(k => content.includes(k)) || hasOffKeyword;
   
-  const isWeakProduct = !factual.title || factual.title.includes('sem título') || !factual.price || factual.price <= 0;
+  const isMercadoLivre = factual.marketplace === 'Mercado Livre';
+  const isWeakProduct = !factual.title || factual.title.includes('sem título') || 
+    ((!factual.price || factual.price <= 0) && !isMercadoLivre);
 
   if (hasCouponKeywords && isWeakProduct) {
     return { type: 'coupon_offer', reasons: ['Oferta de cupom detectada (fallback)'] };
