@@ -84,10 +84,21 @@ export const marketplaceService = {
         }
       }
 
+      let mlCredentials = {};
+      if (appSecret && conn.marketplaces?.name?.toLowerCase() === 'mercado livre') {
+        try {
+          mlCredentials = JSON.parse(appSecret);
+        } catch (e) {
+          // Fallback if the secret is just the affiliate tag as a raw string
+          mlCredentials = { ml_affiliate_tag: appSecret };
+        }
+      }
+
       return {
         ...conn,
         marketplace_name: conn.marketplaces?.name || '',
-        shopee_app_secret: appSecret
+        shopee_app_secret: appSecret,
+        ...mlCredentials
       };
     });
   },

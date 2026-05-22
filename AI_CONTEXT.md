@@ -1,32 +1,41 @@
 # SYNCO — Contexto Atual (Sprint Focus)
 
-Este arquivo descreve o estado imediato do projeto e os focos de curto prazo. Para o histórico completo, regras de design ou protocolos de IA, consulte os arquivos específicos.
+Este arquivo descreve o estado imediato do projeto e os focos de curto prazo.
+Para histórico completo, regras de design ou protocolo de IA, consulte os arquivos específicos.
 
 ---
 
-## 🛠️ Estado Recente e Entregas
-- **BLOCO G (Login)**: Finalizado com redesenho Modern Skeuo.
-- **BLOCO D (Performance)**: Finalizado com estabilização do AuthContext e remoção de duplicidade de provedores.
-- **DEPLOY FIX**: Resolvido conflito de ESLint 8 e v9, além de placeholders em rotas de API vazias. Build e Typecheck operacionais.
+## Estado Atual
+
+O sistema está **operacional em produção** (`synco.pro`).
+
+O pipeline completo funciona end-to-end:
+- Link Shopee → Resolve → Reafilia → Enriquece → Campanha → Jobs → Worker → Wasender → WhatsApp
+
+Blockers de qualidade implementados:
+- Guardião no processor (bloqueia itens inválidos antes de criar campanha)
+- Classificação antecipada de offer_type (cupons e carrinhos não passam como produto)
+- Worker estável: deadline 45s, anti-loop, pacing, locks de canal
 
 ---
 
-## 🏗️ Foco da Fase de Operação Real
+## Foco da Sprint Atual
 
-### 1. BLOCO H — Operação Real do Envio Rápido
-- Persistir rascunhos de links no Supabase.
-- Refinar scrapers de marketplace.
-
-### 2. BLOCO I — Execução de Campanhas
-- Modelo de dados estável para registros de disparo.
-- Histórico de campanhas transmitidas.
+### PromoMetadata Stage 2
+- Persistência de cupons em `campaign_items`
+- Card de preview no Envio Rápido
+- Template de mensagem com seção de cupom
 
 ---
 
-## 📁 Referências Primárias
-- **[GEMINI.md](file:///c:/Users/esaur_4zg16wg/Desktop/SYNCO/GEMINI.md)**: Design System (Identidade Visual).
-- **[AGENTS.md](file:///c:/Users/esaur_4zg16wg/Desktop/SYNCO/AGENTS.md)**: Regras de Desenvolvimento e Protocolo IA.
-- **[WORK_LOG.md](file:///c:/Users/esaur_4zg16wg/Desktop/SYNCO/WORK_LOG.md)**: Histórico Completo e Roadmap.
+## Referências Primárias
+
+- **GEMINI.md**: Design System (Identidade Visual)
+- **AGENTS.md**: Regras de Desenvolvimento e Protocolo IA
+- **WORK_LOG.md**: Histórico Completo e Roadmap
+- **architecture_coupon_offers.md**: Arquitetura de cupons e PromoMetadata
+- **certification_report.md**: Pacote de estabilização mergeado
 
 ---
-*Este arquivo deve ser mantido enxuto, refletindo apenas a "sprint" atual.*
+
+*Este arquivo deve ser mantido enxuto, refletindo apenas a sprint atual.*

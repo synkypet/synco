@@ -105,9 +105,12 @@ export interface ProductSnapshot {
   };
 }
 
+import { MercadoLivreAdapter } from './marketplaces/MercadoLivreAdapter';
+
 // ─── Registry de Adapters ──────────────────────────────────────────────────
 const adapters: MarketplaceAdapter[] = [
   new ShopeeAdapter(),
+  new MercadoLivreAdapter(),
 ];
 
 /**
@@ -126,7 +129,7 @@ export function detectMarketplace(url: string): Marketplace {
     if (hostname === 'br.shp.ee' || hostname.endsWith('.br.shp.ee')) return 'Shopee';
     
     if (hostname === 'amazon.com.br' || hostname.endsWith('.amazon.com.br')) return 'Amazon';
-    if (hostname === 'mercadolivre.com.br' || hostname.endsWith('.mercadolivre.com.br')) return 'Mercado Livre';
+    if (hostname === 'mercadolivre.com.br' || hostname.endsWith('.mercadolivre.com.br') || hostname === 'mercadolibre.com' || hostname.endsWith('.mercadolibre.com') || hostname === 'meli.com' || hostname.endsWith('.meli.com') || hostname === 'mercadol.in' || hostname.endsWith('.mercadol.in')) return 'Mercado Livre';
     if (hostname === 'magazineluiza.com.br' || hostname.endsWith('.magazineluiza.com.br') || hostname === 'magalu.com' || hostname.endsWith('.magalu.com')) return 'Magalu';
   } catch {
     // Fallback para URLs malformadas ou sem protocolo

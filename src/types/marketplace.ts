@@ -21,6 +21,9 @@ export interface UserMarketplaceConnection {
     affiliate_username?: string;
     shopee_app_id?: string;
     shopee_app_secret?: string; // used for transit
+    ml_affiliate_tag?: string;
+    ml_matt_tool?: string;
+    ml_partner_id?: string;
     has_secret?: boolean; // stored UI flag ensuring config exists
     connection_status?: 'not_connected' | 'connected' | 'error' | 'pending_verification' | 'configured';
     last_error?: string;

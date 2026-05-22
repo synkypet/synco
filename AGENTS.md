@@ -90,3 +90,23 @@ Before marking a task done:
 - Do not propose broad redesigns unless asked.
 - Do not expand scope.
 - If blocked, explain exactly what is blocking progress.
+
+## Documentation update rule
+
+**Every commit to `main` that changes operational behavior must update documentation.**
+
+This applies when:
+- A block is completed or a feature goes live
+- A known debt item is resolved
+- Architecture decisions change
+- New risks are identified or old ones resolved
+
+Files to update per change type:
+- **Feature complete / block done**: update `WORK_LOG.md` (move to Completed, remove from Next Steps) and `AI_CONTEXT.md` (update sprint focus)
+- **Architecture decision**: update or create the relevant `architecture_*.md` file
+- **Bug fix with systemic impact**: update `WORK_LOG.md` Known Risks section
+- **New planned feature**: add to `WORK_LOG.md` Next Steps
+
+Documentation updates must be included **in the same PR** as the code change — not in a separate commit after.
+
+If a documentation update is not possible in the same PR (e.g. blocked by scope), note it explicitly in the PR summary under "Docs debt".
