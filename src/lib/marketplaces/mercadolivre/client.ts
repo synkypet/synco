@@ -1,4 +1,5 @@
 import { ProductMetadata } from '../BaseAdapter';
+import { fetchOGMetadata } from './og-scraper';
 
 export class MLClient {
   /**
@@ -7,10 +8,30 @@ export class MLClient {
    * Timeout: 8s
    * Retry: 2 tentativas
    */
-  async fetchItemMetadata(itemData: { id: string, type: 'catalog' | 'item' }): Promise<Partial<ProductMetadata> | null> {
-    const url = itemData.type === 'catalog'
-      ? `https://api.mercadolibre.com/products/${itemData.id}`
-      : `https://api.mercadolibre.com/items/${itemData.id}`;
+  async fetchItemMetadata(
+    itemData: { id: string, type: 'catalog' | 'item' },
+    canonicalUrl?: string
+  ): Promise<Partial<ProductMetadata> | null> {
+    if (itemData.type === 'catalog') {
+      const targetUrl = canonicalUrl || `https://www.mercadolivre.com.br/p/${itemData.id}`;
+      const ogData = await fetchOGMetadata(targetUrl);
+      return {
+        name: ogData.title ?? 'Produto Mercado Livre',
+        currentPrice: 0,
+        originalPrice: 0,
+        discountPercent: 0,
+        imageUrl: ogData.imageUrl ?? '',
+        marketplace: 'Mercado Livre',
+        currentPriceFactual: 0,
+        currentPriceSource: 'unavailable',
+        commissionValueFactual: 0,
+        commissionSource: 'fallback',
+        itemId: itemData.id,
+        price_unavailable: true
+      } as any;
+    }
+
+    const url = `https://api.mercadolibre.com/items/${itemData.id}`;
       
     const maxRetries = 2;
     const timeoutMs = 8000;

@@ -87,6 +87,7 @@ export interface FactualData {
 
   // Extra (Fase 2H.1B)
   extraCouponLink?: string;
+  price_unavailable?: boolean;
 }
 
 export interface GeneratedCopy {
@@ -278,14 +279,14 @@ export function validateEligibility(factual: FactualData, offerType: OfferType =
     const isShopee = factual.marketplace === 'Shopee';
     const hasValidPrice = typeof factual.price === 'number' && factual.price > 0 && !isNaN(factual.price);
     
-    if (!hasValidPrice) {
+    if (!hasValidPrice && factual.marketplace !== 'Mercado Livre') {
       reasons.push('Preço factual indisponível ou inválido (Obrigatório para Shopee)');
       status = 'ineligible';
     }
 
   }
 
-  if (!factual.image && offerType === 'product_offer') {
+  if (!factual.image && offerType === 'product_offer' && factual.marketplace !== 'Mercado Livre') {
     reasons.push('Imagem ausente (obrigatória no SYNCO para produtos)');
     status = 'ineligible';
   }
@@ -395,7 +396,7 @@ export function buildProductSnapshot(opts: {
     
     // Auditoria Factual (Pro)
     price,
-    priceFormatted: formatBRL(price),
+    priceFormatted: metadata.price_unavailable ? null : formatBRL(price),
     originalPrice,
     originalPriceFormatted: formatBRL(originalPrice),
     currentPriceFactual: metadata.currentPriceFactual,
@@ -438,7 +439,8 @@ export function buildProductSnapshot(opts: {
     // Fonte de Texto Original (Fase 2H.1B)
     source_text: sourceText,
     extraCouponLink: metadata.extraCouponLink,
-    discountPercent: metadata.discountPercent
+    discountPercent: metadata.discountPercent,
+    price_unavailable: metadata.price_unavailable || false
   };
 
   // 2. Classificar Oferta (Heurísticas)

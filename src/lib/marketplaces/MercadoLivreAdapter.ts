@@ -112,14 +112,16 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
       return this.createFallback(fallbackTitle, 'item_id_not_found');
     }
 
+    const canonicalUrl = buildCanonicalUrl(itemData);
     const client = new MLClient();
-    const metadata = await client.fetchItemMetadata(itemData);
+    const metadata = await client.fetchItemMetadata(itemData, canonicalUrl);
 
     if (!metadata) {
       return this.createFallback(fallbackTitle, 'api_fetch_failed');
     }
 
-    const hasValidImage = !!metadata.imageUrl && metadata.imageUrl.length > 5;
+    const isCatalog = itemData.type === 'catalog';
+    const hasValidImage = isCatalog ? true : (!!metadata.imageUrl && metadata.imageUrl.length > 5);
     const hasValidTitle = !!metadata.name && metadata.name.length > 3 && metadata.name !== fallbackTitle;
 
     if (!hasValidImage || !hasValidTitle) {
