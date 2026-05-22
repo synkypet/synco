@@ -21,11 +21,6 @@ Blockers de qualidade implementados:
 
 ## Foco da Sprint Atual
 
-### BLOCO I — Mercado Livre
-- Adapter seguindo o mesmo padrão do ShopeeAdapter
-- Reafiliação por usuário
-- Integração no processor
-
 ### PromoMetadata Stage 2
 - Persistência de cupons em `campaign_items`
 - Card de preview no Envio Rápido
