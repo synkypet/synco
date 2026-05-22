@@ -39,6 +39,8 @@ export function AffiliateSettingsCard({
   const [affiliateCode, setAffiliateCode] = useState(connection?.affiliate_code || '');
   const [shopeeAppId, setShopeeAppId] = useState(connection?.shopee_app_id || '');
   const [shopeeAppSecret, setShopeeAppSecret] = useState(''); // Always blank on load for security
+  const [mattTool, setMattTool] = useState(connection?.ml_matt_tool || '');
+  const [partnerId, setPartnerId] = useState(connection?.ml_partner_id || '');
   const [isActive, setIsActive] = useState(connection?.is_active ?? false);
   const [hasChanges, setHasChanges] = useState(false);
   const [isInjectingSecret, setIsInjectingSecret] = useState(false);
@@ -51,6 +53,8 @@ export function AffiliateSettingsCard({
     setAffiliateCode(connection?.affiliate_code || '');
     setShopeeAppId(connection?.shopee_app_id || '');
     setShopeeAppSecret('');
+    setMattTool(connection?.ml_matt_tool || '');
+    setPartnerId(connection?.ml_partner_id || '');
     setIsActive(connection?.is_active ?? false);
   }, [connection]);
 
@@ -60,12 +64,15 @@ export function AffiliateSettingsCard({
       affiliateCode !== (connection?.affiliate_code || '') ||
       shopeeAppId !== (connection?.shopee_app_id || '') ||
       shopeeAppSecret !== '' ||
+      mattTool !== (connection?.ml_matt_tool || '') ||
+      partnerId !== (connection?.ml_partner_id || '') ||
       isActive !== (connection?.is_active ?? false);
     setHasChanges(changed);
-  }, [affiliateId, affiliateCode, shopeeAppId, shopeeAppSecret, isActive, connection]);
+  }, [affiliateId, affiliateCode, shopeeAppId, shopeeAppSecret, mattTool, partnerId, isActive, connection]);
 
   const isShopee = marketplace.name.toLowerCase() === 'shopee';
-  const isConfigured = isShopee ? !!shopeeAppId : !!affiliateId;
+  const isMercadoLivre = marketplace.name.toLowerCase() === 'mercado livre' || marketplace.name.toLowerCase() === 'mercadolivre';
+  const isConfigured = isShopee ? !!shopeeAppId : isMercadoLivre ? (!!mattTool && !!partnerId) : !!affiliateId;
 
   const handleSave = async () => {
     setIsInjectingSecret(true);
@@ -93,6 +100,8 @@ export function AffiliateSettingsCard({
         affiliate_id: affiliateId,
         affiliate_code: affiliateCode,
         shopee_app_id: shopeeAppId,
+        ml_matt_tool: mattTool,
+        ml_partner_id: partnerId,
         has_secret: shopeeAppSecret ? true : connection?.has_secret,
         is_active: isActive
       });
@@ -186,7 +195,7 @@ export function AffiliateSettingsCard({
 
       {/* Fields */}
       <div className="space-y-6">
-          {!isShopee && (
+          {!isShopee && !isMercadoLivre && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">
@@ -199,6 +208,33 @@ export function AffiliateSettingsCard({
                 placeholder="Insira seu ID"
                 className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl"
               />
+            </div>
+          )}
+
+          {isMercadoLivre && (
+            <div className="space-y-4 animate-in slide-in-from-top-2">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  Matt Tool ID
+                </Label>
+                <Input 
+                  value={mattTool}
+                  onChange={(e) => setMattTool(e.target.value)}
+                  placeholder="Ex: 90237257"
+                  className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  Partner ID (username)
+                </Label>
+                <Input 
+                  value={partnerId}
+                  onChange={(e) => setPartnerId(e.target.value)}
+                  placeholder="Ex: liyu9461230"
+                  className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl"
+                />
+              </div>
             </div>
           )}
 
