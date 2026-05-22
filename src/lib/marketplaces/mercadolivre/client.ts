@@ -14,21 +14,46 @@ export class MLClient {
   ): Promise<Partial<ProductMetadata> | null> {
     if (itemData.type === 'catalog') {
       const targetUrl = canonicalUrl || `https://www.mercadolivre.com.br/p/${itemData.id}`;
-      const ogData = await fetchOGMetadata(targetUrl);
-      return {
-        name: ogData.title ?? 'Produto Mercado Livre',
-        currentPrice: 0,
-        originalPrice: 0,
-        discountPercent: 0,
-        imageUrl: ogData.imageUrl ?? '',
-        marketplace: 'Mercado Livre',
-        currentPriceFactual: 0,
-        currentPriceSource: 'fallback',
-        commissionValueFactual: 0,
-        commissionSource: 'fallback',
-        itemId: itemData.id,
-        price_unavailable: true
-      } as any;
+      const scraperUrl = process.env.SCRAPER_SERVICE_URL;
+
+      if (scraperUrl) {
+        try {
+          const res = await fetch(`${scraperUrl}/scrape`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': process.env.SCRAPER_API_KEY || ''
+            },
+            body: JSON.stringify({ url: targetUrl }),
+            signal: AbortSignal.timeout(20000) // 20s — Render Free pode demorar (cold start)
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+              return {
+                name: data.title ?? 'Produto Mercado Livre',
+                currentPrice: data.price ?? 0,
+                originalPrice: data.price ?? 0,
+                discountPercent: 0,
+                imageUrl: data.image ?? '',
+                marketplace: 'Mercado Livre',
+                currentPriceFactual: data.price ?? 0,
+                currentPriceSource: data.price ? 'scraper' : 'fallback',
+                commissionValueFactual: 0,
+                commissionSource: 'fallback',
+                itemId: itemData.id,
+                price_unavailable: !data.price
+              } as any;
+            }
+          }
+        } catch (err) {
+          console.warn('[ML-CLIENT] Render scraper failed, falling back to OG:', err);
+        }
+      }
+
+      // Fallback: OG scraper local (sem preço mas funciona)
+      return this.fetchViaOG(targetUrl, itemData);
     }
 
     const url = `https://api.mercadolibre.com/items/${itemData.id}`;
@@ -85,7 +110,31 @@ export class MLClient {
         await new Promise(resolve => setTimeout(resolve, 600));
       }
     }
-    
+
     return null;
+  }
+
+  /**
+   * Fallback de catálogo: extrai título + imagem das tags OpenGraph (sem preço).
+   */
+  private async fetchViaOG(
+    targetUrl: string,
+    itemData: { id: string, type: 'catalog' | 'item' }
+  ): Promise<Partial<ProductMetadata> | null> {
+    const ogData = await fetchOGMetadata(targetUrl);
+    return {
+      name: ogData.title ?? 'Produto Mercado Livre',
+      currentPrice: 0,
+      originalPrice: 0,
+      discountPercent: 0,
+      imageUrl: ogData.imageUrl ?? '',
+      marketplace: 'Mercado Livre',
+      currentPriceFactual: 0,
+      currentPriceSource: 'fallback',
+      commissionValueFactual: 0,
+      commissionSource: 'fallback',
+      itemId: itemData.id,
+      price_unavailable: true
+    } as any;
   }
 }
