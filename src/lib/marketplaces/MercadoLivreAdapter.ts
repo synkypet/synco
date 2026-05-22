@@ -184,8 +184,7 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
             if (location) {
               const nextUrl = new URL(location, currentUrl).toString();
               if (chain.includes(nextUrl)) {
-                attemptSuccess = true;
-                break;
+                return { resolvedUrl: currentUrl, chain };
               }
               currentUrl = nextUrl;
               chain.push(currentUrl);

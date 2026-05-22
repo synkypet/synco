@@ -20,12 +20,6 @@ Use it to track completed blocks, known debt, active risks, and the next executi
   - H2: Affiliate settings per user ✅
   - H3: Wasender session lifecycle integration ✅
   - H4: Session-based queue, pacing, retry, cooldown, deadline ✅
-- BLOCO I — Mercado Livre adapter ✅
-  - MercadoLivreAdapter seguindo padrão do ShopeeAdapter
-  - Suporte a formato tag e matt_tool
-  - fetchMetadata via API pública items/{ID}
-  - Integrado no array de adapters do linkProcessor
-- ESTABILIZAÇÃO: Pacote completo mergeado (ver certification_report.md) ✅
 
 ---
 
