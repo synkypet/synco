@@ -124,6 +124,9 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
     } as ProductMetadata;
   }
 
+  // TODO: generateAffiliateLink retorna cleanUrl como fallback apenas para satisfazer
+  // o contrato do BaseAdapter. O fluxo real do ML passa por preProcessIncomingLink.
+  // Este método não é o caminho ativo no pipeline principal.
   async generateAffiliateLink(cleanUrl: string, connection?: UserMarketplaceConnection, metadata?: ProductMetadata | null): Promise<string> {
     const link = buildAffiliateUrl(cleanUrl, connection);
     return link || cleanUrl;

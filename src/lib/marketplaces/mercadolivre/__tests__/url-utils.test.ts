@@ -51,6 +51,9 @@ describe('Mercado Livre url-utils e Gaps de Afiliação', () => {
     expect(result.generated_affiliate_url).toBeUndefined();
   });
 
+  // TODO: Teste 7 usa status 'canonicalized' como trigger, mas o adapter ML
+  // nunca emite esse status (emite 'blocked' ou 'reaffiliated').
+  // O guard cobre corretamente, mas o cenário do teste é hipotético.
   it('7. validateEligibility com status "canonicalized" e marketplace "Mercado Livre" -> ineligible', () => {
     const factual = {
       marketplace: 'Mercado Livre',

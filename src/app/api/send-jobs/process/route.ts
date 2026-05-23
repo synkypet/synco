@@ -365,7 +365,8 @@ export async function POST(request: Request) {
 
             const destination = provider.formatDestination(job.destination);
 
-            // Verifica Mercado Livre pelo link no message_body
+            // TODO: job.marketplace não existe na send_jobs hoje — guard usa string matching.
+            // Quando a coluna for adicionada, substituir por: job.marketplace === 'mercadolivre'
             const isML = job.message_body && (
               job.message_body.includes('mercadolivre.com.br') || 
               job.message_body.includes('mercadolibre.com') ||
