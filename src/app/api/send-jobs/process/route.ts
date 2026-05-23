@@ -13,6 +13,8 @@ const MAX_SLEEP_MS = 10000; // Limite de 10s para ambiente serverless
 const MAX_JOBS_PER_CHANNEL_PER_CYCLE = parseInt(process.env.MAX_JOBS_PER_CHANNEL_PER_CYCLE || '5', 10);
 const SEND_WINDOW_RESTRICTED_ORIGINS = ['radar', 'coupon', 'coupon_shopee', 'monitor'];
 const INTER_CAMPAIGN_DELAY_MIN_MS = 2 * 60 * 1000;   // 2 minutos — mínimo imutável
+// INTER_CAMPAIGN_DELAY_MIN_MS será aplicado como Math.max(userDelay, MIN_MS)
+// quando a configuração por usuário for implementada (fase futura)
 const INTER_CAMPAIGN_DELAY_DEFAULT_MS = 3 * 60 * 1000; // 3 minutos — padrão inicial
 
 function sleep(ms: number) {
@@ -370,6 +372,8 @@ export async function POST(request: Request) {
               ` campaign mudou de ${lastCampaignId} para ${job.campaign_id}` +
               ` — job ${job.id} reagendado para ${nextScheduledAt}`
             );
+
+            lastCampaignId = job.campaign_id;
 
             break; // para de processar este canal neste ciclo
           }
