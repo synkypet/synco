@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       resolvedTag = bodyTag;
     } else {
       const { data: conn } = await adminClient
-        .from('user_marketplace_connections')
+        .from('user_marketplaces')
         .select('ml_partner_id')
         .eq('user_id', userId)
         .limit(1)
