@@ -34,8 +34,8 @@ export class MLClient {
               return {
                 name: data.title ?? 'Produto Mercado Livre',
                 currentPrice: data.price ?? 0,
-                originalPrice: data.price ?? 0,
-                discountPercent: 0,
+                originalPrice: data.originalPrice ?? data.price ?? 0,
+                discountPercent: data.discountPercent ?? 0,
                 imageUrl: data.image ?? '',
                 marketplace: 'Mercado Livre',
                 currentPriceFactual: data.price ?? 0,
