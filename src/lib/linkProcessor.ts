@@ -438,6 +438,8 @@ export function buildProductSnapshot(opts: {
     commissionRate,
     commissionRatePercent: commissionRate !== null ? `${(commissionRate * 100).toFixed(2)}%` : null,
     affiliateLink: reaffiliation?.generated_affiliate_url || affiliateUrl,
+    // TODO: shortLink não é populado para links meli.la (meli.la vai em
+    // finalLinkToSend). Avaliar se templates ML precisam do campo shortLink.
     shortLink: (reaffiliation?.generated_affiliate_url || affiliateUrl).includes('s.shopee') || (reaffiliation?.generated_affiliate_url || affiliateUrl).includes('shope.ee') ? (reaffiliation?.generated_affiliate_url || affiliateUrl) : null,
     productLink: metadata.productLink || null,
     offerLink: metadata.offerLink || null,

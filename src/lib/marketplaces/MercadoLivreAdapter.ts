@@ -71,7 +71,7 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
 
     if (!affiliateUrlOrNull || affiliateUrlOrNull === canonicalUrl) {
       status = 'blocked';
-      console.warn(`[ML Adapter] Afiliação bloqueada — credenciais ausentes ou inválidas. userId: ${connection?.user_id || 'unknown'}`);
+      console.warn(`[ML Adapter] Afiliação bloqueada — credenciais ausentes ou inválidas. userId: ${(connection?.user_id || 'unknown').substring(0, 8)}`);
       return {
         incoming_url: url,
         resolved_url: resolvedUrl,
