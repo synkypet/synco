@@ -5,9 +5,10 @@ import { KineticButton } from '@/components/ui/KineticButton';
 import { Label } from '@/components/ui/label';
 import { Loader2, Copy, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useMLSessionStatus } from '@/hooks/useMLSessionStatus';
 
 export function MercadoLivreExtensionPairing() {
-  const [status, setStatus] = useState<
+  const [localStatus, setLocalStatus] = useState<
     'idle' | 'loading' | 'code_ready' | 'error' | 'rate_limited'
   >('idle');
   const [code, setCode] = useState<string | null>(null);
@@ -15,8 +16,28 @@ export function MercadoLivreExtensionPairing() {
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
   const [copied, setCopied] = useState(false);
 
+  const shouldPoll = localStatus === 'code_ready';
+
+  const {
+    status: integrationStatus,
+    isLoading: statusLoading,
+    lastSyncedAt,
+    expiresAt: sessionExpiresAt,
+    refetch
+  } = useMLSessionStatus({
+    pollingIntervalMs: shouldPoll ? 4000 : 0,
+    enabled: true
+  });
+
+  // Call refetch immediately when transitioning to code_ready
   useEffect(() => {
-    if (status !== 'code_ready' || !expiresAt) return;
+    if (localStatus === 'code_ready') {
+      refetch();
+    }
+  }, [localStatus, refetch]);
+
+  useEffect(() => {
+    if (localStatus !== 'code_ready' || !expiresAt) return;
 
     const interval = setInterval(() => {
       const remaining = Math.max(
@@ -25,17 +46,17 @@ export function MercadoLivreExtensionPairing() {
       );
       setSecondsLeft(remaining);
       if (remaining <= 0) {
-        setStatus('idle');
+        setLocalStatus('idle');
         setCode(null);
         setExpiresAt(null);
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [status, expiresAt]);
+  }, [localStatus, expiresAt]);
 
   async function generateCode() {
-    setStatus('loading');
+    setLocalStatus('loading');
     try {
       const response = await fetch('/api/ml/pairing/generate', {
         method: 'POST'
@@ -49,14 +70,14 @@ export function MercadoLivreExtensionPairing() {
         setCode(data.code);
         setExpiresAt(data.expires_at);
         setSecondsLeft(remaining);
-        setStatus('code_ready');
+        setLocalStatus('code_ready');
       } else if (response.status === 429) {
-        setStatus('rate_limited');
+        setLocalStatus('rate_limited');
       } else {
-        setStatus('error');
+        setLocalStatus('error');
       }
     } catch {
-      setStatus('error');
+      setLocalStatus('error');
     }
   }
 
@@ -67,8 +88,13 @@ export function MercadoLivreExtensionPairing() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // falha silenciosa — usuário pode copiar manualmente
+      // falha silenciosa
     }
+  }
+
+  function formatDate(dateStr: string | null) {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleString('pt-BR');
   }
 
   return (
@@ -82,7 +108,56 @@ export function MercadoLivreExtensionPairing() {
         </p>
       </div>
 
-      {status === 'idle' && (
+      {/* Permanent Status Block */}
+      <div className="bg-deep-void/50 border border-white/5 rounded-xl p-3 space-y-2">
+        {statusLoading && integrationStatus === null ? (
+          <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Verificando status...</p>
+        ) : integrationStatus === 'not_paired' ? (
+          <span className="inline-block px-2 py-1 rounded bg-white/5 text-white/40 text-[9px] font-black uppercase tracking-widest">
+            Não pareada
+          </span>
+        ) : integrationStatus === 'paired_no_session' ? (
+          <span className="inline-block px-2 py-1 rounded bg-yellow-500/10 text-yellow-400 text-[9px] font-black uppercase tracking-widest">
+            Pareada, aguardando sessão
+          </span>
+        ) : integrationStatus === 'session_ready' ? (
+          <div className="space-y-2">
+            <span className="inline-block px-2 py-1 rounded bg-green-500/10 text-green-400 text-[9px] font-black uppercase tracking-widest">
+              ✅ Mercado Livre conectado
+            </span>
+            <div className="space-y-1">
+              <p className="text-[9px] text-white/60 tracking-widest">Última sync: {formatDate(lastSyncedAt)}</p>
+              <p className="text-[9px] text-white/60 tracking-widest">Válida até: {formatDate(sessionExpiresAt)}</p>
+            </div>
+            <button
+              onClick={() => refetch()}
+              className="text-[9px] font-black uppercase tracking-widest text-white/40 hover:text-white/60 underline decoration-white/20 underline-offset-2"
+            >
+              Atualizar status
+            </button>
+          </div>
+        ) : integrationStatus === 'session_expired' ? (
+          <div className="space-y-2">
+            <span className="inline-block px-2 py-1 rounded bg-red-500/10 text-red-400 text-[9px] font-black uppercase tracking-widest">
+              ⚠️ Sessão expirada
+            </span>
+            <p className="text-[9px] text-white/60 tracking-widest">
+              Sincronize novamente pela extensão.
+            </p>
+          </div>
+        ) : integrationStatus === 'session_revoked' ? (
+          <div className="space-y-2">
+            <span className="inline-block px-2 py-1 rounded bg-white/5 text-white/40 text-[9px] font-black uppercase tracking-widest">
+              Sessão revogada
+            </span>
+            <p className="text-[9px] text-white/60 tracking-widest">
+              Reconecte a extensão para reativar.
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      {localStatus === 'idle' && (
         <div className="space-y-3">
           <p className="text-[9px] font-bold text-kinetic-orange uppercase tracking-tighter">
             Download da extensão: em breve no painel Synco.
@@ -96,7 +171,7 @@ export function MercadoLivreExtensionPairing() {
         </div>
       )}
 
-      {status === 'loading' && (
+      {localStatus === 'loading' && (
         <KineticButton
           disabled
           className="h-10 w-full font-black uppercase tracking-widest text-[10px]"
@@ -105,7 +180,7 @@ export function MercadoLivreExtensionPairing() {
         </KineticButton>
       )}
 
-      {status === 'code_ready' && (
+      {localStatus === 'code_ready' && (
         <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-500">
           <div className="space-y-2 text-center">
             <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">
@@ -120,6 +195,39 @@ export function MercadoLivreExtensionPairing() {
             )}>
               Expira em {secondsLeft}s
             </p>
+          </div>
+
+          <div className="bg-deep-void/30 p-3 rounded-lg border border-white/5 text-center">
+            {(!integrationStatus || integrationStatus === 'not_paired') && (
+              <p className="text-[10px] text-white/60 font-bold uppercase tracking-widest animate-pulse">
+                Aguardando conexão da extensão...
+              </p>
+            )}
+            {integrationStatus === 'paired_no_session' && (
+              <p className="text-[10px] text-kinetic-orange font-bold uppercase tracking-widest">
+                Extensão pareada. Clique em Sincronizar agora na extensão.
+              </p>
+            )}
+            {integrationStatus === 'session_ready' && (
+              <div className="space-y-1">
+                <p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">
+                  ✅ Mercado Livre conectado com sucesso!
+                </p>
+                <p className="text-[9px] text-white/40 tracking-widest">
+                  Sincronizado: {formatDate(lastSyncedAt)}
+                </p>
+              </div>
+            )}
+            {integrationStatus === 'session_expired' && (
+              <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">
+                Sessão expirada. Sincronize novamente.
+              </p>
+            )}
+            {integrationStatus === 'session_revoked' && (
+              <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">
+                Sessão revogada. Gere novo código.
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -148,13 +256,13 @@ export function MercadoLivreExtensionPairing() {
         </div>
       )}
 
-      {status === 'rate_limited' && (
+      {localStatus === 'rate_limited' && (
         <div className="space-y-3">
           <p className="text-[9px] text-red-400 tracking-tighter leading-tight">
             Limite de códigos atingido. Aguarde alguns minutos e tente novamente.
           </p>
           <KineticButton
-            onClick={() => setStatus('idle')}
+            onClick={() => setLocalStatus('idle')}
             className="h-10 w-full font-black uppercase tracking-widest text-[10px] bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
           >
             Tentar novamente
@@ -162,13 +270,13 @@ export function MercadoLivreExtensionPairing() {
         </div>
       )}
 
-      {status === 'error' && (
+      {localStatus === 'error' && (
         <div className="space-y-3">
           <p className="text-[9px] text-red-400 tracking-tighter leading-tight">
             Não foi possível gerar o código. Tente novamente.
           </p>
           <KineticButton
-            onClick={() => setStatus('idle')}
+            onClick={() => setLocalStatus('idle')}
             className="h-10 w-full font-black uppercase tracking-widest text-[10px] bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
           >
             Tentar novamente
