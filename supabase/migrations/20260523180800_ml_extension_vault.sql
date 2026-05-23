@@ -59,6 +59,8 @@ CREATE POLICY "users can access own pairing codes via panel"
 CREATE TABLE ml_link_generation_log (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL,
+  -- TODO(fase-3): adicionar REFERENCES auth.users(id) ON DELETE CASCADE
+  -- quando o endpoint sair do stub
   status      TEXT NOT NULL CHECK (status IN ('success', 'failed', 'fallback')),
   error_code  TEXT,
   created_at  TIMESTAMPTZ DEFAULT now() NOT NULL

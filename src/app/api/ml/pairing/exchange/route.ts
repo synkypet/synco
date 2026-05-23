@@ -7,6 +7,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const pairing_code = body.pairing_code;
 
+    // TODO(fase-3): adicionar rate limit por IP ou bloqueio após N falhas
+    // para mitigar brute force nos 900.000 códigos possíveis
     if (!pairing_code || typeof pairing_code !== 'string' || !/^\d{6}$/.test(pairing_code)) {
       return NextResponse.json({ error: 'invalid_format' }, { status: 400 });
     }

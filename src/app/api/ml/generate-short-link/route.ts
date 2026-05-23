@@ -34,6 +34,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const canonical_url = body.canonical_url;
 
+    // TODO(fase-3): restringir canonical_url a domínios ML
+    // usando canHandleUrl() de url-utils.ts antes de gerar o link
     if (!canonical_url || typeof canonical_url !== 'string' || !canonical_url.startsWith('https://')) {
       return NextResponse.json({ error: 'invalid_url' }, { status: 400 });
     }
