@@ -54,6 +54,17 @@ export function MercadoLivreExtensionPairing() {
     return () => clearInterval(interval);
   }, [localStatus, expiresAt]);
 
+  useEffect(() => {
+    if (integrationStatus === 'session_ready' && localStatus === 'code_ready') {
+      const timer = setTimeout(() => {
+        setCode(null);
+        setExpiresAt(null);
+        setLocalStatus('idle');
+      }, 1500); // usuário vê confirmação antes do dismiss
+      return () => clearTimeout(timer);
+    }
+  }, [integrationStatus, localStatus]);
+
   async function generateCode() {
     setLocalStatus('loading');
     try {
