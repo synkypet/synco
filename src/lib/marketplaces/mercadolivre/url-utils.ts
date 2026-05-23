@@ -39,21 +39,25 @@ export function buildCanonicalUrl(itemData: { id: string, type: 'catalog' | 'ite
   return `https://www.mercadolivre.com.br/${itemData.id}`;
 }
 
-export function buildAffiliateUrl(canonicalUrl: string, connection?: UserMarketplaceConnection): string {
-  if (!connection) return canonicalUrl;
+export function buildAffiliateUrl(canonicalUrl: string, connection?: UserMarketplaceConnection): string | null {
+  if (!connection) return null;
   
-  if (connection.ml_matt_tool && connection.ml_partner_id) {
-    const url = new URL(canonicalUrl);
-    url.searchParams.set('matt_tool', connection.ml_matt_tool);
-    url.searchParams.set('partner_id', connection.ml_partner_id);
-    return url.toString();
+  if (!connection.ml_matt_tool || !connection.ml_partner_id) {
+    return null;
   }
 
-  if (connection.ml_affiliate_tag) {
-    const url = new URL(canonicalUrl);
-    url.searchParams.set('tag', connection.ml_affiliate_tag);
-    return url.toString();
+  const url = new URL(canonicalUrl);
+  url.searchParams.set('matt_tool', connection.ml_matt_tool);
+  url.searchParams.set('partner_id', connection.ml_partner_id);
+  
+  const finalUrl = url.toString();
+  if (finalUrl === canonicalUrl) {
+    return null;
   }
 
-  return canonicalUrl;
+  if (!finalUrl.includes('matt_tool=') || !finalUrl.includes('partner_id=')) {
+    return null;
+  }
+
+  return finalUrl;
 }

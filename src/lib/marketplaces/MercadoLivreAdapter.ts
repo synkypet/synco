@@ -61,44 +61,31 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
     const canonicalUrl = buildCanonicalUrl(itemData);
 
     // 5. Build affiliate
-    let affiliateUrl = canonicalUrl;
     let status: any = 'not_needed';
+    
+    const affiliateUrlOrNull = buildAffiliateUrl(canonicalUrl, connection);
 
-    if (connection && (connection.ml_matt_tool || connection.ml_affiliate_tag)) {
-      affiliateUrl = buildAffiliateUrl(canonicalUrl, connection);
-      if (affiliateUrl === canonicalUrl) {
-        status = 'failed';
-        return {
-          incoming_url: url,
-          resolved_url: resolvedUrl,
-          canonical_url: canonicalUrl,
-          redirect_chain: redirectChain,
-          reaffiliation_status: 'failed',
-          reaffiliation_error: 'no_affiliate_params'
-        };
-      } else {
-        status = 'reaffiliated';
-      }
-    } else if (connection) {
-       // Possui connection, mas sem credenciais válidas do ML
-       status = 'failed';
-       return {
-          incoming_url: url,
-          resolved_url: resolvedUrl,
-          canonical_url: canonicalUrl,
-          redirect_chain: redirectChain,
-          reaffiliation_status: 'failed',
-          reaffiliation_error: 'no_affiliate_params'
-        };
+    if (!affiliateUrlOrNull || affiliateUrlOrNull === canonicalUrl) {
+      status = 'blocked';
+      console.warn(`[ML Adapter] Afiliação bloqueada — credenciais ausentes ou inválidas. userId: ${connection?.user_id || 'unknown'}`);
+      return {
+        incoming_url: url,
+        resolved_url: resolvedUrl,
+        canonical_url: canonicalUrl,
+        generated_affiliate_url: undefined,
+        redirect_chain: redirectChain,
+        reaffiliation_status: 'blocked',
+        reaffiliation_error: 'Afiliação bloqueada — credenciais de afiliado ML não configuradas'
+      };
     } else {
-       status = 'canonicalized';
+      status = 'reaffiliated';
     }
 
     return {
       incoming_url: url,
       resolved_url: resolvedUrl,
       canonical_url: canonicalUrl,
-      generated_affiliate_url: affiliateUrl,
+      generated_affiliate_url: affiliateUrlOrNull,
       redirect_chain: redirectChain,
       reaffiliation_status: status
     };
@@ -138,8 +125,8 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
   }
 
   async generateAffiliateLink(cleanUrl: string, connection?: UserMarketplaceConnection, metadata?: ProductMetadata | null): Promise<string> {
-    if (!connection) return cleanUrl;
-    return buildAffiliateUrl(cleanUrl, connection);
+    const link = buildAffiliateUrl(cleanUrl, connection);
+    return link || cleanUrl;
   }
 
   private createFallback(name: string, errorMsg: string): ProductMetadata {

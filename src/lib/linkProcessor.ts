@@ -270,6 +270,22 @@ export function validateEligibility(factual: FactualData, offerType: OfferType =
   } else if (factual.reaffiliation_status === 'failed') {
     reasons.push(`Falha de Afiliação: ${factual.reaffiliation_error || 'Erro desconhecido'}`);
     status = 'ineligible';
+  } else if (
+    factual.reaffiliation_status === 'canonicalized' &&
+    factual.marketplace === 'Mercado Livre'
+  ) {
+    reasons.push('Afiliação inválida: link do Mercado Livre sem parâmetros de rastreio');
+    status = 'ineligible';
+  }
+
+  if (
+    factual.finalLinkToSend &&
+    factual.canonical_url &&
+    factual.finalLinkToSend === factual.canonical_url &&
+    factual.marketplace === 'Mercado Livre'
+  ) {
+    reasons.push('Afiliação inválida: link final idêntico ao canônico');
+    status = 'ineligible';
   }
 
   // 2. Metadados Essenciais (Regra SYNCO: Sem Título, Sem Preço ou Sem Imagem = Quebrado para produtos)

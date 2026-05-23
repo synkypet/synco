@@ -364,6 +364,31 @@ export async function POST(request: Request) {
             if (!apiKey) throw new Error('API Key missing');
 
             const destination = provider.formatDestination(job.destination);
+
+            // Verifica Mercado Livre pelo link no message_body
+            const isML = job.message_body && (
+              job.message_body.includes('mercadolivre.com.br') || 
+              job.message_body.includes('mercadolibre.com') ||
+              job.message_body.includes('meli.com') ||
+              job.message_body.includes('mercadol.in')
+            );
+            if (isML) {
+              const hasTracking =
+                job.message_body.includes('matt_tool=') &&
+                job.message_body.includes('partner_id=');
+              if (!hasTracking) {
+                console.warn(`[Worker] Job bloqueado — ML sem rastreio. jobId: ${job.id}`);
+                await supabase.from('send_jobs').update({ 
+                  status: 'failed', 
+                  error_type: 'FATAL', 
+                  last_error: 'Disparo bloqueado: link ML sem parâmetros de rastreio', 
+                  processed_at: new Date().toISOString() 
+                }).eq('id', job.id);
+                results.push({ jobId: job.id, status: 'failed', error: 'Disparo bloqueado: link ML sem parâmetros de rastreio', origin: job.origin });
+                continue; // pula este job, não envia
+              }
+            }
+
             const result: SendResult = job.image_url 
               ? await provider.sendMedia(apiKey, destination, job.image_url, job.message_body || '')
               : await provider.sendMessage(apiKey, destination, job.message_body || '');
