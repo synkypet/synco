@@ -12,16 +12,12 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Loader2, 
-  HelpCircle, 
-  Info,
-  ExternalLink,
   ShieldCheck,
-  ChevronDown,
-  ChevronUp
 } from 'lucide-react';
 import { Marketplace, UserMarketplaceConnection } from '@/types/marketplace';
 import { cn } from '@/lib/utils';
 import { MercadoLivreExtensionPairing } from './MercadoLivreExtensionPairing';
+import { useMLSessionStatus } from '@/hooks/useMLSessionStatus';
 
 interface AffiliateSettingsCardProps {
   marketplace: Marketplace;
@@ -40,22 +36,28 @@ export function AffiliateSettingsCard({
   const [affiliateCode, setAffiliateCode] = useState(connection?.affiliate_code || '');
   const [shopeeAppId, setShopeeAppId] = useState(connection?.shopee_app_id || '');
   const [shopeeAppSecret, setShopeeAppSecret] = useState(''); // Always blank on load for security
-  const [mattTool, setMattTool] = useState(connection?.ml_matt_tool || '');
-  const [partnerId, setPartnerId] = useState(connection?.ml_partner_id || '');
   const [isActive, setIsActive] = useState(connection?.is_active ?? false);
   const [hasChanges, setHasChanges] = useState(false);
   const [isInjectingSecret, setIsInjectingSecret] = useState(false);
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ valid: boolean; message: string } | null>(null);
+
+  const [mlShouldPoll, setMlShouldPoll] = useState(false);
+
+  const isShopee = marketplace.name.toLowerCase() === 'shopee';
+  const normalizedName = marketplace?.name?.toLowerCase().replace(/\s+/g, '');
+  const isMercadoLivre = normalizedName === 'mercadolivre';
+
+  const { status: mlStatus, isLoading: mlLoading, lastSyncedAt: mlLastSyncedAt, expiresAt: mlExpiresAt, refetch: mlRefetch } = useMLSessionStatus({
+    enabled: isMercadoLivre,
+    pollingIntervalMs: mlShouldPoll ? 4000 : 0
+  });
 
   useEffect(() => {
     setAffiliateId(connection?.affiliate_id || '');
     setAffiliateCode(connection?.affiliate_code || '');
     setShopeeAppId(connection?.shopee_app_id || '');
     setShopeeAppSecret('');
-    setMattTool(connection?.ml_matt_tool || '');
-    setPartnerId(connection?.ml_partner_id || '');
     setIsActive(connection?.is_active ?? false);
   }, [connection]);
 
@@ -65,16 +67,13 @@ export function AffiliateSettingsCard({
       affiliateCode !== (connection?.affiliate_code || '') ||
       shopeeAppId !== (connection?.shopee_app_id || '') ||
       shopeeAppSecret !== '' ||
-      mattTool !== (connection?.ml_matt_tool || '') ||
-      partnerId !== (connection?.ml_partner_id || '') ||
       isActive !== (connection?.is_active ?? false);
+    
+    // For ML, manual credentials are not in the main UI anymore, so we only track isActive changes
     setHasChanges(changed);
-  }, [affiliateId, affiliateCode, shopeeAppId, shopeeAppSecret, mattTool, partnerId, isActive, connection]);
+  }, [affiliateId, affiliateCode, shopeeAppId, shopeeAppSecret, isActive, connection]);
 
-  const isShopee = marketplace.name.toLowerCase() === 'shopee';
-  const normalizedName = marketplace?.name?.toLowerCase().replace(/\s+/g, '');
-  const isMercadoLivre = normalizedName === 'mercadolivre';
-  const isConfigured = isShopee ? !!shopeeAppId : isMercadoLivre ? (!!mattTool && !!partnerId) : !!affiliateId;
+  const isConfigured = isShopee ? !!shopeeAppId : isMercadoLivre ? (mlStatus === 'session_ready') : !!affiliateId;
 
   const handleSave = async () => {
     setIsInjectingSecret(true);
@@ -102,15 +101,13 @@ export function AffiliateSettingsCard({
         affiliate_id: affiliateId,
         affiliate_code: affiliateCode,
         shopee_app_id: shopeeAppId,
-        ml_matt_tool: mattTool,
-        ml_partner_id: partnerId,
         has_secret: shopeeAppSecret ? true : connection?.has_secret,
         is_active: isActive
+        // Not saving mattTool and partnerId here since they aren't edited in the main UI anymore
       });
 
-      // Clear the local state secret input proactively after successfully storing it
       setShopeeAppSecret('');
-      setTestResult(null); // Reset test status on save
+      setTestResult(null);
     } catch (e: any) {
       console.error(e);
     } finally {
@@ -163,7 +160,29 @@ export function AffiliateSettingsCard({
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
-          {connection?.connection_status === 'connected' ? (
+          {isMercadoLivre ? (
+            mlStatus === 'session_ready' ? (
+              <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-emerald-500/20 px-2 h-6 shadow-skeuo-pressed bg-emerald-500/10 text-emerald-500">
+                <ShieldCheck className="w-3 h-3 mr-1" /> Conectado
+              </Badge>
+            ) : mlStatus === 'paired_no_session' ? (
+              <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-amber-500/20 px-2 h-6 shadow-skeuo-pressed bg-amber-500/10 text-amber-500">
+                Pareado
+              </Badge>
+            ) : mlStatus === 'session_expired' ? (
+              <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-red-500/20 px-2 h-6 shadow-skeuo-pressed bg-red-500/10 text-red-500">
+                <AlertCircle className="w-3 h-3 mr-1" /> Sessão expirada
+              </Badge>
+            ) : mlStatus === 'session_revoked' ? (
+              <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-white/5 px-2 h-6 shadow-skeuo-pressed bg-deep-void text-white/40">
+                Desconectado
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-white/5 px-2 h-6 shadow-skeuo-pressed bg-deep-void text-white/40">
+                Não conectado
+              </Badge>
+            )
+          ) : connection?.connection_status === 'connected' ? (
             <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-emerald-500/20 px-2 h-6 shadow-skeuo-pressed bg-emerald-500/10 text-emerald-500">
               <ShieldCheck className="w-3 h-3 mr-1" /> Conectado
             </Badge>
@@ -214,31 +233,15 @@ export function AffiliateSettingsCard({
           )}
 
           {isMercadoLivre && (
-            <div className="space-y-4 animate-in slide-in-from-top-2">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                  Matt Tool ID
-                </Label>
-                <Input 
-                  value={mattTool}
-                  onChange={(e) => setMattTool(e.target.value)}
-                  placeholder="Ex: 90237257"
-                  className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                  Partner ID (username)
-                </Label>
-                <Input 
-                  value={partnerId}
-                  onChange={(e) => setPartnerId(e.target.value)}
-                  placeholder="Ex: liyu9461230"
-                  className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl"
-                />
-              </div>
-
-              <MercadoLivreExtensionPairing />
+            <div className="animate-in slide-in-from-top-2">
+              <MercadoLivreExtensionPairing 
+                integrationStatus={mlStatus}
+                statusLoading={mlLoading}
+                lastSyncedAt={mlLastSyncedAt}
+                sessionExpiresAt={mlExpiresAt}
+                refetch={mlRefetch}
+                setShouldPoll={setMlShouldPoll}
+              />
             </div>
           )}
 
@@ -323,43 +326,59 @@ export function AffiliateSettingsCard({
               </div>
             </div>
           )}
-
-        {/* Remove the redundant Shopee block since we moved it above */}
       </div>
 
       {/* Status & Validation */}
-      <div className="p-4 bg-deep-void/50 rounded-xl border-none shadow-skeuo-pressed flex items-start gap-3">
-        {isConfigured ? (
-          <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-        ) : (
-          <AlertCircle className="w-4 h-4 text-kinetic-orange/50 flex-shrink-0 mt-0.5" />
-        )}
-        <div className="flex flex-col gap-1">
-          <p className="text-[9px] font-black uppercase tracking-widest text-white/40 leading-tight">
-            {isConfigured 
-              ? 'Pronto para processamento real.' 
-              : 'ID obrigatório para converter links.'}
-          </p>
-          {isActive && !isConfigured && (
-            <p className="text-[8px] font-bold text-kinetic-orange uppercase tracking-tighter animate-pulse">
-              Aviso: Configuração ativa sem ID detectado
-            </p>
+      {!isMercadoLivre && (
+        <div className="p-4 bg-deep-void/50 rounded-xl border-none shadow-skeuo-pressed flex items-start gap-3">
+          {isConfigured ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-kinetic-orange/50 flex-shrink-0 mt-0.5" />
           )}
+          <div className="flex flex-col gap-1">
+            <p className="text-[9px] font-black uppercase tracking-widest text-white/40 leading-tight">
+              {isConfigured 
+                ? 'Pronto para processamento real.' 
+                : 'ID obrigatório para converter links.'}
+            </p>
+            {isActive && !isConfigured && (
+              <p className="text-[8px] font-bold text-kinetic-orange uppercase tracking-tighter animate-pulse">
+                Aviso: Configuração ativa sem ID detectado
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Action */}
-      <KineticButton 
-        onClick={handleSave}
-        disabled={isSaving || isInjectingSecret || !hasChanges}
-        className="h-12 w-full font-black uppercase tracking-widest text-xs"
-      >
-        {isSaving || isInjectingSecret ? (
-          <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Salvando...</>
-        ) : (
-          <><ShieldCheck className="w-3.5 h-3.5 mr-2" /> Salvar Configuração</>
-        )}
-      </KineticButton>
+      {!isMercadoLivre && (
+        <KineticButton 
+          onClick={handleSave}
+          disabled={isSaving || isInjectingSecret || !hasChanges}
+          className="h-12 w-full font-black uppercase tracking-widest text-xs"
+        >
+          {isSaving || isInjectingSecret ? (
+            <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Salvando...</>
+          ) : (
+            <><ShieldCheck className="w-3.5 h-3.5 mr-2" /> Salvar Configuração</>
+          )}
+        </KineticButton>
+      )}
+      
+      {isMercadoLivre && hasChanges && (
+        <KineticButton 
+          onClick={handleSave}
+          disabled={isSaving || isInjectingSecret}
+          className="h-12 w-full font-black uppercase tracking-widest text-xs"
+        >
+          {isSaving ? (
+            <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Salvando Status Ativo...</>
+          ) : (
+            <><ShieldCheck className="w-3.5 h-3.5 mr-2" /> Salvar Status Ativo</>
+          )}
+        </KineticButton>
+      )}
     </TactileCard>
   );
 }

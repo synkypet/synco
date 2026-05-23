@@ -3,11 +3,27 @@
 import React, { useState, useEffect } from 'react';
 import { KineticButton } from '@/components/ui/KineticButton';
 import { Label } from '@/components/ui/label';
-import { Loader2, Copy, RefreshCw } from 'lucide-react';
+import { Loader2, Copy, RefreshCw, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useMLSessionStatus } from '@/hooks/useMLSessionStatus';
+import { MLSessionStatus } from '@/hooks/useMLSessionStatus';
 
-export function MercadoLivreExtensionPairing() {
+interface MercadoLivreExtensionPairingProps {
+  integrationStatus: MLSessionStatus | null;
+  statusLoading: boolean;
+  lastSyncedAt: string | null;
+  sessionExpiresAt: string | null;
+  refetch: () => void;
+  setShouldPoll: (poll: boolean) => void;
+}
+
+export function MercadoLivreExtensionPairing({
+  integrationStatus,
+  statusLoading,
+  lastSyncedAt,
+  sessionExpiresAt,
+  refetch,
+  setShouldPoll
+}: MercadoLivreExtensionPairingProps) {
   const [localStatus, setLocalStatus] = useState<
     'idle' | 'loading' | 'code_ready' | 'error' | 'rate_limited'
   >('idle');
@@ -15,19 +31,11 @@ export function MercadoLivreExtensionPairing() {
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
   const [copied, setCopied] = useState(false);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
-  const shouldPoll = localStatus === 'code_ready';
-
-  const {
-    status: integrationStatus,
-    isLoading: statusLoading,
-    lastSyncedAt,
-    expiresAt: sessionExpiresAt,
-    refetch
-  } = useMLSessionStatus({
-    pollingIntervalMs: shouldPoll ? 4000 : 0,
-    enabled: true
-  });
+  useEffect(() => {
+    setShouldPoll(localStatus === 'code_ready');
+  }, [localStatus, setShouldPoll]);
 
   useEffect(() => {
     if (localStatus === 'code_ready') {
@@ -66,6 +74,14 @@ export function MercadoLivreExtensionPairing() {
   }, [integrationStatus, localStatus]);
 
   async function generateCode() {
+    if (integrationStatus === 'session_ready' || integrationStatus === 'paired_no_session') {
+      setShowDisconnectConfirm(true);
+      return;
+    }
+    await executeGenerateCode();
+  }
+
+  async function executeGenerateCode() {
     setLocalStatus('loading');
     try {
       const response = await fetch('/api/ml/pairing/generate', {
@@ -91,6 +107,18 @@ export function MercadoLivreExtensionPairing() {
     }
   }
 
+  async function confirmDisconnectAndGenerate() {
+    setShowDisconnectConfirm(false);
+    setLocalStatus('loading');
+    try {
+      await fetch('/api/ml/session/disconnect', { method: 'POST' });
+      await refetch();
+      await executeGenerateCode();
+    } catch {
+      setLocalStatus('error');
+    }
+  }
+
   async function handleCopy() {
     if (!code) return;
     try {
@@ -103,7 +131,7 @@ export function MercadoLivreExtensionPairing() {
   }
 
   return (
-    <div className="pt-4 mt-6 border-t border-white/5 space-y-4">
+    <div className="pt-4 border-t border-white/5 space-y-4">
       <div className="space-y-1 mb-4">
         <Label className="text-[10px] font-black uppercase tracking-widest text-white/60">
           Extensão Chrome
@@ -140,7 +168,29 @@ export function MercadoLivreExtensionPairing() {
         ) : null}
       </div>
 
-      {localStatus === 'idle' && (
+      {showDisconnectConfirm && (
+        <div className="space-y-4 p-4 rounded-xl border border-red-500/20 bg-red-500/10 mb-4 animate-in fade-in slide-in-from-top-1">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Desconectar sessão atual?</p>
+              <p className="text-[9px] text-red-400/80 tracking-tighter leading-tight">
+                Você já possui uma conexão ativa. Gerar um novo código irá revogar imediatamente sua sessão e tokens atuais.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <button onClick={() => setShowDisconnectConfirm(false)} className="h-8 flex-1 rounded-lg border text-[9px] font-black uppercase tracking-widest bg-deep-void/50 border-white/5 text-white/40 hover:text-white/60">
+              Cancelar
+            </button>
+            <KineticButton onClick={confirmDisconnectAndGenerate} className="h-8 flex-1 bg-red-500 text-white hover:bg-red-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] text-[9px] font-black uppercase tracking-widest border-none">
+              Desconectar e Gerar
+            </KineticButton>
+          </div>
+        </div>
+      )}
+
+      {localStatus === 'idle' && !showDisconnectConfirm && (
         <div className="space-y-3">
           <p className="text-[9px] font-bold text-kinetic-orange uppercase tracking-tighter">
             Download da extensão: em breve no painel Synco.
@@ -190,7 +240,7 @@ export function MercadoLivreExtensionPairing() {
             </KineticButton>
             
             <button
-              onClick={generateCode}
+              onClick={executeGenerateCode}
               className="flex items-center justify-center gap-2 h-10 w-10 rounded-lg border text-[9px] font-black uppercase tracking-widest bg-deep-void/50 border-white/5 text-white/40 hover:text-white/60 hover:border-white/10 transition-all shrink-0"
               title="Gerar novo código"
             >
