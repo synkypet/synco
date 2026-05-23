@@ -12,6 +12,8 @@ const DESTINATION_RATE_LIMIT_MS = parseInt(process.env.DESTINATION_RATE_LIMIT_MS
 const MAX_SLEEP_MS = 10000; // Limite de 10s para ambiente serverless
 const MAX_JOBS_PER_CHANNEL_PER_CYCLE = parseInt(process.env.MAX_JOBS_PER_CHANNEL_PER_CYCLE || '5', 10);
 const SEND_WINDOW_RESTRICTED_ORIGINS = ['radar', 'coupon', 'coupon_shopee', 'monitor'];
+const INTER_CAMPAIGN_DELAY_MIN_MS = 2 * 60 * 1000;   // 2 minutos — mínimo imutável
+const INTER_CAMPAIGN_DELAY_DEFAULT_MS = 3 * 60 * 1000; // 3 minutos — padrão inicial
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -284,6 +286,7 @@ export async function POST(request: Request) {
         const cooldownMs = provider.getCooldownMs();
         
         let sentForThisChannel = 0;
+        let lastCampaignId: string | null = null;
         console.log(`[WORKER-DRAIN-START] [${requestId}] channelId:${channelId} maxJobs:${MAX_JOBS_PER_CHANNEL_PER_CYCLE} cooldownMs:${cooldownMs}`);
 
         while (sentForThisChannel < MAX_JOBS_PER_CHANNEL_PER_CYCLE) {
@@ -344,6 +347,33 @@ export async function POST(request: Request) {
             break; // Para evitar loop infinito
           }
 
+          // 3.2 Detecção de troca de campanha (Inter-Campaign Delay)
+          const isCampaignSwitch =
+            job.campaign_id &&
+            lastCampaignId !== null &&
+            job.campaign_id !== lastCampaignId;
+
+          if (isCampaignSwitch) {
+            const delayMs = INTER_CAMPAIGN_DELAY_DEFAULT_MS;
+            const nextScheduledAt = new Date(Date.now() + delayMs).toISOString();
+
+            await supabase
+              .from('send_jobs')
+              .update({
+                scheduled_at: nextScheduledAt,
+                status: 'pending'
+              })
+              .eq('id', job.id);
+
+            console.log(
+              `[INTER-CAMPAIGN-DELAY] channelId:${channelId}` +
+              ` campaign mudou de ${lastCampaignId} para ${job.campaign_id}` +
+              ` — job ${job.id} reagendado para ${nextScheduledAt}`
+            );
+
+            break; // para de processar este canal neste ciclo
+          }
+
           // 4. Lock Atômico do Job
           const { data: lockedJob } = await supabase
             .from('send_jobs')
@@ -399,6 +429,10 @@ export async function POST(request: Request) {
               await supabase.from('send_receipts').insert({ send_job_id: job.id, user_id: job.user_id, campaign_id: job.campaign_id, destination: job.destination, wasender_message_id: result.messageId });
               logJob('INFO', job.id, { action: 'delivered' }, requestId, job.user_id, job.origin);
               results.push({ jobId: job.id, status: 'completed', origin: job.origin });
+
+              if (job.campaign_id) {
+                lastCampaignId = job.campaign_id;
+              }
             } else {
               const errorType: string = result.errorType || provider.classifyError(result.error);
               if (errorType === 'SESSION_LOST') {
