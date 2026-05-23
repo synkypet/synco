@@ -64,39 +64,25 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
     // 4. Build canonical
     const canonicalUrl = buildCanonicalUrl(itemData);
 
-    // 5. Build affiliate
-    let status: any = 'not_needed';
-    
+    // 5. Build affiliate fallback (Long link)
     const affiliateUrlOrNull = buildAffiliateUrl(canonicalUrl, connection);
-
-    if (!affiliateUrlOrNull || affiliateUrlOrNull === canonicalUrl) {
-      status = 'blocked';
-      console.warn(`[ML Adapter] Afiliação bloqueada — credenciais ausentes ou inválidas. userId: ${(connection?.user_id || 'unknown').substring(0, 8)}`);
-      return {
-        incoming_url: url,
-        resolved_url: resolvedUrl,
-        canonical_url: canonicalUrl,
-        generated_affiliate_url: undefined,
-        redirect_chain: redirectChain,
-        reaffiliation_status: 'blocked',
-        reaffiliation_error: 'Afiliação bloqueada — credenciais de afiliado ML não configuradas'
-      };
-    } else {
-      status = 'reaffiliated';
-    }
 
     // Tentativa de geração de meli.la (apenas se sessão válida existir)
     let shortUrl: string | null = null;
     let shortGenerationStatus: 'success' | 'fallback' | 'no_session' | 'skipped' = 'skipped';
 
+    // Para gerar short link, não obrigamos ml_partner_id (a tag pode vir do corpo ou ser resolvida no endpoint interno, mas aqui chamamos direto. Opa, aqui precisamos passar tag).
+    // Na verdade, se a tag estiver vazia, o endpoint falharia com 400. Vamos pegar a tag da connection.
     const tag = connection?.ml_partner_id || null;
+    let hasValidMLVaultSession = false;
 
-    if (connection?.user_id && tag) {
+    if (connection?.user_id) {
       try {
         const adminClient = createAdminClient();
         const sessionSnapshot = await getDecryptedMLSession(connection.user_id, adminClient);
 
         if (sessionSnapshot) {
+          hasValidMLVaultSession = true;
           const shortLinkInputUrl = selectShortLinkInputUrl({
             resolved_url: resolvedUrl,
             incoming_url: url,
@@ -106,7 +92,7 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
           if (shortLinkInputUrl) {
             const result = await generateMeliShortLink({
               canonicalUrl: shortLinkInputUrl,
-              tag,
+              tag: tag || '',
               sessionSnapshot
             });
 
@@ -121,6 +107,7 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
                   .update({ is_valid: false })
                   .eq('user_id', connection.user_id);
                 console.warn('[ML-ADAPTER] userId:', connection.user_id.substring(0, 8), '— sessão ML invalidada por 401/403');
+                hasValidMLVaultSession = false;
               }
             }
           } else {
@@ -136,16 +123,36 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
       shortGenerationStatus = 'skipped';
     }
 
-    console.log('[ML-ADAPTER] meli.la gerado:', shortGenerationStatus, '—', shortUrl ? 'short_url presente' : 'short_url ausente');
+    // 6. Validar Elegibilidade Final
+    const hasValidLongAffiliateCredentials = !!affiliateUrlOrNull && affiliateUrlOrNull !== canonicalUrl;
+
+    if (shortUrl) {
+      console.log('[ML-ADAPTER] status: ml_short_link_success');
+    } else if (hasValidLongAffiliateCredentials) {
+      console.log('[ML-ADAPTER] status: ml_short_link_fallback');
+    }
+
+    if (!shortUrl && !hasValidLongAffiliateCredentials) {
+      console.warn(`[ML-ADAPTER] status: ml_no_valid_affiliate_link. userId: ${(connection?.user_id || 'unknown').substring(0, 8)}`);
+      return {
+        incoming_url: url,
+        resolved_url: resolvedUrl,
+        canonical_url: canonicalUrl,
+        generated_affiliate_url: undefined,
+        redirect_chain: redirectChain,
+        reaffiliation_status: 'blocked',
+        reaffiliation_error: 'Não foi possível gerar o link afiliado Mercado Livre. Sincronize novamente a extensão ou configure credenciais de fallback.'
+      };
+    }
 
     return {
       incoming_url: url,
       resolved_url: resolvedUrl,
       canonical_url: canonicalUrl,
-      generated_affiliate_url: shortUrl ?? affiliateUrlOrNull,
+      generated_affiliate_url: shortUrl || affiliateUrlOrNull || undefined,
       redirect_chain: redirectChain,
-      reaffiliation_status: status,
-      short_url: shortUrl,
+      reaffiliation_status: 'reaffiliated',
+      short_url: shortUrl || undefined,
       shortGenerationStatus
     };
   }
