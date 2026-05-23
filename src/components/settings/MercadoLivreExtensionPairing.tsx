@@ -29,7 +29,6 @@ export function MercadoLivreExtensionPairing() {
     enabled: true
   });
 
-  // Call refetch immediately when transitioning to code_ready
   useEffect(() => {
     if (localStatus === 'code_ready') {
       refetch();
@@ -88,18 +87,13 @@ export function MercadoLivreExtensionPairing() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // falha silenciosa
+      // falha silenciosa — usuário pode copiar manualmente
     }
-  }
-
-  function formatDate(dateStr: string | null) {
-    if (!dateStr) return '';
-    return new Date(dateStr).toLocaleString('pt-BR');
   }
 
   return (
     <div className="pt-4 mt-6 border-t border-white/5 space-y-4">
-      <div className="space-y-1">
+      <div className="space-y-1 mb-4">
         <Label className="text-[10px] font-black uppercase tracking-widest text-white/60">
           Extensão Chrome
         </Label>
@@ -108,52 +102,30 @@ export function MercadoLivreExtensionPairing() {
         </p>
       </div>
 
-      {/* Permanent Status Block */}
-      <div className="bg-deep-void/50 border border-white/5 rounded-xl p-3 space-y-2">
+      <div className="flex flex-col gap-1.5 mb-4 bg-deep-void/50 p-3 rounded-xl border border-white/5 shadow-skeuo-pressed">
         {statusLoading && integrationStatus === null ? (
-          <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Verificando status...</p>
+          <span className="text-[9px] text-white/40 uppercase tracking-widest font-black">Verificando status...</span>
         ) : integrationStatus === 'not_paired' ? (
-          <span className="inline-block px-2 py-1 rounded bg-white/5 text-white/40 text-[9px] font-black uppercase tracking-widest">
-            Não pareada
-          </span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Não pareada</span>
         ) : integrationStatus === 'paired_no_session' ? (
-          <span className="inline-block px-2 py-1 rounded bg-yellow-500/10 text-yellow-400 text-[9px] font-black uppercase tracking-widest">
-            Pareada, aguardando sessão
-          </span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">Pareada, aguardando sessão</span>
         ) : integrationStatus === 'session_ready' ? (
-          <div className="space-y-2">
-            <span className="inline-block px-2 py-1 rounded bg-green-500/10 text-green-400 text-[9px] font-black uppercase tracking-widest">
-              ✅ Mercado Livre conectado
-            </span>
-            <div className="space-y-1">
-              <p className="text-[9px] text-white/60 tracking-widest">Última sync: {formatDate(lastSyncedAt)}</p>
-              <p className="text-[9px] text-white/60 tracking-widest">Válida até: {formatDate(sessionExpiresAt)}</p>
-            </div>
-            <button
-              onClick={() => refetch()}
-              className="text-[9px] font-black uppercase tracking-widest text-white/40 hover:text-white/60 underline decoration-white/20 underline-offset-2"
-            >
-              Atualizar status
-            </button>
-          </div>
+          <>
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">✅ Mercado Livre conectado</span>
+            {lastSyncedAt && <span className="text-[9px] text-white/40 uppercase tracking-widest">Última sync: {new Date(lastSyncedAt).toLocaleString('pt-BR')}</span>}
+            {sessionExpiresAt && <span className="text-[9px] text-white/40 uppercase tracking-widest">Válida até: {new Date(sessionExpiresAt).toLocaleString('pt-BR')}</span>}
+            <button onClick={refetch} className="mt-1 text-[9px] text-kinetic-orange font-bold uppercase tracking-widest hover:underline text-left">Atualizar status</button>
+          </>
         ) : integrationStatus === 'session_expired' ? (
-          <div className="space-y-2">
-            <span className="inline-block px-2 py-1 rounded bg-red-500/10 text-red-400 text-[9px] font-black uppercase tracking-widest">
-              ⚠️ Sessão expirada
-            </span>
-            <p className="text-[9px] text-white/60 tracking-widest">
-              Sincronize novamente pela extensão.
-            </p>
-          </div>
+          <>
+            <span className="text-[10px] font-black uppercase tracking-widest text-red-400">⚠️ Sessão expirada</span>
+            <span className="text-[9px] text-white/40 uppercase tracking-widest">Sincronize novamente pela extensão.</span>
+          </>
         ) : integrationStatus === 'session_revoked' ? (
-          <div className="space-y-2">
-            <span className="inline-block px-2 py-1 rounded bg-white/5 text-white/40 text-[9px] font-black uppercase tracking-widest">
-              Sessão revogada
-            </span>
-            <p className="text-[9px] text-white/60 tracking-widest">
-              Reconecte a extensão para reativar.
-            </p>
-          </div>
+          <>
+            <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Sessão revogada</span>
+            <span className="text-[9px] text-white/40 uppercase tracking-widest">Reconecte a extensão para reativar.</span>
+          </>
         ) : null}
       </div>
 
@@ -197,39 +169,6 @@ export function MercadoLivreExtensionPairing() {
             </p>
           </div>
 
-          <div className="bg-deep-void/30 p-3 rounded-lg border border-white/5 text-center">
-            {(!integrationStatus || integrationStatus === 'not_paired') && (
-              <p className="text-[10px] text-white/60 font-bold uppercase tracking-widest animate-pulse">
-                Aguardando conexão da extensão...
-              </p>
-            )}
-            {integrationStatus === 'paired_no_session' && (
-              <p className="text-[10px] text-kinetic-orange font-bold uppercase tracking-widest">
-                Extensão pareada. Clique em Sincronizar agora na extensão.
-              </p>
-            )}
-            {integrationStatus === 'session_ready' && (
-              <div className="space-y-1">
-                <p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">
-                  ✅ Mercado Livre conectado com sucesso!
-                </p>
-                <p className="text-[9px] text-white/40 tracking-widest">
-                  Sincronizado: {formatDate(lastSyncedAt)}
-                </p>
-              </div>
-            )}
-            {integrationStatus === 'session_expired' && (
-              <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">
-                Sessão expirada. Sincronize novamente.
-              </p>
-            )}
-            {integrationStatus === 'session_revoked' && (
-              <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">
-                Sessão revogada. Gere novo código.
-              </p>
-            )}
-          </div>
-
           <div className="flex items-center gap-3">
             <KineticButton
               onClick={handleCopy}
@@ -246,6 +185,18 @@ export function MercadoLivreExtensionPairing() {
             >
               <RefreshCw className="w-4 h-4" />
             </button>
+          </div>
+
+          <div className="text-center pt-2">
+            {integrationStatus === 'not_paired' || integrationStatus === null ? (
+              <p className="text-[9px] text-white/40 uppercase tracking-widest font-bold animate-pulse">Aguardando conexão da extensão...</p>
+            ) : integrationStatus === 'paired_no_session' ? (
+              <p className="text-[9px] text-amber-400 uppercase tracking-widest font-bold">Extensão pareada. Clique em Sincronizar agora na extensão.</p>
+            ) : integrationStatus === 'session_ready' ? (
+              <>
+                <p className="text-[9px] text-emerald-400 uppercase tracking-widest font-black">✅ Mercado Livre conectado com sucesso!</p>
+              </>
+            ) : null}
           </div>
 
           <div className="pt-2 border-t border-white/5 space-y-1">

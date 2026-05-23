@@ -8,42 +8,38 @@ export type MLSessionStatus =
   | 'session_revoked';
 
 interface MLSessionStatusResponse {
-  status: MLSessionStatus;
-  hasExtensionToken: boolean;
-  hasValidSession: boolean;
+  status: MLSessionStatus | null;
+  isLoading: boolean;
   lastSyncedAt: string | null;
   expiresAt: string | null;
+  refetch: () => void;
 }
 
-interface UseMLSessionStatusOptions {
-  pollingIntervalMs?: number;
-  enabled?: boolean;
-}
-
-export function useMLSessionStatus(options?: UseMLSessionStatusOptions) {
+export function useMLSessionStatus(options?: { pollingIntervalMs?: number; enabled?: boolean }): MLSessionStatusResponse {
   const { pollingIntervalMs = 0, enabled = true } = options || {};
 
   const [status, setStatus] = useState<MLSessionStatus | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(enabled);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   const fetchStatus = useCallback(async () => {
     try {
-      const response = await fetch('/api/ml/session/status');
-      if (response.ok) {
-        const data: MLSessionStatusResponse = await response.json();
+      const res = await fetch('/api/ml/session/status');
+      if (res.ok) {
+        const data = await res.json();
         setStatus(data.status);
         setLastSyncedAt(data.lastSyncedAt);
         setExpiresAt(data.expiresAt);
-        return data.status;
       }
-    } catch (error) {
-      console.error('[useMLSessionStatus] Fetch error:', error);
+    } catch {
+      // Handle silently
     } finally {
       setIsLoading(false);
     }
-    return null;
   }, []);
 
   const refetch = useCallback(() => {
@@ -56,23 +52,15 @@ export function useMLSessionStatus(options?: UseMLSessionStatusOptions) {
 
     fetchStatus();
 
-    if (pollingIntervalMs > 0 && status !== 'session_ready') {
-      const intervalId = setInterval(async () => {
-        const newStatus = await fetchStatus();
-        if (newStatus === 'session_ready') {
-          clearInterval(intervalId);
+    if (pollingIntervalMs > 0) {
+      const interval = setInterval(() => {
+        if (statusRef.current !== 'session_ready') {
+          fetchStatus();
         }
       }, pollingIntervalMs);
-
-      return () => clearInterval(intervalId);
+      return () => clearInterval(interval);
     }
-  }, [enabled, pollingIntervalMs, status, fetchStatus]);
+  }, [enabled, pollingIntervalMs, fetchStatus]);
 
-  return {
-    status,
-    isLoading,
-    lastSyncedAt,
-    expiresAt,
-    refetch
-  };
+  return { status, isLoading, lastSyncedAt, expiresAt, refetch };
 }
