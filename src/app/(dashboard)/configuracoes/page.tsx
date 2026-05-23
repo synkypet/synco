@@ -213,7 +213,7 @@ export default function ConfiguracoesPage() {
                             <span className="font-black text-sm uppercase tracking-widest">Sincronizando Marketplace...</span>
                           </div>
                         ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 items-start">
                             {catalog?.map(mp => {
                               const connection = connections?.find(c => c.marketplace_id === mp.id);
                               return (

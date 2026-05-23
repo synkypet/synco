@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Marketplace, UserMarketplaceConnection } from '@/types/marketplace';
 import { cn } from '@/lib/utils';
+import { MercadoLivreExtensionPairing } from './MercadoLivreExtensionPairing';
 
 interface AffiliateSettingsCardProps {
   marketplace: Marketplace;
@@ -71,7 +72,8 @@ export function AffiliateSettingsCard({
   }, [affiliateId, affiliateCode, shopeeAppId, shopeeAppSecret, mattTool, partnerId, isActive, connection]);
 
   const isShopee = marketplace.name.toLowerCase() === 'shopee';
-  const isMercadoLivre = marketplace.name.toLowerCase() === 'mercado livre' || marketplace.name.toLowerCase() === 'mercadolivre';
+  const normalizedName = marketplace?.name?.toLowerCase().replace(/\s+/g, '');
+  const isMercadoLivre = normalizedName === 'mercadolivre';
   const isConfigured = isShopee ? !!shopeeAppId : isMercadoLivre ? (!!mattTool && !!partnerId) : !!affiliateId;
 
   const handleSave = async () => {
@@ -235,6 +237,8 @@ export function AffiliateSettingsCard({
                   className="bg-deep-void border-none shadow-skeuo-pressed text-xs font-mono h-11 focus-visible:ring-1 focus-visible:ring-kinetic-orange/30 rounded-xl"
                 />
               </div>
+
+              <MercadoLivreExtensionPairing />
             </div>
           )}
 
