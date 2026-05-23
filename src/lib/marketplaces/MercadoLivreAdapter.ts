@@ -2,6 +2,10 @@ import { MarketplaceAdapter, ProductMetadata, AffiliateResult } from './BaseAdap
 import { UserMarketplaceConnection } from '@/types/marketplace';
 import { MLClient } from './mercadolivre/client';
 import { canHandleUrl, extractItemId, buildCanonicalUrl, buildAffiliateUrl } from './mercadolivre/url-utils';
+import { selectShortLinkInputUrl } from '../ml/shortLinkUrl';
+import { getDecryptedMLSession } from '@/lib/ml/vault';
+import { generateMeliShortLink } from '@/lib/ml/createLink';
+import { createAdminClient } from '@/lib/ml/extension-auth';
 
 export class MercadoLivreAdapter extends MarketplaceAdapter {
   readonly name = 'mercadolivre';
@@ -81,13 +85,68 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
       status = 'reaffiliated';
     }
 
+    // Tentativa de geração de meli.la (apenas se sessão válida existir)
+    let shortUrl: string | null = null;
+    let shortGenerationStatus: 'success' | 'fallback' | 'no_session' | 'skipped' = 'skipped';
+
+    const tag = connection?.ml_partner_id || null;
+
+    if (connection?.user_id && tag) {
+      try {
+        const adminClient = createAdminClient();
+        const sessionSnapshot = await getDecryptedMLSession(connection.user_id, adminClient);
+
+        if (sessionSnapshot) {
+          const shortLinkInputUrl = selectShortLinkInputUrl({
+            resolved_url: resolvedUrl,
+            incoming_url: url,
+            canonical_url: canonicalUrl
+          });
+
+          if (shortLinkInputUrl) {
+            const result = await generateMeliShortLink({
+              canonicalUrl: shortLinkInputUrl,
+              tag,
+              sessionSnapshot
+            });
+
+            if (result.success && result.short_url) {
+              shortUrl = result.short_url;
+              shortGenerationStatus = 'success';
+            } else {
+              shortGenerationStatus = 'fallback';
+              if (result.error_code === 'ml_unauthorized') {
+                await adminClient
+                  .from('ml_sessions')
+                  .update({ is_valid: false })
+                  .eq('user_id', connection.user_id);
+                console.warn('[ML-ADAPTER] userId:', connection.user_id.substring(0, 8), '— sessão ML invalidada por 401/403');
+              }
+            }
+          } else {
+            shortGenerationStatus = 'fallback';
+          }
+        } else {
+          shortGenerationStatus = 'no_session';
+        }
+      } catch (_) {
+        shortGenerationStatus = 'fallback';
+      }
+    } else {
+      shortGenerationStatus = 'skipped';
+    }
+
+    console.log('[ML-ADAPTER] meli.la gerado:', shortGenerationStatus, '—', shortUrl ? 'short_url presente' : 'short_url ausente');
+
     return {
       incoming_url: url,
       resolved_url: resolvedUrl,
       canonical_url: canonicalUrl,
-      generated_affiliate_url: affiliateUrlOrNull,
+      generated_affiliate_url: shortUrl ?? affiliateUrlOrNull,
       redirect_chain: redirectChain,
-      reaffiliation_status: status
+      reaffiliation_status: status,
+      short_url: shortUrl,
+      shortGenerationStatus
     };
   }
 

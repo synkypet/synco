@@ -88,6 +88,9 @@ export interface FactualData {
   // Extra (Fase 2H.1B)
   extraCouponLink?: string;
   price_unavailable?: boolean;
+  
+  // Status da geração do link curto
+  shortGenerationStatus?: 'success' | 'fallback' | 'no_session' | 'skipped';
 }
 
 export interface GeneratedCopy {
@@ -387,6 +390,7 @@ export function buildProductSnapshot(opts: {
     redirect_chain?: string[];
     reaffiliation_status: string;
     reaffiliation_error?: string;
+    shortGenerationStatus?: 'success' | 'fallback' | 'no_session' | 'skipped';
   };
   templateMetadata?: {
     isSystemDefault: boolean;
@@ -459,7 +463,8 @@ export function buildProductSnapshot(opts: {
     source_text: sourceText,
     extraCouponLink: metadata.extraCouponLink,
     discountPercent: metadata.discountPercent,
-    price_unavailable: metadata.price_unavailable || false
+    price_unavailable: metadata.price_unavailable || false,
+    shortGenerationStatus: reaffiliation?.shortGenerationStatus
   };
 
   // 2. Classificar Oferta (Heurísticas)

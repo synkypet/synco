@@ -87,6 +87,8 @@ export interface AffiliateResult {
   redirect_chain?: string[];
   reaffiliation_status: 'not_needed' | 'resolved' | 'canonicalized' | 'reaffiliated' | 'blocked' | 'failed';
   reaffiliation_error?: string;
+  short_url?: string | null;
+  shortGenerationStatus?: 'success' | 'fallback' | 'no_session' | 'skipped';
 }
 
 export abstract class MarketplaceAdapter {
