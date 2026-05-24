@@ -190,31 +190,44 @@ export function MercadoLivreExtensionPairing({
         </div>
         
         {showTutorial && (
-          <div className="p-3 rounded-xl bg-deep-void/50 border border-white/5 shadow-skeuo-pressed space-y-2 mt-2 animate-in fade-in slide-in-from-top-1">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-white/80">
-              Como instalar a extensão Mercado Livre
-            </h4>
-            <div className="space-y-1">
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">1. Clique em &quot;Baixar extensão Chrome&quot;.</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">2. Extraia/descompacte o arquivo ZIP no seu computador.</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">3. Abra o Google Chrome e acesse: <span className="font-mono text-kinetic-orange">chrome://extensions</span></p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">4. Ative o &quot;Modo do desenvolvedor&quot; no canto superior direito.</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">5. Clique em &quot;Carregar sem compactação&quot;.</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">6. Selecione a pasta descompactada da extensão (não o arquivo ZIP).</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">7. Fixe a extensão na barra do Chrome.</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">8. Volte aqui no painel e clique em &quot;Gerar código de pareamento&quot;.</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">9. Abra a extensão, cole o código, marque a autorização e clique em &quot;Conectar&quot;.</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">10. Entre no Mercado Livre no Chrome e clique em &quot;Sincronizar agora&quot; na extensão.</p>
+          <div className="p-1 animate-in fade-in slide-in-from-top-1 space-y-2 mt-3">
+            
+            <div className="grid grid-cols-1 gap-2">
+              <div className="bg-deep-void/60 rounded-lg p-3 border border-white/5 space-y-1.5 shadow-skeuo-pressed">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/80">1. Baixar e extrair</p>
+                <p className="text-[10px] text-white/50 leading-relaxed">
+                  Baixe o arquivo ZIP clicando no botão acima e <strong>descompacte/extraia</strong> em uma pasta no seu computador.
+                </p>
+              </div>
+
+              <div className="bg-deep-void/60 rounded-lg p-3 border border-white/5 space-y-1.5 shadow-skeuo-pressed">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/80">2. Instalar no Chrome</p>
+                <p className="text-[10px] text-white/50 leading-relaxed">
+                  Acesse <span className="font-mono text-kinetic-orange bg-kinetic-orange/10 px-1 py-0.5 rounded text-[9px]">chrome://extensions</span> no seu navegador. 
+                  Ative o &quot;Modo do desenvolvedor&quot; (no canto superior direito), clique em &quot;Carregar sem compactação&quot; e selecione a <strong>pasta descompactada</strong>. Fixe a extensão na barra do Chrome.
+                </p>
+              </div>
+
+              <div className="bg-deep-void/60 rounded-lg p-3 border border-white/5 space-y-1.5 shadow-skeuo-pressed">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/80">3. Parear e sincronizar</p>
+                <p className="text-[10px] text-white/50 leading-relaxed">
+                  Gere o código abaixo, cole na extensão e clique em &quot;Conectar&quot;. Depois, acesse o Mercado Livre no Chrome e clique em &quot;Sincronizar agora&quot; na extensão.
+                </p>
+              </div>
             </div>
             
-            <div className="pt-2 mt-2 border-t border-white/5 space-y-1">
-              <p className="text-[8px] text-amber-400 uppercase tracking-widest font-bold">Avisos importantes:</p>
-              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- O usuário precisa estar logado no Mercado Livre no mesmo Chrome.</p>
-              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- O usuário deve selecionar a pasta descompactada, não o ZIP.</p>
-              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- Se trocar de conta Mercado Livre, deve desconectar e parear novamente.</p>
-              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- Se a sessão expirar, basta abrir a extensão e clicar em &quot;Sincronizar agora&quot;.</p>
-              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- A extensão não envia senha do Mercado Livre para o Synco.</p>
+            <div className="p-3 mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 space-y-2">
+              <p className="text-[9px] text-amber-500 uppercase tracking-widest font-black flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5" /> Avisos importantes
+              </p>
+              <ul className="text-[9px] text-white/50 leading-relaxed list-disc list-inside space-y-1">
+                <li>Você deve selecionar a pasta extraída, não o arquivo ZIP.</li>
+                <li>Você precisa estar logado no Mercado Livre no mesmo Chrome.</li>
+                <li>Se a sessão expirar, basta clicar em &quot;Sincronizar agora&quot; na extensão.</li>
+                <li>A extensão <strong>não</strong> envia ou salva sua senha do Mercado Livre.</li>
+              </ul>
             </div>
+
           </div>
         )}
       </div>
@@ -246,9 +259,14 @@ export function MercadoLivreExtensionPairing({
 
           <KineticButton
             onClick={generateCode}
-            className="h-10 w-full font-black uppercase tracking-widest text-[10px]"
+            className={cn(
+              "h-10 w-full font-black uppercase tracking-widest text-[10px] transition-all",
+              integrationStatus === 'session_ready' 
+                ? "bg-deep-void/50 border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/5 shadow-none" 
+                : ""
+            )}
           >
-            Gerar código de pareamento
+            {integrationStatus === 'session_ready' ? 'Gerar novo código de pareamento' : 'Gerar código de pareamento'}
           </KineticButton>
         </div>
       )}
