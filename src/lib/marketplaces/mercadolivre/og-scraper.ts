@@ -20,8 +20,8 @@ export async function fetchOGMetadata(canonicalUrl: string): Promise<{ title: st
     "Accept-Language": "pt-BR,pt;q=0.9"
   };
 
-  const maxRetries = 0;   // sem retry — fast path exige resposta única
-  const timeoutMs = 3000; // 3s máximo para OG
+  const maxRetries = 1;
+  const timeoutMs = 8000;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     const controller = new AbortController();
