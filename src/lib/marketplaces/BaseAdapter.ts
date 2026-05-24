@@ -71,6 +71,9 @@ export interface ProductMetadata {
 
   // Extra (Fase 2H.1B)
   extraCouponLink?: string;
+
+  // Extra indicators
+  price_unavailable?: boolean;
 }
 
 export interface AffiliateResult {

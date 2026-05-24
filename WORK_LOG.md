@@ -23,6 +23,7 @@ Use it to track completed blocks, known debt, active risks, and the next executi
 - BLOCO I — Mercado Livre adapter e OpenGraph Catalog Fallback ✅
   - I1: Correção de canonical URL de produtos ML para evitar 404 e viabilizar scraper fallback ✅
   - I2: Enriquecimento de metadados ML usando URL original rica + scrapers reordenados com timeout curto ✅
+  - I3: Enriquecimento de metadados ML em paralelo via Promise.allSettled e timeout de 7s ✅
 
 ---
 
