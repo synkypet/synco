@@ -171,6 +171,54 @@ export function MercadoLivreExtensionPairing({
         ) : null}
       </div>
 
+      <div className="space-y-2 mb-4">
+        <div className="flex flex-col gap-2">
+          <a 
+            href="/downloads/synco-ml-extension.zip" 
+            download 
+            className="flex items-center justify-center h-10 w-full rounded-lg bg-deep-void border border-white/10 text-white hover:bg-white/5 transition-colors text-[10px] font-black uppercase tracking-widest shadow-skeuo-flat"
+          >
+            Baixar extensão Chrome (v1.0.0)
+          </a>
+          
+          <button
+            onClick={() => setShowTutorial(!showTutorial)}
+            className="text-[9px] font-bold text-kinetic-orange uppercase tracking-widest hover:underline text-center"
+          >
+            {showTutorial ? 'Esconder tutorial de instalação' : 'Ver tutorial de instalação'}
+          </button>
+        </div>
+        
+        {showTutorial && (
+          <div className="p-3 rounded-xl bg-deep-void/50 border border-white/5 shadow-skeuo-pressed space-y-2 mt-2 animate-in fade-in slide-in-from-top-1">
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-white/80">
+              Como instalar a extensão Mercado Livre
+            </h4>
+            <div className="space-y-1">
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">1. Clique em "Baixar extensão Chrome".</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">2. Extraia/descompacte o arquivo ZIP no seu computador.</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">3. Abra o Google Chrome e acesse: <span className="font-mono text-kinetic-orange">chrome://extensions</span></p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">4. Ative o "Modo do desenvolvedor" no canto superior direito.</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">5. Clique em "Carregar sem compactação".</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">6. Selecione a pasta descompactada da extensão (não o arquivo ZIP).</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">7. Fixe a extensão na barra do Chrome.</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">8. Volte aqui no painel e clique em "Gerar código de pareamento".</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">9. Abra a extensão, cole o código, marque a autorização e clique em "Conectar".</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">10. Entre no Mercado Livre no Chrome e clique em "Sincronizar agora" na extensão.</p>
+            </div>
+            
+            <div className="pt-2 mt-2 border-t border-white/5 space-y-1">
+              <p className="text-[8px] text-amber-400 uppercase tracking-widest font-bold">Avisos importantes:</p>
+              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- O usuário precisa estar logado no Mercado Livre no mesmo Chrome.</p>
+              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- O usuário deve selecionar a pasta descompactada, não o ZIP.</p>
+              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- Se trocar de conta Mercado Livre, deve desconectar e parear novamente.</p>
+              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- Se a sessão expirar, basta abrir a extensão e clicar em "Sincronizar agora".</p>
+              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- A extensão não envia senha do Mercado Livre para o Synco.</p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {showDisconnectConfirm && (
         <div className="space-y-4 p-4 rounded-xl border border-red-500/20 bg-red-500/10 mb-4 animate-in fade-in slide-in-from-top-1">
           <div className="flex items-start gap-3">
@@ -195,51 +243,6 @@ export function MercadoLivreExtensionPairing({
 
       {localStatus === 'idle' && !showDisconnectConfirm && (
         <div className="space-y-3">
-          <div className="flex flex-col gap-2">
-            <a 
-              href="/downloads/synco-ml-extension.zip" 
-              download 
-              className="flex items-center justify-center h-10 w-full rounded-lg bg-deep-void border border-white/10 text-white hover:bg-white/5 transition-colors text-[10px] font-black uppercase tracking-widest shadow-skeuo-flat"
-            >
-              Baixar extensão Chrome (v1.0.0)
-            </a>
-            
-            <button
-              onClick={() => setShowTutorial(!showTutorial)}
-              className="text-[9px] font-bold text-kinetic-orange uppercase tracking-widest hover:underline text-center"
-            >
-              {showTutorial ? 'Esconder tutorial de instalação' : 'Ver tutorial de instalação'}
-            </button>
-          </div>
-          
-          {showTutorial && (
-            <div className="p-3 rounded-xl bg-deep-void/50 border border-white/5 shadow-skeuo-pressed space-y-2 mt-2 animate-in fade-in slide-in-from-top-1">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-white/80">
-                Como instalar a extensão Mercado Livre
-              </h4>
-              <div className="space-y-1">
-                <p className="text-[9px] text-white/60 tracking-tighter leading-tight">1. Clique em "Baixar extensão Chrome".</p>
-                <p className="text-[9px] text-white/60 tracking-tighter leading-tight">2. Extraia/descompacte o arquivo ZIP no seu computador.</p>
-                <p className="text-[9px] text-white/60 tracking-tighter leading-tight">3. Abra o Google Chrome e acesse: <span className="font-mono text-kinetic-orange">chrome://extensions</span></p>
-                <p className="text-[9px] text-white/60 tracking-tighter leading-tight">4. Ative o "Modo do desenvolvedor" no canto superior direito.</p>
-                <p className="text-[9px] text-white/60 tracking-tighter leading-tight">5. Clique em "Carregar sem compactação".</p>
-                <p className="text-[9px] text-white/60 tracking-tighter leading-tight">6. Selecione a pasta descompactada da extensão (não o arquivo ZIP).</p>
-                <p className="text-[9px] text-white/60 tracking-tighter leading-tight">7. Fixe a extensão na barra do Chrome.</p>
-                <p className="text-[9px] text-white/60 tracking-tighter leading-tight">8. Volte aqui no painel e clique em "Gerar código de pareamento".</p>
-                <p className="text-[9px] text-white/60 tracking-tighter leading-tight">9. Abra a extensão, cole o código, marque a autorização e clique em "Conectar".</p>
-                <p className="text-[9px] text-white/60 tracking-tighter leading-tight">10. Entre no Mercado Livre no Chrome e clique em "Sincronizar agora" na extensão.</p>
-              </div>
-              
-              <div className="pt-2 mt-2 border-t border-white/5 space-y-1">
-                <p className="text-[8px] text-amber-400 uppercase tracking-widest font-bold">Avisos importantes:</p>
-                <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- O usuário precisa estar logado no Mercado Livre no mesmo Chrome.</p>
-                <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- O usuário deve selecionar a pasta descompactada, não o ZIP.</p>
-                <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- Se trocar de conta Mercado Livre, deve desconectar e parear novamente.</p>
-                <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- Se a sessão expirar, basta abrir a extensão e clicar em "Sincronizar agora".</p>
-                <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- A extensão não envia senha do Mercado Livre para o Synco.</p>
-              </div>
-            </div>
-          )}
 
           <KineticButton
             onClick={generateCode}
