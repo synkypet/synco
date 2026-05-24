@@ -186,7 +186,7 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
 
     const canonicalUrl = buildCanonicalUrl(itemData);
     const client = new MLClient();
-    const metadata = await client.fetchItemMetadata(itemData, canonicalUrl);
+    const metadata = await client.fetchItemMetadata(itemData, url);
 
     if (!metadata) {
       return this.createFallback(fallbackTitle, 'api_fetch_failed');

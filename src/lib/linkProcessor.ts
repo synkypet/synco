@@ -1040,8 +1040,11 @@ export async function processLinks(
         // B. Enrichment (Metadata) - Somente se não estiver bloqueado/falhado
         const canEnrich = preResult.reaffiliation_status !== 'blocked' && preResult.reaffiliation_status !== 'failed';
         if (canEnrich) {
-            const finalTargetUrl = preResult.canonical_url || targetUrl;
-            metadata = await adapter.fetchMetadata(finalTargetUrl, connection);
+            const metadataTargetUrl =
+              marketplace === 'Mercado Livre'
+                ? (preResult.resolved_url || targetUrl)
+                : (preResult.canonical_url || targetUrl);
+            metadata = await adapter.fetchMetadata(metadataTargetUrl, connection);
             
             // C. Validação de Metadados (Metadata Guardrail)
             // Somente falha se NÃO for um cupom identificado (pelo texto ou pela URL canônica)

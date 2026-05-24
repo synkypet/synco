@@ -9,20 +9,20 @@ export function canHandleUrl(url: string): boolean {
 }
 
 export function extractItemId(url: string): { id: string, type: 'catalog' | 'item' } | null {
-  // Padrão 1: /p/MLB123456789
-  const matchP = url.match(/\/p\/(MLB\d+)/i);
-  if (matchP) return { id: matchP[1].toUpperCase(), type: 'catalog' };
+  // Padrão 1: /p/ ou /up/ seguido por ML...
+  const matchP = url.match(/\/(p|up)\/((?:MLB|MLA|MLU|MLC|MLM|MLBU)\d+)/i);
+  if (matchP) return { id: matchP[2].toUpperCase(), type: 'catalog' };
 
   // Padrão 2: /MLB-123456789-slug ou /MLB123456789
-  const matchMLB = url.match(/(MLB)-?(\d+)/i);
+  const matchMLB = url.match(/(MLB|MLA|MLU|MLC|MLM|MLBU)-?(\d+)/i);
   if (matchMLB) return { id: `${matchMLB[1].toUpperCase()}${matchMLB[2]}`, type: 'item' };
 
   // Padrão 3: itemId na querystring
   try {
     const parsed = new URL(url);
     const itemParam = parsed.searchParams.get('itemId') || parsed.searchParams.get('item_id');
-    if (itemParam && itemParam.toUpperCase().startsWith('MLB')) {
-      const type = parsed.pathname.startsWith('/p/') ? 'catalog' : 'item';
+    if (itemParam && (itemParam.toUpperCase().startsWith('MLB') || itemParam.toUpperCase().startsWith('MLBU') || itemParam.toUpperCase().startsWith('MLU'))) {
+      const type = parsed.pathname.includes('/p/') || parsed.pathname.includes('/up/') ? 'catalog' : 'item';
       return { id: itemParam.toUpperCase(), type };
     }
   } catch (e) {
