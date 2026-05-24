@@ -977,6 +977,12 @@ export async function processLinks(
           return connName === dbMarketplaceName || connName.includes(dbMarketplaceName);
         });
 
+        // FASE 2/ML-FIX: Se o usuário só sincronizou a extensão e não tem registro explícito em user_marketplaces,
+        // injetamos uma conexão dummy com o user_id para que o adapter consiga buscar a sessão no Vault.
+        if (!connection && userId) {
+          connection = { user_id: userId, marketplace_name: marketplace } as any;
+        }
+
         // A. Pré-processamento (Fase 1: Reafiliação)
         preResult = await adapter.preProcessIncomingLink(targetUrl, connection);
 
