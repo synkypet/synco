@@ -59,11 +59,19 @@ export async function POST(request: Request) {
         expires_at: expiresAt
       });
 
-    console.log('[PAIRING-EXCHANGE] userId:', codeRow.user_id.substring(0, 8), '— token emitido');
+    const userIdPrefix = codeRow.user_id.substring(0, 8);
+    const accountLabel = `Conta Synco •••${codeRow.user_id.substring(codeRow.user_id.length - 2)}`;
+
+    console.log('[ML-EXT-PAIRING-DIAG]', {
+      userIdPrefix,
+      hasToken: true,
+    });
 
     return NextResponse.json({
       extension_token: `${tokenId}.${tokenSecret}`,
-      expires_at: expiresAt
+      expires_at: expiresAt,
+      user_id_prefix: userIdPrefix,
+      account_label: accountLabel,
     });
 
   } catch (error) {

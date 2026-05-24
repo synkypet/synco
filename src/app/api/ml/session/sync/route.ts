@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { cookies } from 'next/headers';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createAdminClient, validateExtensionToken } from '@/lib/ml/extension-auth';
 
 export async function PUT(request: Request) {
@@ -12,13 +14,54 @@ export async function PUT(request: Request) {
   try {
     const adminClient = createAdminClient();
     const authHeader = request.headers.get('authorization');
-    
+
     const authResult = await validateExtensionToken(authHeader, adminClient);
     if (!authResult) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
-    const { userId } = authResult;
+    const { userId: tokenUserId } = authResult;
+
+    // Verificação cruzada: se o cookie Supabase estiver presente, o userId autenticado
+    // deve coincidir com o userId do token. Bloqueia apenas quando os dois existem e divergem.
+    let authUserId: string | null = null;
+    try {
+      const cookieStore = cookies();
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            get(name: string) { return cookieStore.get(name)?.value; },
+            set(name: string, value: string, options: CookieOptions) { try { cookieStore.set({ name, value, ...options }); } catch (e) {} },
+            remove(name: string, options: CookieOptions) { try { cookieStore.set({ name, value: '', ...options }); } catch (e) {} },
+          },
+        }
+      );
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      if (authSession?.user?.id) {
+        authUserId = authSession.user.id;
+      }
+    } catch {
+      // Cookie Supabase ausente ou não legível (extensão sem credentials:include) — ignorar
+    }
+
+    console.info('[ML-SYNC-ISOLATION-DIAG]', {
+      hasAuthUser: Boolean(authUserId),
+      authUserIdPrefix: authUserId?.slice(0, 8) ?? null,
+      tokenUserIdPrefix: tokenUserId?.slice(0, 8) ?? null,
+      tokenUserMatchesAuthUser:
+        authUserId && tokenUserId
+          ? authUserId === tokenUserId
+          : null,
+      selectedUserIdPrefix: tokenUserId?.slice(0, 8) ?? null,
+    });
+
+    if (authUserId && tokenUserId && authUserId !== tokenUserId) {
+      return NextResponse.json({ error: 'token_user_mismatch' }, { status: 403 });
+    }
+
+    const userId = tokenUserId;
     const body = await request.json();
     const session_snapshot = body.session_snapshot;
 

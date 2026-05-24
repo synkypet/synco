@@ -178,7 +178,7 @@ export function MercadoLivreExtensionPairing({
             download 
             className="flex items-center justify-center h-10 w-full rounded-lg bg-deep-void border border-white/10 text-white hover:bg-white/5 transition-colors text-[10px] font-black uppercase tracking-widest shadow-skeuo-flat"
           >
-            Baixar extensão Chrome (v1.0.0)
+            Baixar extensão Chrome (v1.0.1)
           </a>
           
           <button
