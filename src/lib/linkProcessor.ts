@@ -977,14 +977,19 @@ export async function processLinks(
           return connName === dbMarketplaceName || connName.includes(dbMarketplaceName);
         });
 
-        // FASE 2/ML-FIX: Se o usuário só sincronizou a extensão e não tem registro explícito em user_marketplaces,
-        // injetamos uma conexão dummy com o user_id para que o adapter consiga buscar a sessão no Vault.
-        if (!connection && userId) {
-          connection = { user_id: userId, marketplace_name: marketplace } as any;
+        let effectiveConnection = connection;
+
+        // FASE 2/ML-FIX: Para Mercado Livre, se o usuário tiver apenas sincronizado a extensão (e consequentemente
+        // não possuir configuração explícita de marketplace salva em user_marketplaces), estabelecemos um
+        // contexto de conexão efetivo com o userId do próprio Supabase Auth. Isso garante que o adapter do
+        // Mercado Livre recupere corretamente a sessão ativa do Vault.
+        // Aplicado estritamente apenas para Mercado Livre para evitar efeitos colaterais em outros marketplaces.
+        if (!effectiveConnection && userId && marketplace === 'Mercado Livre') {
+          effectiveConnection = { user_id: userId, marketplace_name: marketplace } as any;
         }
 
         // A. Pré-processamento (Fase 1: Reafiliação)
-        preResult = await adapter.preProcessIncomingLink(targetUrl, connection);
+        preResult = await adapter.preProcessIncomingLink(targetUrl, effectiveConnection);
 
         // 2. Checagem após a resolução (com as URLs resolvidas / canônicas)
         const isGenericLanding = (url: string) => {
@@ -1050,7 +1055,7 @@ export async function processLinks(
               marketplace === 'Mercado Livre'
                 ? (preResult.resolved_url || targetUrl)
                 : (preResult.canonical_url || targetUrl);
-            metadata = await adapter.fetchMetadata(metadataTargetUrl, connection);
+            metadata = await adapter.fetchMetadata(metadataTargetUrl, effectiveConnection);
             
             // C. Validação de Metadados (Metadata Guardrail)
             // Somente falha se NÃO for um cupom identificado (pelo texto ou pela URL canônica)
