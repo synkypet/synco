@@ -105,13 +105,17 @@ export class MLClient {
         clearTimeout(id);
         console.warn(`[ML-CLIENT] Attempt ${attempt} failed for ${itemData.id}: ${error.message}`);
         if (attempt > maxRetries) {
-          return null;
+          // API exauriu retries — tentar fallback via scraper/OG
+          console.log('[ML-METADATA] api_failed_trying_scraper');
+          return this.fetchItemFallback(itemData, canonicalUrl);
         }
         await new Promise(resolve => setTimeout(resolve, 600));
       }
     }
 
-    return null;
+    // Fallback final caso o loop termine sem retorno
+    console.log('[ML-METADATA] api_failed_trying_scraper');
+    return this.fetchItemFallback(itemData, canonicalUrl);
   }
 
   /**
@@ -136,5 +140,59 @@ export class MLClient {
       itemId: itemData.id,
       price_unavailable: true
     } as any;
+  }
+
+  /**
+   * Fallback para itens quando a API pública retorna 403/erro.
+   * Tenta: 1) Render scraper, 2) OG scraper local.
+   */
+  private async fetchItemFallback(
+    itemData: { id: string, type: 'catalog' | 'item' },
+    canonicalUrl?: string
+  ): Promise<Partial<ProductMetadata> | null> {
+    const targetUrl = canonicalUrl || `https://www.mercadolivre.com.br/${itemData.id}`;
+    const scraperUrl = process.env.SCRAPER_SERVICE_URL;
+
+    // 1. Tentar Render scraper
+    if (scraperUrl) {
+      try {
+        const res = await fetch(`${scraperUrl}/scrape`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.SCRAPER_API_KEY || ''
+          },
+          body: JSON.stringify({ url: targetUrl }),
+          signal: AbortSignal.timeout(20000)
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.title) {
+            console.log('[ML-METADATA] scraper_success');
+            return {
+              name: data.title ?? 'Produto Mercado Livre',
+              currentPrice: data.price ?? 0,
+              originalPrice: data.originalPrice ?? data.price ?? 0,
+              discountPercent: data.discountPercent ?? 0,
+              imageUrl: data.image ?? '',
+              marketplace: 'Mercado Livre',
+              currentPriceFactual: data.price ?? 0,
+              currentPriceSource: data.price ? 'scraper' : 'fallback',
+              commissionValueFactual: 0,
+              commissionSource: 'fallback',
+              itemId: itemData.id,
+              price_unavailable: !data.price
+            } as any;
+          }
+        }
+      } catch (err) {
+        console.warn('[ML-METADATA] scraper_failed');
+      }
+    }
+
+    // 2. Fallback: OG scraper local
+    console.log('[ML-METADATA] fallback_partial');
+    return this.fetchViaOG(targetUrl, itemData);
   }
 }

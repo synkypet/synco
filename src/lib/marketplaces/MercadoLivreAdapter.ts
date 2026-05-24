@@ -193,12 +193,21 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
     }
 
     const isCatalog = itemData.type === 'catalog';
-    const hasValidImage = isCatalog ? true : (!!metadata.imageUrl && metadata.imageUrl.length > 5);
-    const hasValidTitle = isCatalog
-      ? (!!metadata.name && metadata.name.length > 3)
-      : (!!metadata.name && metadata.name.length > 3 && metadata.name !== fallbackTitle);
+    const isFromFallback = !metadata.currentPriceSource || (metadata.currentPriceSource !== 'api.price' && metadata.currentPriceSource !== 'api.priceMin');
+    const hasValidImage = isCatalog || isFromFallback ? true : (!!metadata.imageUrl && metadata.imageUrl.length > 5);
+    const hasValidTitle = !!metadata.name && metadata.name.length > 3 && metadata.name !== fallbackTitle;
 
-    if (!hasValidImage || !hasValidTitle) {
+    if (!hasValidTitle) {
+      // Para ML com fallback, aceitar metadata parcial sem bloquear
+      if (isFromFallback) {
+        return {
+          ...metadata,
+          marketplace: 'Mercado Livre',
+          metadata_failed: false,
+          fetchedAt: new Date().toISOString(),
+          price_unavailable: true
+        } as ProductMetadata;
+      }
       return this.createFallback(metadata.name || fallbackTitle, 'insufficient_metadata_quality');
     }
 

@@ -1045,14 +1045,23 @@ export async function processLinks(
             
             // C. Validação de Metadados (Metadata Guardrail)
             // Somente falha se NÃO for um cupom identificado (pelo texto ou pela URL canônica)
+            // E se NÃO houver um link afiliado válido já gerado (ex: meli.la)
             const isCoupon = (extractShopeeCoupons(link).length > 0) || 
                              (preResult.canonical_url?.toLowerCase().includes('/m/')) ||
                              (preResult.canonical_url?.toLowerCase().includes('cupom'));
 
+            const hasValidAffiliateLink = !!preResult.generated_affiliate_url && 
+                                          preResult.generated_affiliate_url !== preResult.canonical_url;
+
             if (metadata?.metadata_failed && !isCoupon) {
-                console.warn(`[LINK-PROCESSOR] Meta Guardrail: Falha de qualidade para ${targetUrl}: ${metadata.metadata_error}`);
-                preResult.reaffiliation_status = 'failed';
-                preResult.reaffiliation_error = metadata.metadata_error || 'Metadados insuficientes';
+                if (hasValidAffiliateLink) {
+                    // Tem meli.la/link afiliado válido — não bloquear, apenas avisar
+                    console.warn(`[LINK-PROCESSOR] Meta Guardrail: metadados fracos para ${targetUrl}, mas link afiliado válido — continuando`);
+                } else {
+                    console.warn(`[LINK-PROCESSOR] Meta Guardrail: Falha de qualidade para ${targetUrl}: ${metadata.metadata_error}`);
+                    preResult.reaffiliation_status = 'failed';
+                    preResult.reaffiliation_error = metadata.metadata_error || 'Metadados insuficientes';
+                }
             }
         }
       }
