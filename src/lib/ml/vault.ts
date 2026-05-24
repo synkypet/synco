@@ -5,6 +5,7 @@ export interface MLSessionSnapshot {
   csrf_token:    string;
   cookie_string: string;
   meli_user_id:  string;
+  orgnickp?:     string;
 }
 
 export async function getDecryptedMLSession(

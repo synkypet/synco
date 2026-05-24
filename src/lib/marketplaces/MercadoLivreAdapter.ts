@@ -70,10 +70,7 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
     // Tentativa de geração de meli.la (apenas se sessão válida existir)
     let shortUrl: string | null = null;
     let shortGenerationStatus: 'success' | 'fallback' | 'no_session' | 'skipped' = 'skipped';
-
-    // Para gerar short link, não obrigamos ml_partner_id (a tag pode vir do corpo ou ser resolvida no endpoint interno, mas aqui chamamos direto. Opa, aqui precisamos passar tag).
-    // Na verdade, se a tag estiver vazia, o endpoint falharia com 400. Vamos pegar a tag da connection.
-    const tag = connection?.ml_partner_id || null;
+    
     let hasValidMLVaultSession = false;
 
     if (connection?.user_id) {
@@ -83,6 +80,15 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
 
         if (sessionSnapshot) {
           hasValidMLVaultSession = true;
+          
+          let tagSource = 'missing';
+          let tag = connection?.ml_partner_id || null;
+          if (tag) {
+            tagSource = 'connection_partner_id';
+          } else if (sessionSnapshot.orgnickp) {
+            tag = sessionSnapshot.orgnickp.toLowerCase();
+            tagSource = 'vault_orgnickp';
+          }
           const shortLinkInputUrl = selectShortLinkInputUrl({
             resolved_url: resolvedUrl,
             incoming_url: url,
@@ -90,11 +96,23 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
           });
 
           if (shortLinkInputUrl) {
-            const result = await generateMeliShortLink({
-              canonicalUrl: shortLinkInputUrl,
-              tag: tag || '',
-              sessionSnapshot
-            });
+            if (!tag) {
+              shortGenerationStatus = 'fallback';
+              console.warn('[ML-ADAPTER] missing_affiliate_tag — impossível gerar meli.la sem tag explícita ou orgnickp');
+            } else {
+              console.info('[ML-CREATE-LINK-DIAG]', {
+                urlKind: shortLinkInputUrl.includes('/up/') ? 'full_permalink' : (shortLinkInputUrl.includes('/p/') ? 'canonical_p' : 'other'),
+                hasTag: Boolean(tag),
+                tagLength: tag?.length ?? 0,
+                tagSource,
+                hasVaultSession: Boolean(sessionSnapshot),
+              });
+
+              const result = await generateMeliShortLink({
+                canonicalUrl: shortLinkInputUrl,
+                tag,
+                sessionSnapshot
+              });
 
             if (result.success && result.short_url) {
               shortUrl = result.short_url;
@@ -109,6 +127,7 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
                 console.warn('[ML-ADAPTER] userId:', connection.user_id.substring(0, 8), '— sessão ML invalidada por 401/403');
                 hasValidMLVaultSession = false;
               }
+            }
             }
           } else {
             shortGenerationStatus = 'fallback';
