@@ -16,98 +16,19 @@ export class MLClient {
     richUrl?: string
   ): Promise<Partial<ProductMetadata> | null> {
     const t0 = Date.now();
-
-    if (itemData.type === 'catalog') {
-      return this.fetchCatalogMetadata(itemData, richUrl, t0);
-    }
-
-    return this.fetchItemMetadataFast(itemData, richUrl, t0);
+    return this.fetchMetadataParallel(itemData, richUrl, t0);
   }
 
-  // ─── catalog ─────────────────────────────────────────────────────────────
+  // ─── unified parallel path ───────────────────────────────────────────────
 
-  private async fetchCatalogMetadata(
+  private async fetchMetadataParallel(
     itemData: { id: string, type: 'catalog' | 'item' },
     richUrl: string | undefined,
     t0: number
   ): Promise<Partial<ProductMetadata> | null> {
-    const targetUrl = richUrl || `https://www.mercadolivre.com.br/p/${itemData.id}`;
-
-    // 1. OG local primeiro (rápido)
-    try {
-      const tOg = Date.now();
-      const ogMetadata = await this.fetchViaOG(targetUrl, itemData);
-      const ogMs = Date.now() - tOg;
-
-      if (ogMetadata && ogMetadata.name && ogMetadata.name !== 'Produto Mercado Livre') {
-        console.log('[ML-PERF] og_ms=' + ogMs + ' fast_path_used=true');
-        console.log('[ML-METADATA] catalog_og_success');
-        console.log('[ML-PERF] total_metadata_ms=' + (Date.now() - t0));
-        return ogMetadata;
-      }
-      console.log('[ML-PERF] og_ms=' + ogMs + ' og_result=no_title');
-    } catch (err: any) {
-      console.warn('[ML-METADATA] catalog_og_failed:', err.message);
-    }
-
-    // 2. Render scraper apenas como fallback (catalog sem OG)
-    const scraperUrl = process.env.SCRAPER_SERVICE_URL;
-    if (scraperUrl) {
-      const tRender = Date.now();
-      try {
-        const res = await fetch(`${scraperUrl}/scrape`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.SCRAPER_API_KEY || ''
-          },
-          body: JSON.stringify({ url: targetUrl }),
-          signal: AbortSignal.timeout(6000)
-        });
-
-        const renderMs = Date.now() - tRender;
-        console.log('[ML-PERF] render_scraper_ms=' + renderMs);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) {
-            console.log('[ML-METADATA] catalog_render_success');
-            console.log('[ML-PERF] total_metadata_ms=' + (Date.now() - t0));
-            return {
-              name: data.title ?? 'Produto Mercado Livre',
-              currentPrice: data.price ?? 0,
-              originalPrice: data.originalPrice ?? data.price ?? 0,
-              discountPercent: data.discountPercent ?? 0,
-              imageUrl: data.image ?? '',
-              marketplace: 'Mercado Livre',
-              currentPriceFactual: data.price ?? 0,
-              currentPriceSource: data.price ? 'scraper' : 'fallback',
-              commissionValueFactual: 0,
-              commissionSource: 'fallback',
-              itemId: itemData.id,
-              price_unavailable: !data.price
-            } as any;
-          }
-        }
-      } catch (err: any) {
-        const renderMs = Date.now() - tRender;
-        console.warn('[ML-PERF] render_scraper_ms=' + renderMs + ' result=timeout_or_error');
-        console.warn('[ML-CLIENT] Render scraper failed:', err.message);
-      }
-    }
-
-    console.log('[ML-PERF] total_metadata_ms=' + (Date.now() - t0) + ' fast_path_used=false');
-    return this.buildFallback(itemData);
-  }
-
-  // ─── item (fast path) ─────────────────────────────────────────────────────
-
-  private async fetchItemMetadataFast(
-    itemData: { id: string, type: 'catalog' | 'item' },
-    richUrl: string | undefined,
-    t0: number
-  ): Promise<Partial<ProductMetadata> | null> {
-    const targetUrl = richUrl || `https://produto.mercadolivre.com.br/MLB-${itemData.id.replace(/^MLB/i, '')}`;
+    const targetUrl = richUrl || (itemData.type === 'catalog'
+      ? `https://www.mercadolivre.com.br/p/${itemData.id}`
+      : `https://produto.mercadolivre.com.br/MLB-${itemData.id.replace(/^MLB/i, '')}`);
     const scraperUrl = process.env.SCRAPER_SERVICE_URL;
 
     const ogStart = Date.now();
