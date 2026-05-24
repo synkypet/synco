@@ -150,7 +150,11 @@ export class MLClient {
     itemData: { id: string, type: 'catalog' | 'item' },
     canonicalUrl?: string
   ): Promise<Partial<ProductMetadata> | null> {
-    const targetUrl = canonicalUrl || `https://www.mercadolivre.com.br/${itemData.id}`;
+    const targetUrl = canonicalUrl || (
+      itemData.type === 'catalog'
+        ? `https://www.mercadolivre.com.br/p/${itemData.id}`
+        : `https://produto.mercadolivre.com.br/MLB-${itemData.id.replace(/^MLB/i, '')}`
+    );
     const scraperUrl = process.env.SCRAPER_SERVICE_URL;
 
     // 1. Tentar Render scraper

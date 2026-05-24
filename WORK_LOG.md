@@ -21,6 +21,7 @@ Use it to track completed blocks, known debt, active risks, and the next executi
   - H3: Wasender session lifecycle integration ✅
   - H4: Session-based queue, pacing, retry, cooldown, deadline ✅
 - BLOCO I — Mercado Livre adapter e OpenGraph Catalog Fallback ✅
+  - I1: Correção de canonical URL de produtos ML para evitar 404 e viabilizar scraper fallback ✅
 
 ---
 

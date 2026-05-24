@@ -36,7 +36,8 @@ export function buildCanonicalUrl(itemData: { id: string, type: 'catalog' | 'ite
   if (itemData.type === 'catalog') {
     return `https://www.mercadolivre.com.br/p/${itemData.id}`;
   }
-  return `https://www.mercadolivre.com.br/${itemData.id}`;
+  const numericId = itemData.id.replace(/^MLB/i, '');
+  return `https://produto.mercadolivre.com.br/MLB-${numericId}`;
 }
 
 export function buildAffiliateUrl(canonicalUrl: string, connection?: UserMarketplaceConnection): string | null {
