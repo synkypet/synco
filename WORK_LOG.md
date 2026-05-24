@@ -23,6 +23,7 @@ Use it to track completed blocks, known debt, active risks, and the next executi
 - BLOCO I — Mercado Livre adapter e OpenGraph Catalog Fallback ✅
   - I1: Correção de canonical URL de produtos ML para evitar 404 e viabilizar scraper fallback ✅
   - I2: Enriquecimento de metadados ML usando URL original rica + scrapers reordenados com timeout curto ✅
+  - I3: Correção do blocker de multiusuário: fallback de conexão robusto (effectiveConnection) com userId autêntico do Supabase, aplicado exclusivamente para o Mercado Livre, possibilitando a geração de meli.la para usuários que possuem apenas a extensão pareada (sem registro explícito em user_marketplaces). ✅
 
 ---
 
