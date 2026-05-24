@@ -24,6 +24,7 @@ Use it to track completed blocks, known debt, active risks, and the next executi
   - I1: Correção de canonical URL de produtos ML para evitar 404 e viabilizar scraper fallback ✅
   - I2: Enriquecimento de metadados ML usando URL original rica + scrapers reordenados com timeout curto ✅
   - I3: Correção do blocker de multiusuário: fallback de conexão robusto (effectiveConnection) com userId autêntico do Supabase, aplicado exclusivamente para o Mercado Livre, possibilitando a geração de meli.la para usuários que possuem apenas a extensão pareada (sem registro explícito em user_marketplaces). ✅
+  - I4: Resolução de inconsistência de status no painel multiusuário (hierarquia na rota status/route.ts) priorizando extensionToken ativo sobre sessões anteriores revogadas, prevenindo travamento em session_revoked e adicionando logs diagnósticos seguros. ✅
 
 ---
 
