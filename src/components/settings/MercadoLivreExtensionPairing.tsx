@@ -195,16 +195,16 @@ export function MercadoLivreExtensionPairing({
               Como instalar a extensão Mercado Livre
             </h4>
             <div className="space-y-1">
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">1. Clique em "Baixar extensão Chrome".</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">1. Clique em &quot;Baixar extensão Chrome&quot;.</p>
               <p className="text-[9px] text-white/60 tracking-tighter leading-tight">2. Extraia/descompacte o arquivo ZIP no seu computador.</p>
               <p className="text-[9px] text-white/60 tracking-tighter leading-tight">3. Abra o Google Chrome e acesse: <span className="font-mono text-kinetic-orange">chrome://extensions</span></p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">4. Ative o "Modo do desenvolvedor" no canto superior direito.</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">5. Clique em "Carregar sem compactação".</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">4. Ative o &quot;Modo do desenvolvedor&quot; no canto superior direito.</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">5. Clique em &quot;Carregar sem compactação&quot;.</p>
               <p className="text-[9px] text-white/60 tracking-tighter leading-tight">6. Selecione a pasta descompactada da extensão (não o arquivo ZIP).</p>
               <p className="text-[9px] text-white/60 tracking-tighter leading-tight">7. Fixe a extensão na barra do Chrome.</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">8. Volte aqui no painel e clique em "Gerar código de pareamento".</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">9. Abra a extensão, cole o código, marque a autorização e clique em "Conectar".</p>
-              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">10. Entre no Mercado Livre no Chrome e clique em "Sincronizar agora" na extensão.</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">8. Volte aqui no painel e clique em &quot;Gerar código de pareamento&quot;.</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">9. Abra a extensão, cole o código, marque a autorização e clique em &quot;Conectar&quot;.</p>
+              <p className="text-[9px] text-white/60 tracking-tighter leading-tight">10. Entre no Mercado Livre no Chrome e clique em &quot;Sincronizar agora&quot; na extensão.</p>
             </div>
             
             <div className="pt-2 mt-2 border-t border-white/5 space-y-1">
@@ -212,7 +212,7 @@ export function MercadoLivreExtensionPairing({
               <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- O usuário precisa estar logado no Mercado Livre no mesmo Chrome.</p>
               <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- O usuário deve selecionar a pasta descompactada, não o ZIP.</p>
               <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- Se trocar de conta Mercado Livre, deve desconectar e parear novamente.</p>
-              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- Se a sessão expirar, basta abrir a extensão e clicar em "Sincronizar agora".</p>
+              <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- Se a sessão expirar, basta abrir a extensão e clicar em &quot;Sincronizar agora&quot;.</p>
               <p className="text-[8px] text-white/40 tracking-tighter leading-tight">- A extensão não envia senha do Mercado Livre para o Synco.</p>
             </div>
           </div>
