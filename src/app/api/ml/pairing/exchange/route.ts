@@ -60,11 +60,42 @@ export async function POST(request: Request) {
       });
 
     const userIdPrefix = codeRow.user_id.substring(0, 8);
-    const accountLabel = `Conta Synco •••${codeRow.user_id.substring(codeRow.user_id.length - 2)}`;
+
+    // Resolver nome de exibição: profiles.username > auth full_name > email prefix
+    let displayName: string | null = null;
+    try {
+      const { data: profile } = await adminClient
+        .from('profiles')
+        .select('username, full_name')
+        .eq('id', codeRow.user_id)
+        .maybeSingle();
+
+      if (profile?.username) {
+        displayName = profile.username;
+      } else if (profile?.full_name) {
+        displayName = profile.full_name;
+      } else {
+        const { data: authUser } = await adminClient.auth.admin.getUserById(codeRow.user_id);
+        const meta = authUser?.user?.user_metadata;
+        if (meta?.full_name) {
+          displayName = meta.full_name;
+        } else if (authUser?.user?.email) {
+          displayName = authUser.user.email.split('@')[0];
+        }
+      }
+    } catch {
+      // Não bloquear o pareamento por falha na busca do nome
+    }
+
+    const idSuffix = `•••${codeRow.user_id.substring(codeRow.user_id.length - 2)}`;
+    const accountLabel = displayName
+      ? `${displayName} ${idSuffix}`
+      : `Conta Synco ${idSuffix}`;
 
     console.log('[ML-EXT-PAIRING-DIAG]', {
       userIdPrefix,
       hasToken: true,
+      hasDisplayName: Boolean(displayName),
     });
 
     return NextResponse.json({
