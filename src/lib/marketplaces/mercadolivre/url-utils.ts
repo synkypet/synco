@@ -8,25 +8,103 @@ export function canHandleUrl(url: string): boolean {
          lowerUrl.includes('mercadol.in');
 }
 
-export function extractItemId(url: string): { id: string, type: 'catalog' | 'item' } | null {
-  // Padrão 1: /p/ ou /up/ seguido por ML...
-  const matchP = url.match(/\/(p|up)\/((?:MLB|MLA|MLU|MLC|MLM|MLBU)\d+)/i);
-  if (matchP) return { id: matchP[2].toUpperCase(), type: 'catalog' };
+export interface MLItemIdData {
+  id: string;
+  type: 'catalog' | 'item';
+  catalogProductId?: string;
+  offerItemId?: string;
+  urlKind: 'catalog' | 'item' | 'catalog_with_offer';
+}
 
-  // Padrão 2: /MLB-123456789-slug ou /MLB123456789
-  const matchMLB = url.match(/(MLB|MLA|MLU|MLC|MLM|MLBU)-?(\d+)/i);
-  if (matchMLB) return { id: `${matchMLB[1].toUpperCase()}${matchMLB[2]}`, type: 'item' };
-
-  // Padrão 3: itemId na querystring
+export function extractItemId(url: string): MLItemIdData | null {
   try {
-    const parsed = new URL(url);
-    const itemParam = parsed.searchParams.get('itemId') || parsed.searchParams.get('item_id');
-    if (itemParam && (itemParam.toUpperCase().startsWith('MLB') || itemParam.toUpperCase().startsWith('MLBU') || itemParam.toUpperCase().startsWith('MLU'))) {
-      const type = parsed.pathname.includes('/p/') || parsed.pathname.includes('/up/') ? 'catalog' : 'item';
-      return { id: itemParam.toUpperCase(), type };
+    const decodedUrl = decodeURIComponent(url);
+
+    // 1. Extrair offerItemId de pdp_filters ou query string
+    let offerItemId: string | undefined = undefined;
+    const pdpFilterMatch = decodedUrl.match(/pdp_filters=item_id:((?:MLB|MLA|MLU|MLC|MLM|MLBU)\d+)/i) ||
+                           decodedUrl.match(/pdp_filters=item_id%3D((?:MLB|MLA|MLU|MLC|MLM|MLBU)\d+)/i);
+    
+    if (pdpFilterMatch) {
+      offerItemId = pdpFilterMatch[1].toUpperCase();
+    } else {
+      const parsed = new URL(url);
+      const wid = parsed.searchParams.get('wid') || parsed.searchParams.get('itemId') || parsed.searchParams.get('item_id');
+      if (wid && /^(?:MLB|MLA|MLU|MLC|MLM|MLBU)\d+$/i.test(wid)) {
+        offerItemId = wid.toUpperCase();
+      }
+    }
+
+    // 2. Extrair catalogProductId de /p/ ou /up/
+    let catalogProductId: string | undefined = undefined;
+    const matchP = decodedUrl.match(/\/(p|up)\/((?:MLB|MLA|MLU|MLC|MLM|MLBU)\d+)/i);
+    if (matchP) {
+      catalogProductId = matchP[2].toUpperCase();
+    }
+
+    // 3. Extrair item ID tradicional (/MLB-123456... ou /MLB123456)
+    let basicItemId: string | undefined = undefined;
+    const matchMLB = decodedUrl.match(/(MLB|MLA|MLU|MLC|MLM|MLBU)-?(\d+)/i);
+    if (matchMLB) {
+      basicItemId = `${matchMLB[1].toUpperCase()}${matchMLB[2]}`;
+    }
+
+    // Determinar o kind e o ID de metadados prioritário
+    if (catalogProductId && offerItemId) {
+      return {
+        id: offerItemId, // Priorizar a oferta/item real para metadados!
+        type: 'item',
+        catalogProductId,
+        offerItemId,
+        urlKind: 'catalog_with_offer'
+      };
+    }
+
+    if (catalogProductId) {
+      return {
+        id: catalogProductId,
+        type: 'catalog',
+        catalogProductId,
+        urlKind: 'catalog'
+      };
+    }
+
+    if (offerItemId) {
+      return {
+        id: offerItemId,
+        type: 'item',
+        offerItemId,
+        urlKind: 'item'
+      };
+    }
+
+    if (basicItemId) {
+      return {
+        id: basicItemId,
+        type: 'item',
+        urlKind: 'item'
+      };
     }
   } catch (e) {
-    // Ignore invalid url
+    // Fallback para regex simples se falhar na URL
+    const matchP = url.match(/\/(p|up)\/((?:MLB|MLA|MLU|MLC|MLM|MLBU)\d+)/i);
+    if (matchP) {
+      return {
+        id: matchP[2].toUpperCase(),
+        type: 'catalog',
+        catalogProductId: matchP[2].toUpperCase(),
+        urlKind: 'catalog'
+      };
+    }
+    const matchMLB = url.match(/(MLB|MLA|MLU|MLC|MLM|MLBU)-?(\d+)/i);
+    if (matchMLB) {
+      const basicId = `${matchMLB[1].toUpperCase()}${matchMLB[2]}`;
+      return {
+        id: basicId,
+        type: 'item',
+        urlKind: 'item'
+      };
+    }
   }
 
   return null;

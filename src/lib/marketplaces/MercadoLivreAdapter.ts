@@ -184,6 +184,13 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
       return this.createFallback(fallbackTitle, 'item_id_not_found');
     }
 
+    console.log('[ML-EXTRACTED-IDS-DIAG]', {
+      catalogProductId: itemData.catalogProductId || null,
+      offerItemId: itemData.offerItemId || null,
+      metadataItemId: itemData.id,
+      urlKind: itemData.urlKind
+    });
+
     const canonicalUrl = buildCanonicalUrl(itemData);
     const client = new MLClient();
     const metadata = await client.fetchItemMetadata(itemData, url);
