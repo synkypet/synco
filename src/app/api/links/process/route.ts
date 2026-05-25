@@ -5,6 +5,8 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { decrypt, EncryptedData } from '@/lib/encryption';
 import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     // Auth and Access Gate
