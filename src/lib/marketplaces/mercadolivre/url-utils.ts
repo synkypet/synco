@@ -110,6 +110,113 @@ export function extractItemId(url: string): MLItemIdData | null {
   return null;
 }
 
+// ─── Metadata candidates ──────────────────────────────────────────────────────
+
+export type MLMetadataCandidateKind =
+  | 'direct_offer'
+  | 'direct_item'
+  | 'original_rich_clean'
+  | 'catalog_clean';
+
+export interface MLMetadataCandidate {
+  kind: MLMetadataCandidateKind;
+  url: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+const TRACKING_PARAMS = new Set([
+  'matt_tool', 'matt_word', 'matt_source', 'matt_campaign', 'matt_medium',
+  'matt_content', 'matt_term', 'matt_event_ts', 'matt_d2id', 'matt_tracing_id',
+  'tracking_id', 'ad_click_id', 'ad_domain', 'ad_position', 'ad_id',
+  'forceInApp', 'ref', 'backend_model', 'be_origin', 'position',
+  'search_layout', 'type', 'sid', 'c_id', 'c_uid',
+  'reco_backend', 'reco_client', 'reco_item_pos', 'source',
+  'reco_backend_type', 'reco_id', 'wid',
+]);
+
+function buildDirectOfferUrl(offerItemId: string): string {
+  const numeric = offerItemId.replace(/^MLB/i, '');
+  return `https://produto.mercadolivre.com.br/MLB-${numeric}`;
+}
+
+function buildOriginalRichClean(inputUrl: string): string | null {
+  try {
+    const parsed = new URL(inputUrl);
+    // Remover apenas rastreios; preservar pdp_filters, path e demais params contextuais
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (TRACKING_PARAMS.has(key) || key.startsWith('matt_')) {
+        parsed.searchParams.delete(key);
+      }
+    }
+    // Remover fragment (hash) — contém rastreios como #is_advertising=true
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function buildMercadoLivreMetadataCandidates(
+  inputUrl: string,
+  idData: MLItemIdData
+): MLMetadataCandidate[] {
+  const candidates: MLMetadataCandidate[] = [];
+
+  if (idData.urlKind === 'catalog_with_offer' && idData.offerItemId) {
+    // 1. URL direta da oferta — página de produto individual, renderizável via SSR
+    candidates.push({
+      kind: 'direct_offer',
+      url: buildDirectOfferUrl(idData.offerItemId),
+      confidence: 'high',
+    });
+
+    // 2. URL original com pdp_filters preservado, rastreios removidos
+    const richClean = buildOriginalRichClean(inputUrl);
+    if (richClean) {
+      candidates.push({
+        kind: 'original_rich_clean',
+        url: richClean,
+        confidence: 'medium',
+      });
+    }
+
+    // 3. Catálogo limpo — último recurso
+    candidates.push({
+      kind: 'catalog_clean',
+      url: `https://www.mercadolivre.com.br/p/${idData.catalogProductId}`,
+      confidence: 'low',
+    });
+
+    return candidates;
+  }
+
+  if (idData.urlKind === 'item' || (idData.urlKind === 'catalog_with_offer' && !idData.offerItemId)) {
+    candidates.push({
+      kind: 'direct_item',
+      url: buildDirectOfferUrl(idData.id),
+      confidence: 'high',
+    });
+    return candidates;
+  }
+
+  // urlKind === 'catalog' sem offerItemId
+  const richClean = buildOriginalRichClean(inputUrl);
+  if (richClean) {
+    candidates.push({
+      kind: 'original_rich_clean',
+      url: richClean,
+      confidence: 'medium',
+    });
+  }
+  candidates.push({
+    kind: 'catalog_clean',
+    url: `https://www.mercadolivre.com.br/p/${idData.id}`,
+    confidence: 'low',
+  });
+
+  return candidates;
+}
+
 export function buildCanonicalUrl(itemData: { id: string, type: 'catalog' | 'item' }): string {
   if (itemData.type === 'catalog') {
     return `https://www.mercadolivre.com.br/p/${itemData.id}`;

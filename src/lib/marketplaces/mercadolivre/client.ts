@@ -1,273 +1,359 @@
 import { ProductMetadata } from '../BaseAdapter';
 import { extractMLStaticMetadata } from './html-metadata-extractor';
+import {
+  MLItemIdData,
+  MLMetadataCandidate,
+  buildMercadoLivreMetadataCandidates,
+} from './url-utils';
+
+// ─── Internal types ───────────────────────────────────────────────────────────
+
+interface PartialResult {
+  name: string;
+  currentPrice: number;
+  originalPrice: number;
+  imageUrl: string;
+  priceSource: string;
+  titleSource: string;
+  imageSource: string;
+  price_unavailable: boolean;
+  pipelineSource: string;
+}
+
+function emptyPartial(): PartialResult {
+  return {
+    name: 'Produto Mercado Livre',
+    currentPrice: 0,
+    originalPrice: 0,
+    imageUrl: '',
+    priceSource: 'fallback',
+    titleSource: 'fallback',
+    imageSource: 'fallback',
+    price_unavailable: true,
+    pipelineSource: 'none',
+  };
+}
+
+function isComplete(r: PartialResult): boolean {
+  return (
+    !!r.name &&
+    r.name !== 'Produto Mercado Livre' &&
+    !!r.imageUrl &&
+    !r.price_unavailable
+  );
+}
+
+function hasTitle(r: PartialResult): boolean {
+  return !!r.name && r.name !== 'Produto Mercado Livre';
+}
+
+// ─── MLClient ────────────────────────────────────────────────────────────────
 
 export class MLClient {
   /**
-   * Busca metadados do Mercado Livre de forma inteligente e performática.
-   * Ordem do pipeline:
-   * 1. Extrator estático ultra-rápido (HTML + JSON-LD + OG) -> early stop se pegar preço
-   * 2. Render scraper (Playwright) com timeout curto e controlado (6s) como fallback
-   * 3. API pública como salvaguarda rápida (3s)
-   * 4. Fallback parcial por URL slug e imagem padrão se nada mais funcionar
+   * Busca metadados do Mercado Livre usando múltiplos candidatos de URL.
+   *
+   * Para links do tipo catalog_with_offer (ex: /p/MLB67376199?pdp_filters=item_id:MLB6737772730)
+   * o pipeline tenta primeiro a URL direta da oferta (produto.mercadolivre.com.br/MLB-xxx),
+   * que é renderizável via SSR e contém preço/imagem reais da variação específica.
+   *
+   * Ordem geral:
+   *   1. static_html por candidato (early stop se completo)
+   *   2. Render scraper no melhor candidato ainda não completo
+   *   3. API pública (itemData.id) se ainda faltar título ou imagem
+   *   4. Slug fallback para título
    */
   async fetchItemMetadata(
-    itemData: { id: string, type: 'catalog' | 'item' },
+    itemData: MLItemIdData,
     richUrl?: string
   ): Promise<Partial<ProductMetadata> | null> {
-    const startTime = performance.now();
-    
-    let targetUrl = richUrl;
-    if (!targetUrl) {
-      if (itemData.type === 'catalog') {
-        targetUrl = `https://www.mercadolivre.com.br/p/${itemData.id}`;
-      } else {
-        targetUrl = `https://produto.mercadolivre.com.br/MLB-${itemData.id.replace(/^MLB/i, '')}`;
+    const candidates = buildMercadoLivreMetadataCandidates(richUrl || '', itemData);
+
+    console.info('[ML-METADATA-CANDIDATES]', {
+      count: candidates.length,
+      urlKind: itemData.urlKind,
+      hasOfferItem: Boolean(itemData.offerItemId),
+      offerItemId: itemData.offerItemId || null,
+      catalogProductId: itemData.catalogProductId || null,
+    });
+
+    // ─── FASE 1: static_html por candidato ───────────────────────────────────
+    let best = emptyPartial();
+    let bestCandidateKind: string = 'none';
+    let bestCandidateIndex = -1;
+
+    const staticTimeoutMs = 4000;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      const partial = await this.tryStaticHtml(candidate, i + 1, staticTimeoutMs);
+
+      // Merge: preencher campos que best ainda não tem
+      this.mergeBetter(best, partial);
+
+      const complete = isComplete(best);
+
+      console.info('[ML-METADATA-CANDIDATE]', {
+        index: i + 1,
+        kind: candidate.kind,
+        source: 'static_html',
+        hasTitle: hasTitle(partial),
+        hasImage: Boolean(partial.imageUrl),
+        hasPrice: !partial.price_unavailable,
+        complete,
+      });
+
+      if (complete) {
+        bestCandidateKind = candidate.kind;
+        bestCandidateIndex = i;
+        console.info('[ML-METADATA-FINAL]', {
+          quality: 'complete',
+          titleSource: best.titleSource,
+          imageSource: best.imageSource,
+          priceSource: best.priceSource,
+          candidateKind: bestCandidateKind,
+        });
+        return this.buildResult(best, itemData);
+      }
+
+      // Manter rastreio do melhor candidato estático até agora
+      if (bestCandidateIndex === -1 || hasTitle(partial)) {
+        bestCandidateKind = candidate.kind;
+        bestCandidateIndex = i;
       }
     }
 
-    let metadata: any = null;
-    const maxAttempts = 2;
+    // ─── FASE 2: Render scraper — tenta candidatos por prioridade ────────────
+    const scraperUrl = process.env.SCRAPER_SERVICE_URL;
+    if (scraperUrl) {
+      // Tentar Render nos candidatos em ordem, parando no primeiro completo
+      for (let i = 0; i < candidates.length; i++) {
+        const candidate = candidates[i];
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      metadata = await this.executeExtractionPipeline(itemData, targetUrl, attempt);
+        console.info('[ML-METADATA-RENDER-TARGET]', {
+          candidateKind: candidate.kind,
+          candidateIndex: i + 1,
+        });
 
-      const hasTitle = metadata.name && metadata.name !== 'Produto Mercado Livre';
-      const hasImage = Boolean(metadata.imageUrl);
-      const hasPrice = !metadata.price_unavailable && metadata.currentPrice > 0;
+        const renderPartial = await this.tryRender(candidate, i + 1, scraperUrl, 6000);
+        this.mergeBetter(best, renderPartial);
 
-      console.log(`[ML-METADATA-QUALITY-GATE] attempt=${attempt} hasTitle=${hasTitle} hasImage=${hasImage} hasPrice=${hasPrice}`);
+        console.info('[ML-METADATA-CANDIDATE]', {
+          index: i + 1,
+          kind: candidate.kind,
+          source: 'render',
+          hasTitle: hasTitle(renderPartial),
+          hasImage: Boolean(renderPartial.imageUrl),
+          hasPrice: !renderPartial.price_unavailable,
+          complete: isComplete(best),
+        });
 
-      if (hasTitle && hasImage && hasPrice) {
-        console.log(`[ML-METADATA-QUALITY-GATE] Metadata passes Quality Gate on attempt ${attempt}!`);
-        break; // EARLY EXIT: passes the quality gate!
-      }
-
-      if (attempt < maxAttempts) {
-        console.warn(`[ML-METADATA-QUALITY-GATE] Quality Gate failed on attempt ${attempt}. Retrying in 500ms...`);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        if (isComplete(best)) {
+          bestCandidateKind = candidate.kind;
+          console.info('[ML-METADATA-FINAL]', {
+            quality: 'complete',
+            titleSource: best.titleSource,
+            imageSource: best.imageSource,
+            priceSource: best.priceSource,
+            candidateKind: bestCandidateKind,
+          });
+          return this.buildResult(best, itemData);
+        }
       }
     }
 
-    return metadata;
+    // ─── FASE 3: API pública — fallback para título e imagem ─────────────────
+    if (!hasTitle(best) || !best.imageUrl) {
+      await this.tryPublicApi(best, itemData);
+    }
+
+    // ─── FASE 4: Slug fallback para título ───────────────────────────────────
+    if (!hasTitle(best) && candidates.length > 0) {
+      this.applySlugFallback(best, candidates[0].url);
+    }
+
+    const quality = isComplete(best) ? 'complete' : (hasTitle(best) ? 'partial' : 'minimal');
+    console.info('[ML-METADATA-FINAL]', {
+      quality,
+      titleSource: best.titleSource,
+      imageSource: best.imageSource,
+      priceSource: best.priceSource,
+      candidateKind: bestCandidateKind || 'none',
+    });
+
+    return this.buildResult(best, itemData);
   }
 
-  /**
-   * Executa a extração em pipeline com controle dinâmico de timeouts.
-   */
-  private async executeExtractionPipeline(
-    itemData: { id: string, type: 'catalog' | 'item' },
-    targetUrl: string,
-    attempt: number
-  ): Promise<Partial<ProductMetadata>> {
-    const startTime = performance.now();
-    let staticMs = 0;
-    let renderMs = 0;
-    let totalMs = 0;
+  // ─── Helpers privados ─────────────────────────────────────────────────────
 
-    let name = 'Produto Mercado Livre';
-    let currentPrice = 0;
-    let originalPrice = 0;
-    let discountPercent = 0;
-    let imageUrl = '';
-    let priceSource = 'fallback';
-    let titleSource = 'fallback';
-    let imageSource = 'fallback';
-    let price_unavailable = true;
-    let pipelineSource = 'none';
-
-    // Timeouts escalados por tentativa para evitar estouro de gateway
-    const staticTimeoutMs = attempt === 1 ? 4000 : 2500;
-    const renderTimeoutMs = attempt === 1 ? 6000 : 4000;
-
-    // ─── PASSO 1: EXTRATOR ESTÁTICO RÁPIDO (OG / JSON-LD / HTML REGEX) ───
-    const staticStart = performance.now();
-    let staticResult = null;
+  private async tryStaticHtml(
+    candidate: MLMetadataCandidate,
+    index: number,
+    timeoutMs: number
+  ): Promise<PartialResult> {
+    const r = emptyPartial();
     try {
-      staticResult = await extractMLStaticMetadata(targetUrl, staticTimeoutMs);
-      staticMs = Math.round(performance.now() - staticStart);
-
+      const staticResult = await extractMLStaticMetadata(candidate.url, timeoutMs);
       if (staticResult) {
         if (staticResult.title) {
-          name = staticResult.title;
-          titleSource = staticResult.titleSource || 'static_html';
+          r.name = staticResult.title;
+          r.titleSource = staticResult.titleSource || 'static_html';
         }
         if (staticResult.imageUrl) {
-          imageUrl = staticResult.imageUrl;
-          imageSource = staticResult.imageSource || 'static_html';
+          r.imageUrl = staticResult.imageUrl;
+          r.imageSource = staticResult.imageSource || 'static_html';
         }
         if (staticResult.price && staticResult.price > 0) {
-          currentPrice = staticResult.price;
-          originalPrice = staticResult.originalPrice || staticResult.price;
-          priceSource = staticResult.priceSource || 'static_html';
-          price_unavailable = false;
-          pipelineSource = 'static_html';
+          r.currentPrice = staticResult.price;
+          r.originalPrice = staticResult.originalPrice || staticResult.price;
+          r.priceSource = staticResult.priceSource || 'static_html';
+          r.price_unavailable = false;
+          r.pipelineSource = 'static_html';
         }
       }
     } catch (err: any) {
-      staticMs = Math.round(performance.now() - staticStart);
-      console.warn(`[ML-METADATA-PIPELINE] Static extraction threw error on attempt ${attempt}:`, err.message);
+      console.warn(`[ML-METADATA-PIPELINE] static_html error on candidate ${index}:`, err.message);
     }
+    return r;
+  }
 
-    console.log(`[ML-METADATA-PIPELINE] attempt=${attempt} source=static_html success=` + Boolean(staticResult?.title || staticResult?.imageUrl));
+  private async tryRender(
+    candidate: MLMetadataCandidate,
+    index: number,
+    scraperUrl: string,
+    timeoutMs: number
+  ): Promise<PartialResult> {
+    const r = emptyPartial();
+    try {
+      const res = await fetch(`${scraperUrl}/scrape`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.SCRAPER_API_KEY || '',
+        },
+        body: JSON.stringify({ url: candidate.url }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
 
-    // ─── CRITÉRIO DE EARLY STOP ───
-    // Se conseguimos título rico, imagem E preço via extrator estático rápido, paramos imediatamente!
-    const gotAllStatic = name && name !== 'Produto Mercado Livre' && imageUrl && !price_unavailable;
-    
-    if (gotAllStatic) {
-      totalMs = Math.round(performance.now() - startTime);
-      
-      console.log(`[ML-METADATA-QUALITY] attempt=${attempt} hasTitle=true hasImage=true hasPrice=true priceSource=${priceSource}`);
-      console.log(`[ML-METADATA-PERF] attempt=${attempt} static_ms=${staticMs} render_ms=0 total_ms=${totalMs}`);
-
-      if (originalPrice > currentPrice && originalPrice > 0) {
-        discountPercent = Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
-      }
-
-      return {
-        name,
-        currentPrice,
-        originalPrice,
-        discountPercent,
-        imageUrl,
-        marketplace: 'Mercado Livre',
-        currentPriceFactual: currentPrice,
-        currentPriceSource: 'scraper',
-        commissionValueFactual: 0,
-        commissionSource: 'fallback',
-        itemId: itemData.id,
-        price_unavailable: false,
-        fetchedAt: new Date().toISOString()
-      } as any;
-    }
-
-    // ─── PASSO 2: RENDER SCRAPER (PLAYWRIGHT) ───
-    const scraperUrl = process.env.SCRAPER_SERVICE_URL;
-    let renderSuccess = false;
-    let renderTimeout = false;
-
-    if (scraperUrl) {
-      const renderStart = performance.now();
-      
-      try {
-        console.log(`[ML-METADATA-PIPELINE] attempt=${attempt} Trying Render scraper as fallback...`);
-        const res = await fetch(`${scraperUrl}/scrape`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.SCRAPER_API_KEY || ''
-          },
-          body: JSON.stringify({ url: targetUrl }),
-          signal: AbortSignal.timeout(renderTimeoutMs)
-        });
-
-        renderMs = Math.round(performance.now() - renderStart);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) {
-            renderSuccess = true;
-            pipelineSource = 'render';
-
-            if (data.title) {
-              name = data.title;
-              titleSource = 'render';
-            }
-            if (data.image) {
-              imageUrl = data.image;
-              imageSource = 'render';
-            }
-            if (data.price && data.price > 0) {
-              currentPrice = data.price;
-              originalPrice = data.originalPrice || data.price;
-              priceSource = 'render';
-              price_unavailable = false;
-            }
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          r.pipelineSource = 'render';
+          if (data.title) { r.name = data.title; r.titleSource = 'render'; }
+          if (data.image) { r.imageUrl = data.image; r.imageSource = 'render'; }
+          if (data.price && data.price > 0) {
+            r.currentPrice = data.price;
+            r.originalPrice = data.originalPrice || data.price;
+            r.priceSource = 'render';
+            r.price_unavailable = false;
           }
         }
-      } catch (err: any) {
-        renderMs = Math.round(performance.now() - renderStart);
-        if (err.name === 'TimeoutError' || err.message?.includes('timeout') || err.name === 'AbortError') {
-          renderTimeout = true;
-        } else {
-          console.warn(`[ML-METADATA-PIPELINE] attempt=${attempt} Render scraper threw error:`, err.message);
-        }
+      }
+    } catch (err: any) {
+      const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError' || err.message?.includes('timeout');
+      if (!isTimeout) {
+        console.warn(`[ML-METADATA-PIPELINE] render error on candidate ${index}:`, err.message);
       }
     }
+    return r;
+  }
 
-    console.log(`[ML-METADATA-PIPELINE] attempt=${attempt} source=render success=${renderSuccess} timeout=${renderTimeout}`);
-
-    // ─── PASSO 3: API PÚBLICA (ÚLTIMO RECURSO SE AINDA FALTAR TUDO) ───
-    const needsPublicApi = (!name || name === 'Produto Mercado Livre' || !imageUrl) && !renderSuccess;
-    if (needsPublicApi) {
-      const apiUrl = `https://api.mercadolibre.com/items/${itemData.id}`;
-      try {
-        const response = await fetch(apiUrl, { signal: AbortSignal.timeout(3000) });
-        if (response.ok) {
-          const data = await response.json();
-          
-          if (data.title && (!name || name === 'Produto Mercado Livre')) {
-            name = data.title;
-            titleSource = 'public_api';
-          }
-          if (data.pictures && data.pictures.length > 0 && !imageUrl) {
-            imageUrl = data.pictures[0].secure_url || data.pictures[0].url;
-            imageSource = 'public_api';
-          }
-          if (data.price && data.price > 0 && price_unavailable) {
-            currentPrice = data.price;
-            originalPrice = data.original_price || currentPrice;
-            priceSource = 'public_api';
-            price_unavailable = false;
-            pipelineSource = 'public_api';
-          }
+  private async tryPublicApi(best: PartialResult, itemData: MLItemIdData): Promise<void> {
+    const apiUrl = `https://api.mercadolibre.com/items/${itemData.id}`;
+    try {
+      const response = await fetch(apiUrl, { signal: AbortSignal.timeout(3000) });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.title && !hasTitle(best)) {
+          best.name = data.title;
+          best.titleSource = 'public_api';
         }
-      } catch (err: any) {
-        console.warn(`[ML-METADATA-PIPELINE] attempt=${attempt} Public API fallback failed:`, err.message);
-      }
-    }
-
-    // ─── PASSO 4: FALLBACK POR SLUG SE TÍTULO AINDA FOR GENÉRICO ───
-    if (!name || name === 'Produto Mercado Livre') {
-      try {
-        const parsed = new URL(targetUrl);
-        const pathParts = parsed.pathname.split('/');
-        const textPart = pathParts.find(part => part.length > 5 && !part.startsWith('MLB') && !part.startsWith('pdp_filters') && part !== 'p' && part !== 'up');
-        if (textPart) {
-          name = textPart
-            .split('-')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-          titleSource = 'url_slug_fallback';
+        if (data.pictures?.length > 0 && !best.imageUrl) {
+          best.imageUrl = data.pictures[0].secure_url || data.pictures[0].url;
+          best.imageSource = 'public_api';
         }
-      } catch {
-        // Ignorar falhas no parsing de URL
+        if (data.price && data.price > 0 && best.price_unavailable) {
+          best.currentPrice = data.price;
+          best.originalPrice = data.original_price || data.price;
+          best.priceSource = 'public_api';
+          best.price_unavailable = false;
+          best.pipelineSource = 'public_api';
+        }
       }
+    } catch (err: any) {
+      console.warn('[ML-METADATA-PIPELINE] Public API fallback failed:', err.message);
     }
+  }
 
-    totalMs = Math.round(performance.now() - startTime);
+  private applySlugFallback(best: PartialResult, url: string): void {
+    try {
+      const parsed = new URL(url);
+      const pathParts = parsed.pathname.split('/');
+      const textPart = pathParts.find(
+        part =>
+          part.length > 5 &&
+          !/^(MLB|MLA|MLU|MLC|MLM|MLBU)/i.test(part) &&
+          part !== 'p' &&
+          part !== 'up'
+      );
+      if (textPart) {
+        best.name = textPart
+          .split('-')
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+        best.titleSource = 'url_slug_fallback';
+      }
+    } catch {
+      // Ignorar falhas no parsing
+    }
+  }
 
-    console.log(`[ML-METADATA-QUALITY] attempt=${attempt} hasTitle=` + Boolean(name && name !== 'Produto Mercado Livre') + ' hasImage=' + Boolean(imageUrl) + ' hasPrice=' + !price_unavailable + ' priceSource=' + priceSource);
-    console.log(`[ML-METADATA-PERF] attempt=${attempt} static_ms=${staticMs} render_ms=${renderMs} total_ms=${totalMs}`);
+  // Preenche best com campos de partial somente quando best ainda não os tem
+  private mergeBetter(best: PartialResult, partial: PartialResult): void {
+    if (!hasTitle(best) && hasTitle(partial)) {
+      best.name = partial.name;
+      best.titleSource = partial.titleSource;
+    }
+    if (!best.imageUrl && partial.imageUrl) {
+      best.imageUrl = partial.imageUrl;
+      best.imageSource = partial.imageSource;
+    }
+    if (best.price_unavailable && !partial.price_unavailable) {
+      best.currentPrice = partial.currentPrice;
+      best.originalPrice = partial.originalPrice;
+      best.priceSource = partial.priceSource;
+      best.price_unavailable = false;
+      best.pipelineSource = partial.pipelineSource;
+    }
+  }
 
-    if (originalPrice > currentPrice && originalPrice > 0) {
-      discountPercent = Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
+  private buildResult(
+    r: PartialResult,
+    itemData: MLItemIdData
+  ): Partial<ProductMetadata> {
+    let discountPercent = 0;
+    if (r.originalPrice > r.currentPrice && r.originalPrice > 0) {
+      discountPercent = Math.round(((r.originalPrice - r.currentPrice) / r.originalPrice) * 100);
     }
 
     return {
-      name,
-      currentPrice,
-      originalPrice,
+      name: r.name,
+      currentPrice: r.currentPrice,
+      originalPrice: r.originalPrice,
       discountPercent,
-      imageUrl,
+      imageUrl: r.imageUrl,
       marketplace: 'Mercado Livre',
-      currentPriceFactual: currentPrice,
-      currentPriceSource: price_unavailable ? 'fallback' : (priceSource === 'public_api' ? 'api.price' : 'scraper'),
+      currentPriceFactual: r.currentPrice,
+      currentPriceSource: r.price_unavailable
+        ? 'fallback'
+        : r.priceSource === 'public_api'
+          ? 'api.price'
+          : 'scraper',
       commissionValueFactual: 0,
       commissionSource: 'fallback',
       itemId: itemData.id,
-      price_unavailable,
-      fetchedAt: new Date().toISOString()
+      price_unavailable: r.price_unavailable,
+      fetchedAt: new Date().toISOString(),
     } as any;
   }
 }
