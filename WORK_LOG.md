@@ -26,6 +26,7 @@ Use it to track completed blocks, known debt, active risks, and the next executi
   - I3: Correção do blocker de multiusuário: fallback de conexão robusto (effectiveConnection) com userId autêntico do Supabase, aplicado exclusivamente para o Mercado Livre, possibilitando a geração de meli.la para usuários que possuem apenas a extensão pareada (sem registro explícito em user_marketplaces). ✅
   - I4: Resolução de inconsistência de status no painel multiusuário (hierarquia na rota status/route.ts) priorizando extensionToken ativo sobre sessões anteriores revogadas, prevenindo travamento em session_revoked e adicionando logs diagnósticos seguros. ✅
   - I5: Implementação de pipeline híbrido inteligente de metadados ML (html-metadata-extractor.ts) priorizando extração estática ultra-rápida (OG/JSON-LD/Hydration State) em menos de 1.5s, reduzindo a dependência do Playwright/Render scraper, reduzindo o timeout de render para 6s, preservando parâmetros de consulta e introduzindo métricas de auditoria (pipeline/perf/quality). ✅
+  - I6: Implementação do Metadata Quality Gate para Mercado Livre com tolerância a falhas e auto-retry (max 2 tentativas com timeouts escalados), forçando a validação integral de título real, imagem real e preço líquido antes de liberar o link final no Envio Rápido. ✅
 
 ---
 
