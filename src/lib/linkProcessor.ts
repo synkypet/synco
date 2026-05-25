@@ -1258,7 +1258,8 @@ export async function processLinks(
           generated_affiliate_url: preResult?.generated_affiliate_url,
           redirect_chain: preResult?.redirect_chain,
           reaffiliation_status: preResult?.reaffiliation_status || 'not_needed',
-          reaffiliation_error: preResult?.reaffiliation_error
+          reaffiliation_error: preResult?.reaffiliation_error,
+          shortGenerationStatus: preResult?.shortGenerationStatus
         }
       });
 

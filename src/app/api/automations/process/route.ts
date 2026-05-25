@@ -23,11 +23,14 @@ export async function POST(request: Request) {
     console.log(`[PROCESS-ROUTE] [${requestId}] Resultado do processamento:`, JSON.stringify(result, null, 2));
 
     // ─── Fast-Trigger: Disparar o worker imediatamente para reduzir a latência ──────
-    if (!result.skipped) {
-      // Utilizar o novo utilitário compartilhado que resolve a URL base por ambiente
-      await triggerWorker({ 
-        requestId 
+    // Só aciona se houve ao menos um item processado — evita trigger desnecessário
+    // quando todos os links ML foram bloqueados pelo quality gate.
+    if (!result.skipped && (result.processed ?? 0) > 0) {
+      await triggerWorker({
+        requestId
       });
+    } else if (!result.skipped) {
+      console.log(`[WORKER-TRIGGER] skipped reason=no_items_processed`);
     }
 
     return NextResponse.json(result);

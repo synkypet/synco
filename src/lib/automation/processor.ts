@@ -120,14 +120,66 @@ function normalizeShopeeUrl(url: string): string {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-function isCompleteAutomationOffer(snapshot: ProductSnapshot): boolean {
+function getMercadoLivreGateDiagnostics(snapshot: ProductSnapshot) {
   const factual = snapshot.factual;
-  const title = factual.title || "";
-  const image = factual.image || "";
-  const price = factual.currentPriceFactual ?? factual.price ?? 0;
-  
-  const metadataQuality = factual.quality;
+  const title = factual.title || '';
+  const image = factual.image || '';
+  const price = Number(factual.currentPriceFactual ?? factual.price ?? 0);
+  const finalLink = factual.finalLinkToSend || factual.affiliateLink || '';
+
+  const hasTitle = Boolean(
+    title &&
+    title.trim().length >= 4 &&
+    title !== 'Produto Mercado Livre' &&
+    !title.toLowerCase().includes('produto mercado livre')
+  );
+  const hasImage = Boolean(image && image.length > 5);
+  const hasPrice = price > 0;
   const priceUnavailable = factual.price_unavailable === true;
+  const qualityComplete = factual.quality === 'complete';
+  const hasFinalLink = Boolean(
+    finalLink &&
+    (finalLink.includes('meli.la') || finalLink.includes('mercadolivre.com.br') || finalLink.includes('mercadolivre.com'))
+  );
+  const hardIneligible =
+    factual.eligibility?.status === 'ineligible' ||
+    factual.shortGenerationStatus === 'no_session' ||
+    factual.shortGenerationStatus === 'fallback';
+
+  const failedChecks: string[] = [];
+  if (!hasTitle) failedChecks.push('missing_title');
+  if (!hasImage) failedChecks.push('missing_image');
+  if (!hasPrice) failedChecks.push('missing_price');
+  if (priceUnavailable) failedChecks.push('price_unavailable');
+  if (!qualityComplete) failedChecks.push('quality_not_complete');
+  if (factual.priceSource === 'fallback') failedChecks.push('price_source_fallback');
+  if (factual.imageSource === 'fallback') failedChecks.push('image_source_fallback');
+  if (factual.titleSource === 'url_slug_fallback') failedChecks.push('title_source_fallback');
+  if (!hasFinalLink) failedChecks.push('missing_final_link');
+  if (hardIneligible) failedChecks.push('hard_ineligible');
+
+  return {
+    hasTitle,
+    hasImage,
+    hasPrice,
+    quality: factual.quality || null,
+    titleSource: factual.titleSource || null,
+    imageSource: factual.imageSource || null,
+    priceSource: factual.priceSource || null,
+    priceUnavailable,
+    hasFinalLink,
+    shortGenerationStatus: factual.shortGenerationStatus || null,
+    eligibilityStatus: factual.eligibility?.status || null,
+    eligibilityIsEligible: factual.eligibility?.isEligible ?? null,
+    failedChecks,
+  };
+}
+
+function isCompleteMercadoLivreAutomationOffer(snapshot: ProductSnapshot): boolean {
+  const factual = snapshot.factual;
+  const title = factual.title || '';
+  const image = factual.image || '';
+  const price = Number(factual.currentPriceFactual ?? factual.price ?? 0);
 
   const titleIsFallback =
     !title ||
@@ -135,36 +187,29 @@ function isCompleteAutomationOffer(snapshot: ProductSnapshot): boolean {
     title === 'Produto Mercado Livre' ||
     title.toLowerCase().includes('produto mercado livre');
 
+  const finalLink = factual.finalLinkToSend || factual.affiliateLink || '';
+  const hasFinalLink = Boolean(
+    finalLink &&
+    (finalLink.includes('meli.la') || finalLink.includes('mercadolivre.com.br') || finalLink.includes('mercadolivre.com'))
+  );
+
+  // Hard ineligibility: rejeitar apenas erros reais — warning por comissão zero não bloqueia
+  const hardIneligible =
+    factual.eligibility?.status === 'ineligible' ||
+    factual.shortGenerationStatus === 'no_session' ||
+    factual.shortGenerationStatus === 'fallback';
+
   return Boolean(
     !titleIsFallback &&
-    image &&
-    price &&
-    Number(price) > 0 &&
-    priceUnavailable !== true &&
-    metadataQuality !== 'partial' &&
-    metadataQuality !== 'minimal' &&
-    metadataQuality !== 'fallback'
-  );
-}
-
-function isCompleteMercadoLivreAutomationOffer(snapshot: ProductSnapshot): boolean {
-  const factual = snapshot.factual;
-  const affiliateUrl = factual.finalLinkToSend || "";
-  const title = factual.title || "";
-  
-  const hasValidMeliLink = affiliateUrl.includes('meli.la') || affiliateUrl.includes('mercadolivre.com.br');
-  const price = factual.currentPriceFactual ?? factual.price ?? 0;
-  const isEligible = factual.eligibility?.isEligible && factual.eligibility?.status === 'eligible';
-  const hasImage = !!factual.image && factual.image.length > 5;
-
-  return Boolean(
-    isCompleteAutomationOffer(snapshot) &&
-    hasValidMeliLink &&
-    isEligible &&
-    hasImage &&
+    image && image.length > 5 &&
+    price > 0 &&
+    factual.price_unavailable !== true &&
+    factual.quality === 'complete' &&
     factual.priceSource !== 'fallback' &&
     factual.imageSource !== 'fallback' &&
-    factual.titleSource !== 'url_slug_fallback'
+    factual.titleSource !== 'url_slug_fallback' &&
+    hasFinalLink &&
+    !hardIneligible
   );
 }
 
@@ -195,14 +240,32 @@ function chooseBestAutomationSnapshot(previous: ProductSnapshot | null, next: Pr
       Number(nextFactual.originalPrice || 0) > 0
         ? nextFactual.originalPrice
         : prevFactual.originalPrice,
-    finalLinkToSend:
-      nextFactual.finalLinkToSend || prevFactual.finalLinkToSend,
-    affiliateLink:
-      nextFactual.affiliateLink || prevFactual.affiliateLink,
-    
+    // Preferir meli.la sobre link longo em qualquer tentativa
+    finalLinkToSend: (() => {
+      const next = nextFactual.finalLinkToSend || '';
+      const prev = prevFactual.finalLinkToSend || '';
+      if (next.includes('meli.la')) return next;
+      if (prev.includes('meli.la')) return prev;
+      return next || prev;
+    })(),
+    affiliateLink: (() => {
+      const next = nextFactual.affiliateLink || '';
+      const prev = prevFactual.affiliateLink || '';
+      if (next.includes('meli.la')) return next;
+      if (prev.includes('meli.la')) return prev;
+      return next || prev;
+    })(),
+    // Preservar o melhor shortGenerationStatus entre tentativas (success > skipped > fallback > no_session)
+    shortGenerationStatus: (() => {
+      const rank: Record<string, number> = { success: 0, skipped: 1, fallback: 2, no_session: 3 };
+      const prev = prevFactual.shortGenerationStatus || 'no_session';
+      const next = nextFactual.shortGenerationStatus || 'no_session';
+      return (rank[prev] ?? 3) <= (rank[next] ?? 3) ? prev : next;
+    })() as 'success' | 'fallback' | 'no_session' | 'skipped' | undefined,
+
     // Metadados extras
     quality:
-      nextFactual.quality && nextFactual.quality !== 'partial' && nextFactual.quality !== 'minimal'
+      nextFactual.quality && nextFactual.quality !== 'partial' && nextFactual.quality !== 'minimal' && nextFactual.quality !== 'fallback'
         ? nextFactual.quality
         : (prevFactual.quality || nextFactual.quality),
     priceSource:
@@ -416,10 +479,7 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
 
               console.warn('[AUTOMATION-QUALITY-GATE] incomplete_snapshot_retrying', {
                 attempt,
-                hasTitle: Boolean(bestSnapshot?.factual?.title && bestSnapshot?.factual?.title !== 'Produto Mercado Livre'),
-                hasImage: Boolean(bestSnapshot?.factual?.image),
-                hasPrice: Number(bestSnapshot?.factual?.currentPriceFactual || bestSnapshot?.factual?.price || 0) > 0,
-                quality: bestSnapshot?.factual?.quality || null
+                ...(bestSnapshot ? getMercadoLivreGateDiagnostics(bestSnapshot) : { failedChecks: ['no_snapshot'] }),
               });
 
             } catch (err: any) {
