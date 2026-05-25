@@ -916,11 +916,6 @@ export default function EnvioRapidoPage() {
                                   </Badge>
                                 )}
 
-                                {product.factual.eligibility.status === 'warning' && (
-                                  <Badge className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[9px] font-black uppercase tracking-widest font-headline italic">
-                                    ⚡ Atenção
-                                  </Badge>
-                                )}
 
                                   <Button
                                    variant="ghost"
@@ -950,9 +945,9 @@ export default function EnvioRapidoPage() {
                               </div>
 
                               {/* Motivos de Ineligibilidade/Aviso */}
-                              {product.factual.eligibility.reasons.length > 0 && (
+                              {product.factual.eligibility.reasons.filter(r => r.toLowerCase() !== 'comissão não detectada').length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-1">
-                                  {product.factual.eligibility.reasons.map((reason, idx) => (
+                                  {product.factual.eligibility.reasons.filter(r => r.toLowerCase() !== 'comissão não detectada').map((reason, idx) => (
                                     <span key={idx} className={cn(
                                       "text-[9px] font-bold uppercase tracking-tight px-2 py-0.5 rounded-md",
                                       product.factual.eligibility.status === 'ineligible' 
@@ -1020,21 +1015,14 @@ export default function EnvioRapidoPage() {
                                       </div>
                                     </PopoverContent>
                                   </Popover>
-                                ) : (
+                                ) : product.factual.eligibility.offer_type === 'product_offer' ? (
                                   <span className="text-[9px] font-bold text-red-500/60 uppercase tracking-widest bg-red-500/5 px-2 py-1 rounded-lg border border-red-500/10">
                                     Preço indisponível
                                   </span>
-                                )}
+                                ) : null}
 
 
-                                <Badge
-                                  variant="outline"
-                                  className="bg-kinetic-orange/10 text-kinetic-orange border border-kinetic-orange/20 px-2 h-5 text-[8px] font-black uppercase tracking-widest shadow-glow-orange/5"
-                                >
-                                  Link Seguro e Rastreado
-                                </Badge>
-
-                                {product.factual.commissionValueFactual && product.factual.commissionValueFactual > 0 && (
+                                {typeof product.factual.commissionValueFactual === 'number' && product.factual.commissionValueFactual > 0 && (
                                   <Badge
                                     variant="outline"
                                     className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 h-5 text-[8px] font-black uppercase tracking-widest"
@@ -1047,28 +1035,6 @@ export default function EnvioRapidoPage() {
                                   </Badge>
                                 )}
 
-                                {/* Status de Reafiliação de Cupom */}
-                                {product.factual.eligibility.offer_type === 'coupon_offer' && (
-                                  <div className="flex items-center gap-2">
-                                    <Badge
-                                      variant="outline"
-                                      className={cn(
-                                        "px-2 h-5 text-[8px] font-black uppercase tracking-widest",
-                                        product.factual.reaffiliation_status === 'reaffiliated'
-                                          ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/30"
-                                          : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                      )}
-                                    >
-                                      {product.factual.reaffiliation_status === 'reaffiliated' ? '🔗 Link Afiliado Gerado' : '⚠️ Link Original (Sem Afiliação)'}
-                                    </Badge>
-                                    
-                                    {product.factual.reaffiliation_status !== 'reaffiliated' && product.factual.cleanUrl && (
-                                      <span className="text-[8px] font-bold text-amber-500/60 uppercase">
-                                        Reafiliação indisponível para este destino
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
                               </div>
                             </div>
 

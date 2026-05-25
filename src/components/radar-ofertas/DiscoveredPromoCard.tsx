@@ -237,17 +237,15 @@ export const DiscoveredPromoCard: React.FC<DiscoveredPromoCardProps> = ({
         {/* Header Simplificado */}
         <div className="flex items-center justify-between mb-6 pl-6">
           <div className="flex flex-col gap-1.5">
-            {hasLink ? (
-              <Badge className={cn(
-                "px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border-none flex items-center gap-1.5 w-fit shadow-sm", 
-                isReaffiliated ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
-              )}>
-                <div className={cn("w-1.5 h-1.5 rounded-full bg-current", isReaffiliated && "animate-pulse")} />
-                {isReaffiliated ? 'Pronto para uso' : 'Necessita Re-afiliação'}
-              </Badge>
-            ) : (
+            {!hasLink && (
               <Badge className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border-none bg-red-500/10 text-red-400">
                 Link Inválido
+              </Badge>
+            )}
+            {hasLink && isReaffiliated && (
+              <Badge className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border-none flex items-center gap-1.5 w-fit shadow-sm bg-emerald-500/10 text-emerald-400">
+                <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                Pronto para uso
               </Badge>
             )}
           </div>
@@ -290,55 +288,8 @@ export const DiscoveredPromoCard: React.FC<DiscoveredPromoCardProps> = ({
             </div>
           </div>
 
-          {/* Seção Expansível: Detalhes Técnicos */}
-          <details className="group">
-            <summary className="text-[8px] font-black uppercase tracking-[0.2em] text-white/10 cursor-pointer list-none flex items-center gap-2 group-open:mb-4">
-              <Info size={10} className="group-open:rotate-180 transition-transform" />
-              Detalhes Técnicos
-            </summary>
-            
-            <div className="space-y-4 p-4 bg-deep-void/40 rounded-2xl border border-white/5 shadow-skeuo-pressed">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Confiança</span>
-                  <span className="text-[10px] font-black text-white/60 tracking-widest">
-                    {(page.confidence * 100).toFixed(0)}%
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Visto em</span>
-                  <span className="text-[10px] font-black text-white/60 tracking-widest">
-                    {new Date(page.last_seen_at).toLocaleDateString('pt-BR')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
-                <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Rastreio de URLs</span>
-                <div className="space-y-1.5 overflow-hidden">
-                   <div className="flex flex-col">
-                      <span className="text-[6px] text-white/10 uppercase font-black">Entrada:</span>
-                      <span className="text-[8px] text-white/20 font-mono truncate">{page.raw_url || 'N/A'}</span>
-                   </div>
-                   <div className="flex flex-col">
-                      <span className="text-[6px] text-white/10 uppercase font-black">Redenção/Canônica:</span>
-                      <span className="text-[8px] text-white/20 font-mono truncate">{page.canonical_url || 'N/A'}</span>
-                   </div>
-                </div>
-              </div>
-            </div>
-          </details>
-
           {/* Ações */}
           <div className="flex items-center gap-2">
-            {!isReaffiliated && (
-              <button 
-                onClick={handleReaffiliate}
-                className="h-12 px-4 rounded-2xl bg-kinetic-orange/5 text-kinetic-orange hover:bg-kinetic-orange/10 transition-all border border-kinetic-orange/20 text-[9px] font-black uppercase tracking-widest whitespace-nowrap shadow-skeuo-flat"
-              >
-                Re-afiliar
-              </button>
-            )}
             
             <KineticButton 
               onClick={handleCopyMessage}
