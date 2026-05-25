@@ -562,8 +562,24 @@ export async function processLinks(
 
     if (isMeliLa || isMLSocial) {
       const mlKind = isMeliLa ? 'meli_short' : 'social';
-      console.log(`[ML-REAFFILIATE-INPUT] kind=${mlKind} url=${targetUrl}`);
       
+      const hasRef = targetUrl.includes('ref=');
+      const hasMattParams = targetUrl.includes('matt_');
+      const hasPdpFilters = targetUrl.includes('pdp_filters=');
+      const hasWid = targetUrl.includes('wid=');
+
+      console.log(`[ML-REAFFILIATE-INPUT]`, {
+        kind: mlKind,
+        host: isMeliLa ? 'meli.la' : 'www.mercadolivre.com.br',
+        hasRef,
+        hasMattParams,
+        hasPdpFilters,
+        hasWid
+      });
+      
+      let resolveSuccess = false;
+      let resolveErrorStr = 'unknown_error';
+
       try {
         const { resolveMLProductUrl } = await import('@/lib/ml/resolveMLProductUrl');
         const resolved = await resolveMLProductUrl(targetUrl);
@@ -572,17 +588,76 @@ export async function processLinks(
           console.log(`[ML-REAFFILIATE-RESOLVE] source=${resolved.sourceType} success=true`);
           
           const hasPdp = resolved.productUrl.includes('pdp_filters=');
-          const hasWid = resolved.productUrl.includes('wid=');
-          console.log(`[ML-REAFFILIATE-URL] hasRawProductUrl=true hasProductUrl=true preservedOfferHints=${hasPdp || hasWid}`);
+          const hasResolvedWid = resolved.productUrl.includes('wid=');
+          console.log(`[ML-REAFFILIATE-URL] hasRawProductUrl=true hasProductUrl=true preservedOfferHints=${hasPdp || hasResolvedWid}`);
           
           targetUrl = resolved.productUrl;
           resolvedFromAffiliateUrl = true;
           reaffiliateSource = resolved.sourceType;
+          resolveSuccess = true;
         } else {
-          console.warn(`[ML-REAFFILIATE-RESOLVE] success=false error=${resolved.errorCode}`);
+          resolveErrorStr = resolved.errorCode || 'resolution_failed';
+          console.warn(`[ML-REAFFILIATE-RESOLVE] success=false error=${resolveErrorStr}`);
         }
       } catch (err: any) {
+        resolveErrorStr = err.message;
         console.error('[ML-REAFFILIATE-RESOLVE] Error resolving affiliate URL:', err.message);
+      }
+
+      // 🛑 SAFETY BLOCK: If meli.la or /social/ failed to resolve, we MUST abort here.
+      // Do not allow raw meli.la or /social/ URLs to reach createLink.
+      if (!resolveSuccess) {
+        const failedSnapshot: ProductSnapshot = {
+          id,
+          factual: {
+            originalUrl: link,
+            cleanUrl: link, // We keep the original for tracking, but we don't try to affiliate it
+            marketplace: 'Mercado Livre',
+            title: 'Erro de Resolução de Link ML',
+            image: null,
+            price: 0,
+            priceFormatted: null,
+            originalPrice: null,
+            originalPriceFormatted: null,
+            currentPriceFactual: 0,
+            currentPriceSource: 'fallback',
+            commissionValueFactual: 0,
+            commissionSource: 'fallback',
+            commissionValueFormatted: null,
+            commissionRate: null,
+            commissionRatePercent: null,
+            pixDisplayEligible: false,
+            affiliateLink: link,
+            shortLink: link,
+            finalLinkToSend: link,
+            fetchedAt: new Date().toISOString(),
+            incoming_url: link,
+            resolved_url: undefined,
+            canonical_url: link,
+            generated_affiliate_url: link,
+            reaffiliation_status: 'failed',
+            reaffiliation_error: `Falha ao resolver URL encurtada/social: ${resolveErrorStr}`,
+            eligibility: {
+              isEligible: false,
+              status: 'ineligible',
+              reasons: ['ml_resolution_failed'],
+              offer_type: 'product_offer'
+            },
+            coupons: []
+          },
+          copy: {
+            messageText: `⚠️ ITEM PARADO: Falha ao resolver URL encurtada/social do Mercado Livre (${resolveErrorStr})`,
+            toneUsed: 'deterministic',
+            generatedAt: new Date().toISOString()
+          },
+          metadata: {
+            source: 'fallback',
+            isFrozen: true
+          }
+        };
+
+        results.push(failedSnapshot);
+        continue;
       }
     }
 
