@@ -182,9 +182,11 @@ export async function handleWasenderWebhook(request: Request, requestId: string)
           console.log(`[WEBHOOK] ${userTag} [${requestId}] [DIRECT-LOGIC] Processando automação...`);
           const result = await processInboundAutomation(automPayload);
           
-          if (result && !result.skipped) {
-            console.log(`[WEBHOOK] ${userTag} [${requestId}] Processamento concluído. Acionando worker...`);
+          if (result && !result.skipped && result.processed && result.processed > 0) {
+            console.log(`[WEBHOOK] ${userTag} [${requestId}] Processamento concluído com ${result.processed} itens. Acionando worker...`);
             await triggerWorker({ requestId });
+          } else {
+            console.log(`[WEBHOOK] ${userTag} [${requestId}] Processamento concluído sem itens válidos ou pulado. Não acionando worker.`);
           }
         } catch (err: any) {
           console.error(`[WEBHOOK-ERROR-FATAL] ${userTag} [${requestId}] Falha no processamento:`, err.message);

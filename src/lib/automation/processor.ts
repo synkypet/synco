@@ -477,6 +477,11 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
                 break;
               }
 
+              if (bestSnapshot?.factual?.reaffiliation_status === 'failed' || bestSnapshot?.factual?.shortGenerationStatus === 'fallback' || bestSnapshot?.factual?.shortGenerationStatus === 'no_session') {
+                console.warn(`[AUTOMATION-QUALITY-GATE] break_early marketplace=Mercado Livre attempt=${attempt} reason=hard_failure`);
+                break;
+              }
+
               console.warn('[AUTOMATION-QUALITY-GATE] incomplete_snapshot_retrying', {
                 attempt,
                 ...(bestSnapshot ? getMercadoLivreGateDiagnostics(bestSnapshot) : { failedChecks: ['no_snapshot'] }),

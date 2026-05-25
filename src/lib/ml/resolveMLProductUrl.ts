@@ -8,6 +8,18 @@ export interface MLResolveResult {
   resolutionSource?: 'meli_redirect' | 'social_cta_href' | 'social_cta_click' | 'dom_fallback' | 'already_product' | 'unknown'
 }
 
+async function resolveMeliShortRedirect(shortUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(shortUrl, { redirect: 'manual' })
+    if (res.status >= 300 && res.status < 400) {
+      return res.headers.get('location')
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 export async function resolveMLProductUrl(inputUrl: string): Promise<MLResolveResult> {
   const scraperUrl = process.env.SCRAPER_SERVICE_URL
   const scraperKey = process.env.SCRAPER_API_KEY
@@ -24,10 +36,35 @@ export async function resolveMLProductUrl(inputUrl: string): Promise<MLResolveRe
     }
   }
 
-  // 2. Se inputUrl já é URL de produto ML (não meli.la, não /social/)
   const lowerUrl = inputUrl.toLowerCase()
-  if ((lowerUrl.includes('mercadolivre.com.br') || lowerUrl.includes('mercadolibre.com')) &&
-      !lowerUrl.includes('/social/') && !lowerUrl.includes('meli.la')) {
+
+  // 1. Fast-path para meli.la
+  if (lowerUrl.includes('meli.la')) {
+    const redirectedUrl = await resolveMeliShortRedirect(inputUrl)
+    if (redirectedUrl) {
+      const lowerRedirected = redirectedUrl.toLowerCase()
+      // Se redirecionou para um produto direto (não /social/)
+      if ((lowerRedirected.includes('mercadolivre.com.br') || lowerRedirected.includes('mercadolibre.com')) &&
+          !lowerRedirected.includes('/social/')) {
+        return {
+          success: true,
+          sourceType: 'meli_short',
+          productUrl: redirectedUrl,
+          itemId: null,
+          errorCode: null,
+          rawProductUrl: inputUrl,
+          resolutionSource: 'meli_redirect'
+        }
+      }
+      // Se for /social/ ou outro tipo, vamos atualizar o inputUrl para o Scraper tentar do destino
+      inputUrl = redirectedUrl
+    }
+  }
+
+  // 2. Se inputUrl já é URL de produto ML (não meli.la, não /social/)
+  const lowerInputUrl = inputUrl.toLowerCase()
+  if ((lowerInputUrl.includes('mercadolivre.com.br') || lowerInputUrl.includes('mercadolibre.com')) &&
+      !lowerInputUrl.includes('/social/') && !lowerInputUrl.includes('meli.la')) {
     return {
       success: true,
       sourceType: 'product_url',
