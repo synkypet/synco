@@ -28,6 +28,7 @@ Use it to track completed blocks, known debt, active risks, and the next executi
   - I5: Implementação de pipeline híbrido inteligente de metadados ML (html-metadata-extractor.ts) priorizando extração estática ultra-rápida (OG/JSON-LD/Hydration State) em menos de 1.5s, reduzindo a dependência do Playwright/Render scraper, reduzindo o timeout de render para 6s, preservando parâmetros de consulta e introduzindo métricas de auditoria (pipeline/perf/quality). ✅
   - I6: Implementação do Metadata Quality Gate para Mercado Livre com tolerância a falhas e auto-retry (max 2 tentativas com timeouts escalados), forçando a validação integral de título real, imagem real e preço líquido antes de liberar o link final no Envio Rápido. ✅
   - I7: Refinamento na extração de identificadores Mercado Livre (url-utils.ts) adicionando suporte a catalogProductId e offerItemId, permitindo a priorização e extração imediata da oferta de venda em URLs de catálogo (/p/ com pdp_filters/wid), garantindo metadados ricos (título, preço e imagem) de forma estável. ✅
+  - I8: Implementação de Quality Gate obrigatório e auto-retry no Monitor de Grupos para Mercado Livre, prevenindo disparos de mensagens com dados incompletos ou quebrados de forma automatizada. ✅
 
 ---
 

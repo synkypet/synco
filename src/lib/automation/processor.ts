@@ -118,6 +118,117 @@ function normalizeShopeeUrl(url: string): string {
   }
 }
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function isCompleteAutomationOffer(snapshot: ProductSnapshot): boolean {
+  const factual = snapshot.factual;
+  const title = factual.title || "";
+  const image = factual.image || "";
+  const price = factual.currentPriceFactual ?? factual.price ?? 0;
+  
+  const metadataQuality = factual.quality;
+  const priceUnavailable = factual.price_unavailable === true;
+
+  const titleIsFallback =
+    !title ||
+    title.trim().length < 4 ||
+    title === 'Produto Mercado Livre' ||
+    title.toLowerCase().includes('produto mercado livre');
+
+  return Boolean(
+    !titleIsFallback &&
+    image &&
+    price &&
+    Number(price) > 0 &&
+    priceUnavailable !== true &&
+    metadataQuality !== 'partial' &&
+    metadataQuality !== 'minimal' &&
+    metadataQuality !== 'fallback'
+  );
+}
+
+function isCompleteMercadoLivreAutomationOffer(snapshot: ProductSnapshot): boolean {
+  const factual = snapshot.factual;
+  const affiliateUrl = factual.finalLinkToSend || "";
+  const title = factual.title || "";
+  
+  const hasValidMeliLink = affiliateUrl.includes('meli.la') || affiliateUrl.includes('mercadolivre.com.br');
+  const price = factual.currentPriceFactual ?? factual.price ?? 0;
+  const isEligible = factual.eligibility?.isEligible && factual.eligibility?.status === 'eligible';
+  const hasImage = !!factual.image && factual.image.length > 5;
+
+  return Boolean(
+    isCompleteAutomationOffer(snapshot) &&
+    hasValidMeliLink &&
+    isEligible &&
+    hasImage &&
+    factual.priceSource !== 'fallback' &&
+    factual.imageSource !== 'fallback' &&
+    factual.titleSource !== 'url_slug_fallback'
+  );
+}
+
+function chooseBestAutomationSnapshot(previous: ProductSnapshot | null, next: ProductSnapshot): ProductSnapshot {
+  if (!previous) return next;
+  if (!next) return previous;
+
+  const prevFactual = previous.factual;
+  const nextFactual = next.factual;
+
+  const mergedFactual = {
+    ...prevFactual,
+    ...nextFactual,
+    title:
+      nextFactual.title && nextFactual.title !== 'Produto Mercado Livre'
+        ? nextFactual.title
+        : prevFactual.title,
+    image: nextFactual.image || prevFactual.image,
+    currentPriceFactual:
+      Number(nextFactual.currentPriceFactual || 0) > 0
+        ? nextFactual.currentPriceFactual
+        : prevFactual.currentPriceFactual,
+    price:
+      Number(nextFactual.price || 0) > 0
+        ? nextFactual.price
+        : prevFactual.price,
+    originalPrice:
+      Number(nextFactual.originalPrice || 0) > 0
+        ? nextFactual.originalPrice
+        : prevFactual.originalPrice,
+    finalLinkToSend:
+      nextFactual.finalLinkToSend || prevFactual.finalLinkToSend,
+    affiliateLink:
+      nextFactual.affiliateLink || prevFactual.affiliateLink,
+    
+    // Metadados extras
+    quality:
+      nextFactual.quality && nextFactual.quality !== 'partial' && nextFactual.quality !== 'minimal'
+        ? nextFactual.quality
+        : (prevFactual.quality || nextFactual.quality),
+    priceSource:
+      nextFactual.priceSource && nextFactual.priceSource !== 'fallback'
+        ? nextFactual.priceSource
+        : (prevFactual.priceSource || nextFactual.priceSource),
+    imageSource:
+      nextFactual.imageSource && nextFactual.imageSource !== 'fallback'
+        ? nextFactual.imageSource
+        : (prevFactual.imageSource || nextFactual.imageSource),
+    titleSource:
+      nextFactual.titleSource && nextFactual.titleSource !== 'url_slug_fallback'
+        ? nextFactual.titleSource
+        : (prevFactual.titleSource || nextFactual.titleSource),
+    candidateKind:
+      nextFactual.candidateKind || prevFactual.candidateKind,
+  };
+
+  return {
+    ...previous,
+    ...next,
+    factual: mergedFactual,
+    copy: next.copy?.messageText ? next.copy : previous.copy
+  };
+}
+
 export async function processInboundAutomation(payload: InboundPayload, client?: SupabaseClient) {
   const { userId, channelId, externalGroupId, body, isFromMe, messageId } = payload;
   const userTag = `[USER:${userId?.substring(0, 8)}]`;
@@ -281,8 +392,75 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
       
       try {
         console.log(`${logPrefix} [ITEM] Convertendo link e buscando metadados...`);
-        const snapshots = await processLinks([rawUrl], connections, 'auto', userId, supabase, body);
-        const snapshot = snapshots[0];
+        let snapshot: ProductSnapshot | null = null;
+
+        if (isML) {
+          let bestSnapshot: ProductSnapshot | null = null;
+          const maxAttempts = 3;
+
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            console.info(`[AUTOMATION-QUALITY-GATE] attempt_start marketplace=Mercado Livre attempt=${attempt}`);
+
+            try {
+              const snapshots = await processLinks([rawUrl], connections, 'auto', userId, supabase, body);
+              const nextSnapshot = snapshots?.[0];
+
+              if (nextSnapshot) {
+                bestSnapshot = chooseBestAutomationSnapshot(bestSnapshot, nextSnapshot);
+              }
+
+              if (bestSnapshot && isCompleteMercadoLivreAutomationOffer(bestSnapshot)) {
+                console.info(`[AUTOMATION-QUALITY-GATE] passed marketplace=Mercado Livre attempt=${attempt}`);
+                break;
+              }
+
+              console.warn('[AUTOMATION-QUALITY-GATE] incomplete_snapshot_retrying', {
+                attempt,
+                hasTitle: Boolean(bestSnapshot?.factual?.title && bestSnapshot?.factual?.title !== 'Produto Mercado Livre'),
+                hasImage: Boolean(bestSnapshot?.factual?.image),
+                hasPrice: Number(bestSnapshot?.factual?.currentPriceFactual || bestSnapshot?.factual?.price || 0) > 0,
+                quality: bestSnapshot?.factual?.quality || null
+              });
+
+            } catch (err: any) {
+              console.error(`[AUTOMATION-QUALITY-GATE] error in attempt ${attempt}:`, err.message);
+            }
+
+            if (attempt < maxAttempts) {
+              const delay = attempt === 1 ? 1000 : 2000;
+              await sleep(delay);
+            }
+          }
+
+          if (!bestSnapshot || !isCompleteMercadoLivreAutomationOffer(bestSnapshot)) {
+            console.warn('[AUTOMATION-QUALITY-GATE] blocked_incomplete_offer', {
+              marketplace: 'Mercado Livre',
+              reason: 'metadata_incomplete_after_retries'
+            });
+            console.warn(`${logPrefix} [ML-GROUP-MONITOR] blocked=true reason=incomplete_metadata`);
+            
+            await automationService.logEvent({
+              source_id: source.id,
+              user_id: userId,
+              status: 'filtered',
+              event_type: 'operational_lock',
+              details: { 
+                url: normalized, 
+                status: bestSnapshot?.factual?.eligibility?.status || 'incomplete', 
+                error: 'Oferta com metadados incompletos ou inválidos (Mercado Livre Quality Gate)', 
+                messageId 
+              }
+            }, supabase);
+
+            continue;
+          }
+
+          snapshot = bestSnapshot;
+
+        } else {
+          const snapshots = await processLinks([rawUrl], connections, 'auto', userId, supabase, body);
+          snapshot = snapshots[0];
+        }
 
         if (!snapshot) {
           console.error(`${logPrefix} [ITEM] [ERROR] Falha ao capturar metadados do produto (Snapshot nulo).`);

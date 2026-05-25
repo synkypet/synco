@@ -91,6 +91,13 @@ export interface FactualData {
   
   // Status da geração do link curto
   shortGenerationStatus?: 'success' | 'fallback' | 'no_session' | 'skipped';
+
+  // Quality Gate fields (ML)
+  quality?: string;
+  titleSource?: string;
+  imageSource?: string;
+  priceSource?: string;
+  candidateKind?: string;
 }
 
 export interface GeneratedCopy {
@@ -466,7 +473,14 @@ export function buildProductSnapshot(opts: {
     extraCouponLink: metadata.extraCouponLink,
     discountPercent: metadata.discountPercent,
     price_unavailable: metadata.price_unavailable || false,
-    shortGenerationStatus: reaffiliation?.shortGenerationStatus
+    shortGenerationStatus: reaffiliation?.shortGenerationStatus,
+
+    // Quality Gate fields (ML)
+    quality: metadata.quality,
+    titleSource: metadata.titleSource,
+    imageSource: metadata.imageSource,
+    priceSource: metadata.priceSource,
+    candidateKind: metadata.candidateKind
   };
 
   // 2. Classificar Oferta (Heurísticas)

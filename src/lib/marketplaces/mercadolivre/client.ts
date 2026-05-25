@@ -113,7 +113,13 @@ export class MLClient {
           priceSource: best.priceSource,
           candidateKind: bestCandidateKind,
         });
-        return this.buildResult(best, itemData);
+        return this.buildResult(best, itemData, {
+          quality: 'complete',
+          titleSource: best.titleSource,
+          imageSource: best.imageSource,
+          priceSource: best.priceSource,
+          candidateKind: bestCandidateKind,
+        });
       }
 
       // Manter rastreio do melhor candidato estático até agora
@@ -157,7 +163,13 @@ export class MLClient {
             priceSource: best.priceSource,
             candidateKind: bestCandidateKind,
           });
-          return this.buildResult(best, itemData);
+          return this.buildResult(best, itemData, {
+            quality: 'complete',
+            titleSource: best.titleSource,
+            imageSource: best.imageSource,
+            priceSource: best.priceSource,
+            candidateKind: bestCandidateKind,
+          });
         }
       }
     }
@@ -181,7 +193,13 @@ export class MLClient {
       candidateKind: bestCandidateKind || 'none',
     });
 
-    return this.buildResult(best, itemData);
+    return this.buildResult(best, itemData, {
+      quality,
+      titleSource: best.titleSource,
+      imageSource: best.imageSource,
+      priceSource: best.priceSource,
+      candidateKind: bestCandidateKind || 'none',
+    });
   }
 
   // ─── Helpers privados ─────────────────────────────────────────────────────
@@ -329,7 +347,14 @@ export class MLClient {
 
   private buildResult(
     r: PartialResult,
-    itemData: MLItemIdData
+    itemData: MLItemIdData,
+    extra?: {
+      quality?: string;
+      titleSource?: string;
+      imageSource?: string;
+      priceSource?: string;
+      candidateKind?: string;
+    }
   ): Partial<ProductMetadata> {
     let discountPercent = 0;
     if (r.originalPrice > r.currentPrice && r.originalPrice > 0) {
@@ -354,6 +379,11 @@ export class MLClient {
       itemId: itemData.id,
       price_unavailable: r.price_unavailable,
       fetchedAt: new Date().toISOString(),
+      quality: extra?.quality,
+      titleSource: extra?.titleSource || r.titleSource,
+      imageSource: extra?.imageSource || r.imageSource,
+      priceSource: extra?.priceSource || r.priceSource,
+      candidateKind: extra?.candidateKind,
     } as any;
   }
 }

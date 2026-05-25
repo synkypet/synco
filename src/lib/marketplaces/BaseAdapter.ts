@@ -71,6 +71,13 @@ export interface ProductMetadata {
 
   // Extra (Fase 2H.1B)
   extraCouponLink?: string;
+
+  // Quality Gate fields
+  quality?: string;
+  titleSource?: string;
+  imageSource?: string;
+  priceSource?: string;
+  candidateKind?: string;
 }
 
 export interface AffiliateResult {
