@@ -15,10 +15,7 @@ export class MLClient {
     richUrl?: string
   ): Promise<Partial<ProductMetadata> | null> {
     const startTime = performance.now();
-    let staticMs = 0;
-    let renderMs = 0;
-    let totalMs = 0;
-
+    
     let targetUrl = richUrl;
     if (!targetUrl) {
       if (itemData.type === 'catalog') {
@@ -27,6 +24,45 @@ export class MLClient {
         targetUrl = `https://produto.mercadolivre.com.br/MLB-${itemData.id.replace(/^MLB/i, '')}`;
       }
     }
+
+    let metadata: any = null;
+    const maxAttempts = 2;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      metadata = await this.executeExtractionPipeline(itemData, targetUrl, attempt);
+
+      const hasTitle = metadata.name && metadata.name !== 'Produto Mercado Livre';
+      const hasImage = Boolean(metadata.imageUrl);
+      const hasPrice = !metadata.price_unavailable && metadata.currentPrice > 0;
+
+      console.log(`[ML-METADATA-QUALITY-GATE] attempt=${attempt} hasTitle=${hasTitle} hasImage=${hasImage} hasPrice=${hasPrice}`);
+
+      if (hasTitle && hasImage && hasPrice) {
+        console.log(`[ML-METADATA-QUALITY-GATE] Metadata passes Quality Gate on attempt ${attempt}!`);
+        break; // EARLY EXIT: passes the quality gate!
+      }
+
+      if (attempt < maxAttempts) {
+        console.warn(`[ML-METADATA-QUALITY-GATE] Quality Gate failed on attempt ${attempt}. Retrying in 500ms...`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    return metadata;
+  }
+
+  /**
+   * Executa a extração em pipeline com controle dinâmico de timeouts.
+   */
+  private async executeExtractionPipeline(
+    itemData: { id: string, type: 'catalog' | 'item' },
+    targetUrl: string,
+    attempt: number
+  ): Promise<Partial<ProductMetadata>> {
+    const startTime = performance.now();
+    let staticMs = 0;
+    let renderMs = 0;
+    let totalMs = 0;
 
     let name = 'Produto Mercado Livre';
     let currentPrice = 0;
@@ -39,12 +75,15 @@ export class MLClient {
     let price_unavailable = true;
     let pipelineSource = 'none';
 
+    // Timeouts escalados por tentativa para evitar estouro de gateway
+    const staticTimeoutMs = attempt === 1 ? 4000 : 2500;
+    const renderTimeoutMs = attempt === 1 ? 6000 : 4000;
+
     // ─── PASSO 1: EXTRATOR ESTÁTICO RÁPIDO (OG / JSON-LD / HTML REGEX) ───
     const staticStart = performance.now();
     let staticResult = null;
     try {
-      // Executa o fetch estático com timeout rigoroso de 4s
-      staticResult = await extractMLStaticMetadata(targetUrl, 4000);
+      staticResult = await extractMLStaticMetadata(targetUrl, staticTimeoutMs);
       staticMs = Math.round(performance.now() - staticStart);
 
       if (staticResult) {
@@ -66,10 +105,10 @@ export class MLClient {
       }
     } catch (err: any) {
       staticMs = Math.round(performance.now() - staticStart);
-      console.warn('[ML-METADATA-PIPELINE] Static extraction threw error:', err.message);
+      console.warn(`[ML-METADATA-PIPELINE] Static extraction threw error on attempt ${attempt}:`, err.message);
     }
 
-    console.log('[ML-METADATA-PIPELINE] source=static_html success=' + Boolean(staticResult?.title || staticResult?.imageUrl));
+    console.log(`[ML-METADATA-PIPELINE] attempt=${attempt} source=static_html success=` + Boolean(staticResult?.title || staticResult?.imageUrl));
 
     // ─── CRITÉRIO DE EARLY STOP ───
     // Se conseguimos título rico, imagem E preço via extrator estático rápido, paramos imediatamente!
@@ -78,19 +117,8 @@ export class MLClient {
     if (gotAllStatic) {
       totalMs = Math.round(performance.now() - startTime);
       
-      console.log('[ML-METADATA-QUALITY]', {
-        hasTitle: true,
-        hasImage: true,
-        hasPrice: true,
-        priceSource,
-        titleSource,
-        imageSource
-      });
-      console.log('[ML-METADATA-PERF]', {
-        static_ms: staticMs,
-        render_ms: 0,
-        total_ms: totalMs
-      });
+      console.log(`[ML-METADATA-QUALITY] attempt=${attempt} hasTitle=true hasImage=true hasPrice=true priceSource=${priceSource}`);
+      console.log(`[ML-METADATA-PERF] attempt=${attempt} static_ms=${staticMs} render_ms=0 total_ms=${totalMs}`);
 
       if (originalPrice > currentPrice && originalPrice > 0) {
         discountPercent = Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
@@ -114,17 +142,15 @@ export class MLClient {
     }
 
     // ─── PASSO 2: RENDER SCRAPER (PLAYWRIGHT) ───
-    // Só tenta o scraper pesado em Render/Playwright local se falhar em pegar preço ou campos fundamentais
     const scraperUrl = process.env.SCRAPER_SERVICE_URL;
     let renderSuccess = false;
     let renderTimeout = false;
 
     if (scraperUrl) {
       const renderStart = performance.now();
-      const renderTimeoutMs = 6000; // Timeout reduzido e controlado de 6s max
       
       try {
-        console.log('[ML-METADATA-PIPELINE] Trying Render scraper as fallback...');
+        console.log(`[ML-METADATA-PIPELINE] attempt=${attempt} Trying Render scraper as fallback...`);
         const res = await fetch(`${scraperUrl}/scrape`, {
           method: 'POST',
           headers: {
@@ -164,12 +190,12 @@ export class MLClient {
         if (err.name === 'TimeoutError' || err.message?.includes('timeout') || err.name === 'AbortError') {
           renderTimeout = true;
         } else {
-          console.warn('[ML-METADATA-PIPELINE] Render scraper threw error:', err.message);
+          console.warn(`[ML-METADATA-PIPELINE] attempt=${attempt} Render scraper threw error:`, err.message);
         }
       }
     }
 
-    console.log('[ML-METADATA-PIPELINE] source=render success=' + renderSuccess + ' timeout=' + renderTimeout);
+    console.log(`[ML-METADATA-PIPELINE] attempt=${attempt} source=render success=${renderSuccess} timeout=${renderTimeout}`);
 
     // ─── PASSO 3: API PÚBLICA (ÚLTIMO RECURSO SE AINDA FALTAR TUDO) ───
     const needsPublicApi = (!name || name === 'Produto Mercado Livre' || !imageUrl) && !renderSuccess;
@@ -197,7 +223,7 @@ export class MLClient {
           }
         }
       } catch (err: any) {
-        console.warn('[ML-METADATA-PIPELINE] Public API fallback failed:', err.message);
+        console.warn(`[ML-METADATA-PIPELINE] attempt=${attempt} Public API fallback failed:`, err.message);
       }
     }
 
@@ -221,8 +247,8 @@ export class MLClient {
 
     totalMs = Math.round(performance.now() - startTime);
 
-    console.log('[ML-METADATA-QUALITY] hasTitle=' + Boolean(name && name !== 'Produto Mercado Livre') + ' hasImage=' + Boolean(imageUrl) + ' hasPrice=' + !price_unavailable + ' priceSource=' + priceSource);
-    console.log('[ML-METADATA-PERF] static_ms=' + staticMs + ' render_ms=' + renderMs + ' total_ms=' + totalMs);
+    console.log(`[ML-METADATA-QUALITY] attempt=${attempt} hasTitle=` + Boolean(name && name !== 'Produto Mercado Livre') + ' hasImage=' + Boolean(imageUrl) + ' hasPrice=' + !price_unavailable + ' priceSource=' + priceSource);
+    console.log(`[ML-METADATA-PERF] attempt=${attempt} static_ms=${staticMs} render_ms=${renderMs} total_ms=${totalMs}`);
 
     if (originalPrice > currentPrice && originalPrice > 0) {
       discountPercent = Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
