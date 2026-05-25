@@ -32,7 +32,8 @@ interface ExtractedMetadata {
  */
 export async function extractMLStaticMetadata(
   url: string,
-  timeoutMs = 4000
+  timeoutMs = 4000,
+  candidateKind = 'unknown'
 ): Promise<ExtractedMetadata> {
   const result: ExtractedMetadata = {
     title: null,
@@ -55,6 +56,11 @@ export async function extractMLStaticMetadata(
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  
+  let diagReason = 'none';
+  let htmlLength = 0;
+  let hasTitleTag = false, hasOgTitle = false, hasOgImage = false, hasJsonLd = false, hasNextData = false, hasPreloadedState = false, hasMlstatic = false, hasPriceLikePattern = false, botDetected = false;
+  let status = 0;
 
   try {
     const response = await fetch(url, {
@@ -63,12 +69,29 @@ export async function extractMLStaticMetadata(
     });
 
     clearTimeout(timer);
+    status = response.status;
 
     if (!response.ok) {
+      diagReason = `http_error_${response.status}`;
       throw new Error(`HTTP status ${response.status}`);
     }
 
     const html = await response.text();
+    htmlLength = html.length;
+
+    hasTitleTag = /<title[^>]*>/i.test(html);
+    hasOgTitle = /og:title/i.test(html);
+    hasOgImage = /og:image/i.test(html);
+    hasJsonLd = /application\/ld\+json/i.test(html);
+    hasNextData = /__NEXT_DATA__/i.test(html);
+    hasPreloadedState = /__PRELOADED_STATE__/i.test(html);
+    hasMlstatic = /http2?:\/\/http2\.mlstatic\.com/i.test(html);
+    hasPriceLikePattern = /"price":|meta itemprop="price"|"current_price":/i.test(html);
+    botDetected = html.includes('captcha') || html.includes('sec-challenge') || html.includes('Verifique se você é humano') || html.includes('validate') || html.includes('Please verify you are a human') || html.includes('px-captcha') || html.length < 50000;
+
+    if (botDetected) {
+      diagReason = 'bot_or_shell';
+    }
 
     // 1. Tentar extração via JSON-LD (application/ld+json)
     try {
@@ -78,7 +101,6 @@ export async function extractMLStaticMetadata(
         try {
           const parsed = JSON.parse(jsonContent);
           
-          // Verificar se é um schema de Product ou uma lista contendo Product
           const extractFromProduct = (obj: any) => {
             if (obj && (obj["@type"] === "Product" || obj["type"] === "Product")) {
               if (obj.name && !result.title) {
@@ -149,12 +171,10 @@ export async function extractMLStaticMetadata(
     // 3. Tentar extração via Hydrated / State JSON de scripts internos do Mercado Livre
     if (!result.price || !result.title || !result.imageUrl) {
       try {
-        // Encontrar objetos de state/configurações que contêm preço e imagens
         const stateScripts = html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi);
         for (const match of stateScripts) {
           const scriptText = match[1];
           if (scriptText.includes('window.__PRELOADED_STATE__') || scriptText.includes('__NEXT_DATA__') || scriptText.includes('initialState')) {
-            // Tentar extrair propriedades via Regex rápida
             if (!result.price) {
               const priceMatch = scriptText.match(/"price"\s*:\s*([0-9.]+)/) || 
                                  scriptText.match(/"current_price"\s*:\s*([0-9.]+)/) ||
@@ -205,7 +225,6 @@ export async function extractMLStaticMetadata(
     }
 
     if (!result.imageUrl) {
-      // Procurar por tags de imagem estruturadas do Mercado Livre
       const imgTagMatch = html.match(/<img[^>]*class=["'][^"']*ui-pdp-gallery__figure__image[^"']*["'][^>]*src=["']([^"']+)["']/i) ||
                           html.match(/<img[^>]*data-zoom=["']([^"']+)["']/i);
       if (imgTagMatch) {
@@ -214,15 +233,42 @@ export async function extractMLStaticMetadata(
       }
     }
 
-    // Sanear a URL da imagem se for relativa
     if (result.imageUrl && result.imageUrl.startsWith('//')) {
       result.imageUrl = 'https:' + result.imageUrl;
+    }
+    
+    if (result.title || result.imageUrl || result.price) {
+      if (diagReason === 'none' || diagReason === 'bot_or_shell') {
+        diagReason = 'success_partial_or_full';
+      }
     }
 
   } catch (error: any) {
     clearTimeout(timer);
+    if (!diagReason || diagReason === 'none') {
+      diagReason = error.name === 'AbortError' ? 'timeout' : 'fetch_error';
+    }
     console.warn(`[ML-METADATA-PIPELINE] Static HTML extract failed or timed out: ${error.message}`);
   }
+
+  console.info('[ML-STATIC-DIAG]', {
+    candidateKind,
+    status,
+    htmlLength,
+    hasTitleTag,
+    hasOgTitle,
+    hasOgImage,
+    hasJsonLd,
+    hasNextData,
+    hasPreloadedState,
+    hasMlstatic,
+    hasPriceLikePattern,
+    botDetected,
+    extractionReason: diagReason,
+    extractedTitle: !!result.title,
+    extractedImage: !!result.imageUrl,
+    extractedPrice: !!result.price
+  });
 
   return result;
 }

@@ -3,6 +3,8 @@ import { cookies } from 'next/headers'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { resolveMLProductUrl } from '@/lib/ml/resolveMLProductUrl'
 
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   try {
     const cookieStore = cookies()

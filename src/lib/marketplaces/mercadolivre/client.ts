@@ -135,7 +135,7 @@ export class MLClient {
           candidateIndex: i + 1,
         });
 
-        const renderPartial = await this.tryRender(candidate, i + 1, scraperUrl, 6000);
+        const renderPartial = await this.tryRender(candidate, i + 1, scraperUrl, 25000);
         this.mergeBetter(best, renderPartial);
 
         console.info('[ML-METADATA-CANDIDATE]', {
@@ -162,8 +162,8 @@ export class MLClient {
       }
     }
 
-    // ─── FASE 3: API pública — fallback para título e imagem ─────────────────
-    if (!hasTitle(best) || !best.imageUrl) {
+    // ─── FASE 3: API pública — fallback para título e imagem ou preço ─────────────────
+    if (!hasTitle(best) || !best.imageUrl || best.price_unavailable) {
       await this.tryPublicApi(best, itemData);
     }
 
@@ -193,7 +193,7 @@ export class MLClient {
   ): Promise<PartialResult> {
     const r = emptyPartial();
     try {
-      const staticResult = await extractMLStaticMetadata(candidate.url, timeoutMs);
+      const staticResult = await extractMLStaticMetadata(candidate.url, timeoutMs, candidate.kind);
       if (staticResult) {
         if (staticResult.title) {
           r.name = staticResult.title;
