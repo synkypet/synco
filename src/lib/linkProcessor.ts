@@ -133,7 +133,7 @@ export function detectMarketplace(url: string): Marketplace {
     if (hostname === 'br.shp.ee' || hostname.endsWith('.br.shp.ee')) return 'Shopee';
     
     if (hostname === 'amazon.com.br' || hostname.endsWith('.amazon.com.br')) return 'Amazon';
-    if (hostname === 'mercadolivre.com.br' || hostname.endsWith('.mercadolivre.com.br') || hostname === 'mercadolibre.com' || hostname.endsWith('.mercadolibre.com') || hostname === 'meli.com' || hostname.endsWith('.meli.com') || hostname === 'mercadol.in' || hostname.endsWith('.mercadol.in')) return 'Mercado Livre';
+    if (hostname === 'mercadolivre.com.br' || hostname.endsWith('.mercadolivre.com.br') || hostname === 'mercadolibre.com' || hostname.endsWith('.mercadolibre.com') || hostname === 'meli.com' || hostname.endsWith('.meli.com') || hostname === 'mercadol.in' || hostname.endsWith('.mercadol.in') || hostname === 'meli.la' || hostname.endsWith('.meli.la')) return 'Mercado Livre';
     if (hostname === 'magazineluiza.com.br' || hostname.endsWith('.magazineluiza.com.br') || hostname === 'magalu.com' || hostname.endsWith('.magalu.com')) return 'Magalu';
   } catch {
     // Fallback para URLs malformadas ou sem protocolo
@@ -550,7 +550,41 @@ export async function processLinks(
     
     // Extração de URL para processamento (suporta texto com link)
     const urlMatch = link.match(/https?:\/\/[^\s]+/);
-    const targetUrl = urlMatch ? urlMatch[0] : link;
+    let targetUrl = urlMatch ? urlMatch[0] : link;
+
+    let originalInputUrl = targetUrl;
+    let resolvedFromAffiliateUrl = false;
+    let reaffiliateSource: string | undefined = undefined;
+
+    const lowerTarget = targetUrl.toLowerCase();
+    const isMeliLa = lowerTarget.includes('meli.la');
+    const isMLSocial = (lowerTarget.includes('mercadolivre.com.br') || lowerTarget.includes('mercadolibre.com')) && lowerTarget.includes('/social/');
+
+    if (isMeliLa || isMLSocial) {
+      const mlKind = isMeliLa ? 'meli_short' : 'social';
+      console.log(`[ML-REAFFILIATE-INPUT] kind=${mlKind} url=${targetUrl}`);
+      
+      try {
+        const { resolveMLProductUrl } = await import('@/lib/ml/resolveMLProductUrl');
+        const resolved = await resolveMLProductUrl(targetUrl);
+        
+        if (resolved.success && resolved.productUrl) {
+          console.log(`[ML-REAFFILIATE-RESOLVE] source=${resolved.sourceType} success=true`);
+          
+          const hasPdp = resolved.productUrl.includes('pdp_filters=');
+          const hasWid = resolved.productUrl.includes('wid=');
+          console.log(`[ML-REAFFILIATE-URL] hasRawProductUrl=true hasProductUrl=true preservedOfferHints=${hasPdp || hasWid}`);
+          
+          targetUrl = resolved.productUrl;
+          resolvedFromAffiliateUrl = true;
+          reaffiliateSource = resolved.sourceType;
+        } else {
+          console.warn(`[ML-REAFFILIATE-RESOLVE] success=false error=${resolved.errorCode}`);
+        }
+      } catch (err: any) {
+        console.error('[ML-REAFFILIATE-RESOLVE] Error resolving affiliate URL:', err.message);
+      }
+    }
 
     const marketplace = detectMarketplace(targetUrl);
     const adapter = findAdapter(targetUrl);
@@ -990,6 +1024,10 @@ export async function processLinks(
 
         // A. Pré-processamento (Fase 1: Reafiliação)
         preResult = await adapter.preProcessIncomingLink(targetUrl, effectiveConnection);
+
+        if (preResult && preResult.generated_affiliate_url && marketplace === 'Mercado Livre') {
+          console.log('[ML-REAFFILIATE-FINAL] newAffiliateLinkGenerated=true');
+        }
 
         // 2. Checagem após a resolução (com as URLs resolvidas / canônicas)
         const isGenericLanding = (url: string) => {

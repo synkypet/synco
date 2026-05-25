@@ -5,7 +5,8 @@ export function canHandleUrl(url: string): boolean {
   return lowerUrl.includes('mercadolivre.com.br') || 
          lowerUrl.includes('mercadolibre.com') || 
          lowerUrl.includes('meli.com') || 
-         lowerUrl.includes('mercadol.in');
+         lowerUrl.includes('mercadol.in') ||
+         lowerUrl.includes('meli.la');
 }
 
 export interface MLItemIdData {

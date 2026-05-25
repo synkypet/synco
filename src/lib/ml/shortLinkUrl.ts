@@ -2,7 +2,8 @@ export const ML_DOMAINS = [
   'mercadolivre.com.br',
   'mercadolibre.com',
   'meli.com',
-  'mercadol.in'
+  'mercadol.in',
+  'meli.la'
 ];
 
 export function selectShortLinkInputUrl(opts: {
