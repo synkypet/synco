@@ -158,6 +158,7 @@ export default function EnvioRapidoPage() {
   });
   const [processedProducts, setProcessedProducts] = useState<ProductSnapshot[]>([]);
   const [selectedCouponsFromDraft, setSelectedCouponsFromDraft] = useState<any[]>([]);
+  const [draftPromoContext, setDraftPromoContext] = useState<{ sourceType?: string; title?: string } | null>(null);
   const [autoStartFlag, setAutoStartFlag] = useState(false);
   const [tone, setTone] = useState('auto');
   const [selectedDestinations, setSelectedDestinations] = useState<string[]>([]);
@@ -240,30 +241,34 @@ export default function EnvioRapidoPage() {
     const draft = localStorage.getItem('quick_send_draft');
     if (draft && !linksInput && processedProducts.length === 0) {
       try {
-        const { links, coupons, timestamp } = JSON.parse(draft);
+        const { links, coupons, timestamp, sourceType, title } = JSON.parse(draft);
         if (Date.now() - timestamp < 60000) {
           const linksArray = links ? links.split('\n').filter((l: string) => l.trim()) : [];
           const couponsArray = (coupons && Array.isArray(coupons)) ? coupons : [];
           
           console.log('[QUICK-SEND-DRAFT-AUDIT]', {
-            links,
-            coupons: couponsArray,
             linksLength: linksArray.length,
             couponsLength: couponsArray.length
           });
 
+          if (sourceType) {
+            setDraftPromoContext({ sourceType, title });
+          }
+
           setSelectedCouponsFromDraft(couponsArray);
           setLinksInput(links);
           
-          toast.info('Carregando cupons do Radar...', { icon: '🎟️' });
+          toast.info('Carregando ofertas do Radar...', { icon: '🔥' });
           
           if (linksArray.length > 0) {
-            handleProcess(linksArray, couponsArray);
+            // Need to wait for state to update, or pass it directly.
+            // Since we set autoStartFlag below, we can just trigger it.
+            setAutoStartFlag(true);
           }
         }
         localStorage.removeItem('quick_send_draft');
       } catch (e) {
-        console.error('Falha ao ler rascunho de cupons:', e);
+        console.error('Falha ao ler rascunho:', e);
       }
     }
   }, []);
@@ -483,6 +488,15 @@ export default function EnvioRapidoPage() {
         }
 
         if (bestResult) {
+          if (draftPromoContext?.sourceType === 'shopee_promo_page' && bestResult.factual?.marketplace === 'Shopee') {
+            const affiliateUrl = bestResult.factual.finalLinkToSend || bestResult.factual.generated_affiliate_url || bestResult.factual.canonical_url || link;
+            const safeTitle = draftPromoContext.title || bestResult.factual.title || 'Super Ofertas Shopee';
+            bestResult.copy = {
+              ...bestResult.copy,
+              messageText: `🔥 *OFERTA SHOPEE LIBERADA!* 🔥\n\n🛍️ *Página:* ${safeTitle}\n\n⚡ Acesse antes que acabe.\n\n🔗 *Confira aqui:*\n${affiliateUrl}\n\n⚠️ Promoção sujeita à disponibilidade na Shopee.`
+            };
+          }
+
           accumulatedResults.push(bestResult);
           setProcessedProducts([...accumulatedResults]);
           setSelectedProductIds(accumulatedResults.map((p: any) => p.id));

@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation';
 import { KineticButton } from '@/components/ui/KineticButton';
 import { Badge } from '@/components/ui/badge';
 import { DiscoveredPromoPage } from '@/hooks/use-discovered-promo-pages';
-import { formatShopeeCouponMessage, getCouponPrimaryUrl } from '@/lib/marketplaces/shopee/coupon-formatter';
+import { formatShopeePromoPageMessage, getCouponPrimaryUrl } from '@/lib/marketplaces/shopee/coupon-formatter';
 
 interface DiscoveredPromoCardProps {
   page: DiscoveredPromoPage;
@@ -104,15 +104,9 @@ export const DiscoveredPromoCard: React.FC<DiscoveredPromoCardProps> = ({
       primaryUrl: primaryLink
     });
 
-    const formattedMessage = formatShopeeCouponMessage({
-      marketplace: 'shopee',
-      type: 'pagina_oferta', // força tipo página para formatar sem código de cupom
-      code: null,
-      couponLabel: currentTitle,
-      redemptionUrl: primaryLink,
-      confidence: page.confidence,
-      status: page.status,
-      dedupeKey: page.dedupe_key
+    const formattedMessage = formatShopeePromoPageMessage({
+      title: currentTitle,
+      affiliateUrl: primaryLink
     });
 
     if (!formattedMessage) {
@@ -151,29 +145,16 @@ export const DiscoveredPromoCard: React.FC<DiscoveredPromoCardProps> = ({
       return;
     }
 
-    console.log('[PROMO-CARD-ACTION]', {
+    console.log('[SHOPEE-PROMO-PAGE]', {
       action: 'quick_send',
-      couponId: page.id, // Envio Rápido consome o ID como couponId
-      couponCode: null,
-      couponLabel: currentTitle || null,
-      primaryUrl: primaryLink,
-      redemptionUrl: page.canonical_url || null,
-      sourceUrl: page.source_url || null
+      hasPrimaryUrl: true
     });
 
     const stored = {
       links: primaryLink,
-      coupons: [
-        {
-          couponId: page.id,
-          inputUrl: primaryLink,
-          couponCode: null,
-          couponLabel: currentTitle ?? null,
-          couponType: 'pagina_oferta',
-          redemptionUrl: page.canonical_url ?? null,
-          sourceUrl: page.source_url ?? null
-        }
-      ],
+      coupons: [],
+      sourceType: 'shopee_promo_page',
+      title: currentTitle,
       timestamp: Date.now()
     };
     

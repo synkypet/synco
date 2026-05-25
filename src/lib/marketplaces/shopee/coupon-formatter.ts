@@ -50,3 +50,26 @@ export function formatShopeeCouponMessage(coupon: any): string | null {
   const result = formatCouponsForQuickSend([coupon]);
   return result || null;
 }
+
+/**
+ * Formata uma mensagem específica para Páginas Promocionais Shopee.
+ */
+export function formatShopeePromoPageMessage({ title, affiliateUrl }: { title: string, affiliateUrl: string }): string | null {
+  if (!affiliateUrl || affiliateUrl === 'undefined') {
+    console.warn(`[SHOPEE-PROMO-FORMATTER] type=promo_page Tentativa de formatar pagina sem link válido.`);
+    return null;
+  }
+  
+  const safeTitle = title && title.trim() !== '' ? title.trim() : 'Super Ofertas Shopee';
+  
+  return `🔥 *OFERTA SHOPEE LIBERADA!* 🔥
+
+🛍️ *Página:* ${safeTitle}
+
+⚡ Acesse antes que acabe.
+
+🔗 *Confira aqui:*
+${affiliateUrl}
+
+⚠️ Promoção sujeita à disponibilidade na Shopee.`;
+}
