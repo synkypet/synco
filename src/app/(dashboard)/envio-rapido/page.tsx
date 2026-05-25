@@ -103,14 +103,42 @@ function chooseBestResult(previous: ProductSnapshot | null, next: ProductSnapsho
   };
 }
 
-function startStageTicker(index: number, total: number, setProgressMessage: (msg: string) => void) {
-  const timers = [
-    setTimeout(() => setProgressMessage(`Produto ${index + 1} de ${total} — buscando título e imagem...`), 1000),
-    setTimeout(() => setProgressMessage(`Produto ${index + 1} de ${total} — procurando preço e desconto reais...`), 4000),
-    setTimeout(() => setProgressMessage(`Produto ${index + 1} de ${total} — Mercado Livre está demorando, seguimos aguardando os dados...`), 10000),
-  ]
+function getOverallProgress(productIndex: number, total: number, subProgress: number) {
+  const productWeight = 100 / total;
+  return Math.min(
+    100,
+    Math.round(productIndex * productWeight + (subProgress / 100) * productWeight)
+  );
+}
 
-  return () => timers.forEach(clearTimeout)
+const PRODUCT_PROGRESS_STAGES = [
+  { delay: 0, subProgress: 5, message: 'Produto X de Y — preparando link...' },
+  { delay: 700, subProgress: 12, message: 'Produto X de Y — gerando link seguro e rastreado...' },
+  { delay: 1800, subProgress: 25, message: 'Produto X de Y — buscando título e imagem...' },
+  { delay: 4000, subProgress: 45, message: 'Produto X de Y — procurando preço e desconto reais...' },
+  { delay: 8000, subProgress: 65, message: 'Produto X de Y — validando dados da oferta...' },
+  { delay: 12000, subProgress: 82, message: 'Produto X de Y — Mercado Livre está demorando, seguimos aguardando...' },
+];
+
+function startProductProgressTicker(
+  index: number,
+  total: number,
+  setProgress: React.Dispatch<React.SetStateAction<any>>
+) {
+  const timers = PRODUCT_PROGRESS_STAGES.map((stage) =>
+    setTimeout(() => {
+      setProgress((prev: any) => ({
+        ...prev,
+        current: index,
+        percent: getOverallProgress(index, total, stage.subProgress),
+        message: stage.message
+          .replace('X', String(index + 1))
+          .replace('Y', String(total)),
+      }));
+    }, stage.delay)
+  );
+
+  return () => timers.forEach(clearTimeout);
 }
 
 export default function EnvioRapidoPage() {
@@ -389,18 +417,18 @@ export default function EnvioRapidoPage() {
         const maxAttempts = 3;
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-          setProgress({
-            total: links.length,
-            current: i,
-            percent: Math.round((i / links.length) * 100),
-            message: attempt === 1
-              ? `Produto ${i + 1} de ${links.length} — buscando dados da oferta...`
-              : `Produto ${i + 1} de ${links.length} — tentando recuperar dados (${attempt}/${maxAttempts})...`
-          });
+          let stopTicker = () => {};
 
-          const stopTicker = startStageTicker(i, links.length, (msg) => {
-            setProgress(prev => ({ ...prev, message: msg }));
-          });
+          if (attempt === 1) {
+            stopTicker = startProductProgressTicker(i, links.length, setProgress);
+          } else {
+            setProgress(prev => ({
+              ...prev,
+              current: i,
+              percent: getOverallProgress(i, links.length, 85),
+              message: `Produto ${i + 1} de ${links.length} — tentando recuperar imagem e preço novamente (${attempt}/${maxAttempts})...`
+            }));
+          }
 
           try {
             const res = await fetch('/api/links/process', {
@@ -424,7 +452,18 @@ export default function EnvioRapidoPage() {
             bestResult = chooseBestResult(bestResult, result);
 
             if (isCompleteProductResult(bestResult)) {
+              if (attempt === 1) {
+                setProgress(prev => ({ ...prev, message: `Produto ${i + 1} de ${links.length} — título, imagem e preço encontrados.` }));
+              } else {
+                setProgress(prev => ({ ...prev, message: `Produto ${i + 1} de ${links.length} — dados recuperados com sucesso.` }));
+              }
               break;
+            } else {
+              if (attempt < maxAttempts) {
+                setProgress(prev => ({ ...prev, message: `Produto ${i + 1} de ${links.length} — alguns dados não vieram, tentando novamente...` }));
+              } else {
+                setProgress(prev => ({ ...prev, message: `Produto ${i + 1} de ${links.length} — não conseguimos todos os dados, seguindo mesmo assim.` }));
+              }
             }
 
             if (attempt < maxAttempts) {
@@ -433,7 +472,10 @@ export default function EnvioRapidoPage() {
           } catch (error) {
             console.error(`Process error for link ${link} at attempt ${attempt}:`, error);
             if (attempt < maxAttempts) {
+              setProgress(prev => ({ ...prev, message: `Produto ${i + 1} de ${links.length} — falhou, tentando novamente...` }));
               await sleep(attempt === 1 ? 900 : 1500);
+            } else {
+              setProgress(prev => ({ ...prev, message: `Produto ${i + 1} de ${links.length} — falhou, seguindo para o próximo...` }));
             }
           } finally {
             stopTicker();
@@ -451,7 +493,7 @@ export default function EnvioRapidoPage() {
         setProgress(prev => ({
           ...prev,
           current: i + 1,
-          percent: Math.round(((i + 1) / links.length) * 100),
+          percent: getOverallProgress(i, links.length, 100),
           message: `Produto ${i + 1} de ${links.length} finalizado.`
         }));
       }
