@@ -56,6 +56,16 @@ const TONE_OPTIONS = [
   { value: 'natural', label: '🌿 Natural', desc: 'Conversa informal' },
 ];
 
+function startStageTicker(index: number, total: number, setProgressMessage: (msg: string) => void) {
+  const timers = [
+    setTimeout(() => setProgressMessage(`Produto ${index + 1} de ${total} — buscando título e imagem...`), 1000),
+    setTimeout(() => setProgressMessage(`Produto ${index + 1} de ${total} — procurando preço e desconto reais...`), 4000),
+    setTimeout(() => setProgressMessage(`Produto ${index + 1} de ${total} — Mercado Livre está demorando, seguimos aguardando os dados...`), 10000),
+  ]
+
+  return () => timers.forEach(clearTimeout)
+}
+
 export default function EnvioRapidoPage() {
   const { user } = useAuth();
   const { data: groups, isLoading: loadingDestinations } = useGroups(user?.id);
@@ -65,6 +75,12 @@ export default function EnvioRapidoPage() {
 
   const [linksInput, setLinksInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState({
+    total: 0,
+    current: 0,
+    percent: 0,
+    message: ''
+  });
   const [processedProducts, setProcessedProducts] = useState<ProductSnapshot[]>([]);
   const [selectedCouponsFromDraft, setSelectedCouponsFromDraft] = useState<any[]>([]);
   const [autoStartFlag, setAutoStartFlag] = useState(false);
@@ -300,6 +316,7 @@ export default function EnvioRapidoPage() {
     }
 
     setIsProcessing(true);
+    setProcessedProducts([]);
 
     try {
       const links = activeLinksText.split('\n').filter(l => l.trim());
@@ -310,28 +327,83 @@ export default function EnvioRapidoPage() {
         couponsToUse
       });
 
-      const res = await fetch('/api/links/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          links, 
-          tone, 
-          sourceText: activeLinksText,
-          coupons: couponsToUse
-        })
+      setProgress({
+        total: links.length,
+        current: 0,
+        percent: 0,
+        message: 'Preparando links...'
       });
 
-      if (!res.ok) {
-        throw new Error('Falha na API de processamento');
+      const accumulatedResults: ProductSnapshot[] = [];
+
+      for (let i = 0; i < links.length; i++) {
+        const link = links[i];
+
+        setProgress({
+          total: links.length,
+          current: i,
+          percent: Math.round((i / links.length) * 100),
+          message: `Produto ${i + 1} de ${links.length} — gerando link seguro e rastreado...`
+        });
+
+        const stopTicker = startStageTicker(i, links.length, (msg) => {
+          setProgress(prev => ({ ...prev, message: msg }));
+        });
+
+        try {
+          const res = await fetch('/api/links/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              links: [link], 
+              tone, 
+              sourceText: link,
+              coupons: couponsToUse
+            })
+          });
+
+          if (!res.ok) {
+            throw new Error('Falha na API de processamento');
+          }
+
+          const data = await res.json();
+          accumulatedResults.push(...data.results);
+          
+          setProcessedProducts([...accumulatedResults]);
+          setSelectedProductIds(accumulatedResults.map((p: any) => p.id));
+
+          setProgress(prev => ({
+            ...prev,
+            current: i + 1,
+            percent: Math.round(((i + 1) / links.length) * 100),
+            message: `Produto ${i + 1} de ${links.length} finalizado.`
+          }));
+        } catch (error) {
+          console.error(`Process error for link ${link}:`, error);
+          toast.error(`Falha ao processar o link ${i + 1}. Continuando...`);
+          
+          setProgress(prev => ({
+            ...prev,
+            current: i + 1,
+            percent: Math.round(((i + 1) / links.length) * 100),
+            message: `Link ${i + 1} falhou, continuando os próximos...`
+          }));
+        } finally {
+          stopTicker();
+        }
       }
 
-      const data = await res.json();
-      setProcessedProducts(data.results);
-      setSelectedProductIds(data.results.map((p: any) => p.id));
-      toast.success(`${data.results.length} link(s) processado(s) com sucesso!`);
+      setProgress({
+        total: links.length,
+        current: links.length,
+        percent: 100,
+        message: 'Todos os links foram verificados.'
+      });
+
+      toast.success(`${accumulatedResults.length} link(s) processado(s) com sucesso!`);
     } catch (error) {
       console.error('Process error:', error);
-      toast.error('Erro ao processar links. Tente novamente.');
+      toast.error('Erro geral ao processar links. Tente novamente.');
     } finally {
       setIsProcessing(false);
     }
@@ -558,6 +630,27 @@ export default function EnvioRapidoPage() {
                   </KineticButton>
                 </div>
               </TactileCard>
+
+              {isProcessing && progress.total > 0 && (
+                <div className="mt-4 rounded-2xl border border-orange-500/20 bg-black/30 p-4 shadow-skeuo-pressed">
+                  <div className="flex items-center justify-between text-xs uppercase tracking-widest">
+                    <span className="text-orange-300">Processando ofertas</span>
+                    <span className="text-zinc-400">{progress.percent}%</span>
+                  </div>
+
+                  <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-900">
+                    <div
+                      className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                      style={{ width: `${progress.percent}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
+                    <span>{progress.message}</span>
+                    <span>{progress.current}/{progress.total}</span>
+                  </div>
+                </div>
+              )}
 
               {/* Vibe Engine (IA) Oculto por decisão de produto: Envio Rápido 100% Determinístico */}
               {false && (
