@@ -118,178 +118,38 @@ function normalizeShopeeUrl(url: string): string {
   }
 }
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-function getMercadoLivreGateDiagnostics(snapshot: ProductSnapshot) {
+function isCompleteForAutomation(snapshot: ProductSnapshot): boolean {
   const factual = snapshot.factual;
+
   const title = factual.title || '';
   const image = factual.image || '';
   const price = Number(factual.currentPriceFactual ?? factual.price ?? 0);
   const finalLink = factual.finalLinkToSend || factual.affiliateLink || '';
 
-  const hasTitle = Boolean(
-    title &&
+  const titleOk =
     title.trim().length >= 4 &&
     title !== 'Produto Mercado Livre' &&
-    !title.toLowerCase().includes('produto mercado livre')
-  );
-  const hasImage = Boolean(image && image.length > 5);
-  const hasPrice = price > 0;
-  const priceUnavailable = factual.price_unavailable === true;
-  const qualityComplete = factual.quality === 'complete';
-  const hasFinalLink = Boolean(
-    finalLink &&
-    (finalLink.includes('meli.la') || finalLink.includes('mercadolivre.com.br') || finalLink.includes('mercadolivre.com'))
-  );
-  const hardIneligible =
-    factual.eligibility?.status === 'ineligible' ||
-    factual.shortGenerationStatus === 'no_session' ||
-    factual.shortGenerationStatus === 'fallback';
+    !title.toLowerCase().includes('produto Mercado Livre');
 
-  const failedChecks: string[] = [];
-  if (!hasTitle) failedChecks.push('missing_title');
-  if (!hasImage) failedChecks.push('missing_image');
-  if (!hasPrice) failedChecks.push('missing_price');
-  if (priceUnavailable) failedChecks.push('price_unavailable');
-  if (!qualityComplete) failedChecks.push('quality_not_complete');
-  if (factual.priceSource === 'fallback') failedChecks.push('price_source_fallback');
-  if (factual.imageSource === 'fallback') failedChecks.push('image_source_fallback');
-  if (factual.titleSource === 'url_slug_fallback') failedChecks.push('title_source_fallback');
-  if (!hasFinalLink) failedChecks.push('missing_final_link');
-  if (hardIneligible) failedChecks.push('hard_ineligible');
-
-  return {
-    hasTitle,
-    hasImage,
-    hasPrice,
-    quality: factual.quality || null,
-    titleSource: factual.titleSource || null,
-    imageSource: factual.imageSource || null,
-    priceSource: factual.priceSource || null,
-    priceUnavailable,
-    hasFinalLink,
-    shortGenerationStatus: factual.shortGenerationStatus || null,
-    eligibilityStatus: factual.eligibility?.status || null,
-    eligibilityIsEligible: factual.eligibility?.isEligible ?? null,
-    failedChecks,
-  };
-}
-
-function isCompleteMercadoLivreAutomationOffer(snapshot: ProductSnapshot): boolean {
-  const factual = snapshot.factual;
-  const title = factual.title || '';
-  const image = factual.image || '';
-  const price = Number(factual.currentPriceFactual ?? factual.price ?? 0);
-
-  const titleIsFallback =
-    !title ||
-    title.trim().length < 4 ||
-    title === 'Produto Mercado Livre' ||
-    title.toLowerCase().includes('produto mercado livre');
-
-  const finalLink = factual.finalLinkToSend || factual.affiliateLink || '';
-  const hasFinalLink = Boolean(
-    finalLink &&
-    (finalLink.includes('meli.la') || finalLink.includes('mercadolivre.com.br') || finalLink.includes('mercadolivre.com'))
-  );
-
-  // Hard ineligibility: rejeitar apenas erros reais — warning por comissão zero não bloqueia
-  const hardIneligible =
-    factual.eligibility?.status === 'ineligible' ||
+  const hardFailed =
+    factual.reaffiliation_status === 'failed' ||
+    factual.reaffiliation_status === 'blocked' ||
     factual.shortGenerationStatus === 'no_session' ||
     factual.shortGenerationStatus === 'fallback';
 
   return Boolean(
-    !titleIsFallback &&
-    image && image.length > 5 &&
+    titleOk &&
+    image &&
+    image.length > 5 &&
     price > 0 &&
+    finalLink &&
     factual.price_unavailable !== true &&
     factual.quality === 'complete' &&
     factual.priceSource !== 'fallback' &&
     factual.imageSource !== 'fallback' &&
     factual.titleSource !== 'url_slug_fallback' &&
-    hasFinalLink &&
-    !hardIneligible
+    !hardFailed
   );
-}
-
-function chooseBestAutomationSnapshot(previous: ProductSnapshot | null, next: ProductSnapshot): ProductSnapshot {
-  if (!previous) return next;
-  if (!next) return previous;
-
-  const prevFactual = previous.factual;
-  const nextFactual = next.factual;
-
-  const mergedFactual = {
-    ...prevFactual,
-    ...nextFactual,
-    title:
-      nextFactual.title && nextFactual.title !== 'Produto Mercado Livre'
-        ? nextFactual.title
-        : prevFactual.title,
-    image: nextFactual.image || prevFactual.image,
-    currentPriceFactual:
-      Number(nextFactual.currentPriceFactual || 0) > 0
-        ? nextFactual.currentPriceFactual
-        : prevFactual.currentPriceFactual,
-    price:
-      Number(nextFactual.price || 0) > 0
-        ? nextFactual.price
-        : prevFactual.price,
-    originalPrice:
-      Number(nextFactual.originalPrice || 0) > 0
-        ? nextFactual.originalPrice
-        : prevFactual.originalPrice,
-    // Preferir meli.la sobre link longo em qualquer tentativa
-    finalLinkToSend: (() => {
-      const next = nextFactual.finalLinkToSend || '';
-      const prev = prevFactual.finalLinkToSend || '';
-      if (next.includes('meli.la')) return next;
-      if (prev.includes('meli.la')) return prev;
-      return next || prev;
-    })(),
-    affiliateLink: (() => {
-      const next = nextFactual.affiliateLink || '';
-      const prev = prevFactual.affiliateLink || '';
-      if (next.includes('meli.la')) return next;
-      if (prev.includes('meli.la')) return prev;
-      return next || prev;
-    })(),
-    // Preservar o melhor shortGenerationStatus entre tentativas (success > skipped > fallback > no_session)
-    shortGenerationStatus: (() => {
-      const rank: Record<string, number> = { success: 0, skipped: 1, fallback: 2, no_session: 3 };
-      const prev = prevFactual.shortGenerationStatus || 'no_session';
-      const next = nextFactual.shortGenerationStatus || 'no_session';
-      return (rank[prev] ?? 3) <= (rank[next] ?? 3) ? prev : next;
-    })() as 'success' | 'fallback' | 'no_session' | 'skipped' | undefined,
-
-    // Metadados extras
-    quality:
-      nextFactual.quality && nextFactual.quality !== 'partial' && nextFactual.quality !== 'minimal' && nextFactual.quality !== 'fallback'
-        ? nextFactual.quality
-        : (prevFactual.quality || nextFactual.quality),
-    priceSource:
-      nextFactual.priceSource && nextFactual.priceSource !== 'fallback'
-        ? nextFactual.priceSource
-        : (prevFactual.priceSource || nextFactual.priceSource),
-    imageSource:
-      nextFactual.imageSource && nextFactual.imageSource !== 'fallback'
-        ? nextFactual.imageSource
-        : (prevFactual.imageSource || nextFactual.imageSource),
-    titleSource:
-      nextFactual.titleSource && nextFactual.titleSource !== 'url_slug_fallback'
-        ? nextFactual.titleSource
-        : (prevFactual.titleSource || nextFactual.titleSource),
-    candidateKind:
-      nextFactual.candidateKind || prevFactual.candidateKind,
-  };
-
-  return {
-    ...previous,
-    ...next,
-    factual: mergedFactual,
-    copy: next.copy?.messageText ? next.copy : previous.copy
-  };
 }
 
 export async function processInboundAutomation(payload: InboundPayload, client?: SupabaseClient) {
@@ -455,72 +315,13 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
       
       try {
         console.log(`${logPrefix} [ITEM] Convertendo link e buscando metadados...`);
-        let snapshot: ProductSnapshot | null = null;
-
+        
         if (isML) {
-          let bestSnapshot: ProductSnapshot | null = null;
-          const maxAttempts = 3;
-
-          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            console.info(`[AUTOMATION-QUALITY-GATE] attempt_start marketplace=Mercado Livre attempt=${attempt}`);
-
-            try {
-              const snapshots = await processLinks([rawUrl], connections, 'auto', userId, supabase, body);
-              const nextSnapshot = snapshots?.[0];
-
-              if (nextSnapshot) {
-                bestSnapshot = chooseBestAutomationSnapshot(bestSnapshot, nextSnapshot);
-              }
-
-              if (bestSnapshot && isCompleteMercadoLivreAutomationOffer(bestSnapshot)) {
-                console.info(`[AUTOMATION-QUALITY-GATE] passed marketplace=Mercado Livre attempt=${attempt}`);
-                break;
-              }
-
-              console.warn('[AUTOMATION-QUALITY-GATE] incomplete_snapshot_retrying', {
-                attempt,
-                ...(bestSnapshot ? getMercadoLivreGateDiagnostics(bestSnapshot) : { failedChecks: ['no_snapshot'] }),
-              });
-
-            } catch (err: any) {
-              console.error(`[AUTOMATION-QUALITY-GATE] error in attempt ${attempt}:`, err.message);
-            }
-
-            if (attempt < maxAttempts) {
-              const delay = attempt === 1 ? 1000 : 2000;
-              await sleep(delay);
-            }
-          }
-
-          if (!bestSnapshot || !isCompleteMercadoLivreAutomationOffer(bestSnapshot)) {
-            console.warn('[AUTOMATION-QUALITY-GATE] blocked_incomplete_offer', {
-              marketplace: 'Mercado Livre',
-              reason: 'metadata_incomplete_after_retries'
-            });
-            console.warn(`${logPrefix} [ML-GROUP-MONITOR] blocked=true reason=incomplete_metadata`);
-            
-            await automationService.logEvent({
-              source_id: source.id,
-              user_id: userId,
-              status: 'filtered',
-              event_type: 'operational_lock',
-              details: { 
-                url: normalized, 
-                status: bestSnapshot?.factual?.eligibility?.status || 'incomplete', 
-                error: 'Oferta com metadados incompletos ou inválidos (Mercado Livre Quality Gate)', 
-                messageId 
-              }
-            }, supabase);
-
-            continue;
-          }
-
-          snapshot = bestSnapshot;
-
-        } else {
-          const snapshots = await processLinks([rawUrl], connections, 'auto', userId, supabase, body);
-          snapshot = snapshots[0];
+          console.log(`[ML-GROUP-MONITOR] processlinks_start`);
         }
+        
+        const snapshots = await processLinks([rawUrl], connections, 'auto', userId, supabase, body);
+        const snapshot = snapshots?.[0];
 
         if (!snapshot) {
           console.error(`${logPrefix} [ITEM] [ERROR] Falha ao capturar metadados do produto (Snapshot nulo).`);
@@ -535,6 +336,27 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
         }
 
         if (isML) {
+          console.log(`[ML-GROUP-MONITOR] processlinks_done hasSnapshot=true`);
+          
+          if (!isCompleteForAutomation(snapshot)) {
+            console.warn(`${logPrefix} [ML-GROUP-MONITOR] blocked=true reason=incomplete_metadata`);
+            
+            await automationService.logEvent({
+              source_id: source.id,
+              user_id: userId,
+              status: 'filtered',
+              event_type: 'operational_lock',
+              details: { 
+                url: normalized, 
+                status: snapshot.factual?.eligibility?.status || 'incomplete', 
+                error: 'Oferta com metadados incompletos ou inválidos (Mercado Livre Quality Gate)', 
+                messageId 
+              }
+            }, supabase);
+
+            continue;
+          }
+          console.log(`[ML-GROUP-MONITOR] passed=true`);
           console.log(`[ML-GROUP-MONITOR] processed=true eligibility=${snapshot.factual.eligibility?.status || 'none'}`);
           if (snapshot.factual.reaffiliation_status === 'reaffiliated') {
             console.log(`[ML-GROUP-MONITOR] reaffiliate_success=true`);
