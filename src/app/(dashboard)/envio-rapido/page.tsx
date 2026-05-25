@@ -56,6 +56,53 @@ const TONE_OPTIONS = [
   { value: 'natural', label: '🌿 Natural', desc: 'Conversa informal' },
 ];
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function isCompleteProductResult(product: ProductSnapshot | null): boolean {
+  return Boolean(
+    product &&
+    product.factual && 
+    product.factual.title &&
+    product.factual.title !== 'Produto Mercado Livre' &&
+    product.factual.image &&
+    product.factual.price &&
+    product.factual.price > 0 &&
+    product.factual.price_unavailable !== true
+  )
+}
+
+function chooseBestResult(previous: ProductSnapshot | null, next: ProductSnapshot | null): ProductSnapshot | null {
+  if (!previous) return next;
+  if (!next) return previous;
+
+  return {
+    ...previous,
+    ...next,
+    factual: {
+      ...previous.factual,
+      ...next.factual,
+      title: (next.factual.title && next.factual.title !== 'Produto Mercado Livre') 
+        ? next.factual.title 
+        : previous.factual.title,
+      image: next.factual.image || previous.factual.image,
+      price: (next.factual.price && next.factual.price > 0)
+        ? next.factual.price
+        : previous.factual.price,
+      priceFormatted: (next.factual.price && next.factual.price > 0)
+        ? next.factual.priceFormatted
+        : previous.factual.priceFormatted,
+      originalPrice: (next.factual.originalPrice && next.factual.originalPrice > 0)
+        ? next.factual.originalPrice
+        : previous.factual.originalPrice,
+      originalPriceFormatted: (next.factual.originalPrice && next.factual.originalPrice > 0)
+        ? next.factual.originalPriceFormatted
+        : previous.factual.originalPriceFormatted,
+      discountPercent: next.factual.discountPercent ?? previous.factual.discountPercent,
+      price_unavailable: (next.factual.price && next.factual.price > 0) ? false : (previous.factual.price_unavailable && next.factual.price_unavailable),
+    }
+  };
+}
+
 function startStageTicker(index: number, total: number, setProgressMessage: (msg: string) => void) {
   const timers = [
     setTimeout(() => setProgressMessage(`Produto ${index + 1} de ${total} — buscando título e imagem...`), 1000),
@@ -338,59 +385,75 @@ export default function EnvioRapidoPage() {
 
       for (let i = 0; i < links.length; i++) {
         const link = links[i];
+        let bestResult: ProductSnapshot | null = null;
+        const maxAttempts = 3;
 
-        setProgress({
-          total: links.length,
-          current: i,
-          percent: Math.round((i / links.length) * 100),
-          message: `Produto ${i + 1} de ${links.length} — gerando link seguro e rastreado...`
-        });
-
-        const stopTicker = startStageTicker(i, links.length, (msg) => {
-          setProgress(prev => ({ ...prev, message: msg }));
-        });
-
-        try {
-          const res = await fetch('/api/links/process', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              links: [link], 
-              tone, 
-              sourceText: link,
-              coupons: couponsToUse
-            })
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          setProgress({
+            total: links.length,
+            current: i,
+            percent: Math.round((i / links.length) * 100),
+            message: attempt === 1
+              ? `Produto ${i + 1} de ${links.length} — buscando dados da oferta...`
+              : `Produto ${i + 1} de ${links.length} — tentando recuperar dados (${attempt}/${maxAttempts})...`
           });
 
-          if (!res.ok) {
-            throw new Error('Falha na API de processamento');
-          }
+          const stopTicker = startStageTicker(i, links.length, (msg) => {
+            setProgress(prev => ({ ...prev, message: msg }));
+          });
 
-          const data = await res.json();
-          accumulatedResults.push(...data.results);
-          
+          try {
+            const res = await fetch('/api/links/process', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                links: [link], 
+                tone, 
+                sourceText: link,
+                coupons: couponsToUse
+              })
+            });
+
+            if (!res.ok) {
+              throw new Error('Falha na API de processamento');
+            }
+
+            const data = await res.json();
+            const result = data.results && data.results.length > 0 ? data.results[0] : null;
+
+            bestResult = chooseBestResult(bestResult, result);
+
+            if (isCompleteProductResult(bestResult)) {
+              break;
+            }
+
+            if (attempt < maxAttempts) {
+              await sleep(attempt === 1 ? 900 : 1500);
+            }
+          } catch (error) {
+            console.error(`Process error for link ${link} at attempt ${attempt}:`, error);
+            if (attempt < maxAttempts) {
+              await sleep(attempt === 1 ? 900 : 1500);
+            }
+          } finally {
+            stopTicker();
+          }
+        }
+
+        if (bestResult) {
+          accumulatedResults.push(bestResult);
           setProcessedProducts([...accumulatedResults]);
           setSelectedProductIds(accumulatedResults.map((p: any) => p.id));
-
-          setProgress(prev => ({
-            ...prev,
-            current: i + 1,
-            percent: Math.round(((i + 1) / links.length) * 100),
-            message: `Produto ${i + 1} de ${links.length} finalizado.`
-          }));
-        } catch (error) {
-          console.error(`Process error for link ${link}:`, error);
+        } else {
           toast.error(`Falha ao processar o link ${i + 1}. Continuando...`);
-          
-          setProgress(prev => ({
-            ...prev,
-            current: i + 1,
-            percent: Math.round(((i + 1) / links.length) * 100),
-            message: `Link ${i + 1} falhou, continuando os próximos...`
-          }));
-        } finally {
-          stopTicker();
         }
+
+        setProgress(prev => ({
+          ...prev,
+          current: i + 1,
+          percent: Math.round(((i + 1) / links.length) * 100),
+          message: `Produto ${i + 1} de ${links.length} finalizado.`
+        }));
       }
 
       setProgress({
