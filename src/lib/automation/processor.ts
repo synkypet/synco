@@ -81,7 +81,26 @@ function extractShopeeLinks(text: string): string[] {
   const matches = [];
   let match;
   while ((match = shopeeRegex.exec(text)) !== null) {
-    matches.push(match[1].trim());
+    let url = match[1].trim();
+    url = url.replace(/[.,)\]]+$/, '');
+    matches.push(url);
+  }
+  return [...new Set(matches)];
+}
+
+/**
+ * Extrai links do Mercado Livre de um texto.
+ */
+function extractMercadoLivreLinks(text: string): string[] {
+  // Domínios permitidos: mercadolivre.com.br, www.mercadolivre.com.br, produto.mercadolivre.com.br, meli.la, e /social/ dentro de mercadolivre
+  const mlRegex = /(?:^|\s)(https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:mercadolivre\.com\.br|meli\.la)\/[^\s]+)/gi;
+  const matches = [];
+  let match;
+  while ((match = mlRegex.exec(text)) !== null) {
+    let url = match[1].trim();
+    // Limpar pontuação final que pode vir grudada na URL em mensagens
+    url = url.replace(/[.,)\]]+$/, '');
+    matches.push(url);
   }
   return [...new Set(matches)];
 }
@@ -193,17 +212,19 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
       }
     }
 
-    // Detecção robusta de links Shopee (incluindo Mobile e texto misto)
+    // Detecção robusta de links Shopee e Mercado Livre
     console.log(`${logPrefix} [STEP] Extraindo links do texto...`);
-    const links = extractShopeeLinks(body);
+    const shopeeLinks = extractShopeeLinks(body);
+    const mercadoLivreLinks = extractMercadoLivreLinks(body);
+    const links = [...shopeeLinks, ...mercadoLivreLinks];
     
     // Se não há links nem cupons de código, então paramos
     if (links.length === 0 && detectedCoupons.filter(c => c.type === 'codigo').length === 0) {
-      console.log(`${logPrefix} [SKIP] Motivo: Nenhum link ou código de cupom Shopee identificado.`);
-      return { skipped: 'no_shopee_content', bodyPreview: body?.substring(0, 50) };
+      console.log(`${logPrefix} [SKIP] Motivo: Nenhum link de afiliado ou código de cupom identificado.`);
+      return { skipped: 'no_affiliate_content', bodyPreview: body?.substring(0, 50) };
     }
 
-    console.log(`${logPrefix} [STEP] ✓ Identificados ${links.length} links e ${detectedCoupons.length} cupons.`);
+    console.log(`${logPrefix} [STEP] ✓ Identificados ${shopeeLinks.length} links Shopee, ${mercadoLivreLinks.length} links ML e ${detectedCoupons.length} cupons.`);
 
     const connections = await marketplaceService.getEnrichedConnections(userId, supabase);
     console.log(`${logPrefix} [STEP] ✓ Conexões recuperadas. Buscando rotas de destino ativas para Source ${source.id}...`);
@@ -242,8 +263,21 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
     console.log(`${logPrefix} [STEP] Iniciando iteração sobre os links...`);
 
     for (const rawUrl of links) {
-      const normalized = normalizeShopeeUrl(rawUrl);
+      const isShopee = shopeeLinks.includes(rawUrl);
+      const isML = mercadoLivreLinks.includes(rawUrl);
+      const normalized = isShopee ? normalizeShopeeUrl(rawUrl) : rawUrl;
+      
       console.log(`${logPrefix} [ITEM] Processando link: ${rawUrl}`);
+      
+      if (isML) {
+        let inputKind = 'direct';
+        if (rawUrl.includes('meli.la')) inputKind = 'meli_short';
+        else if (rawUrl.includes('/social/')) inputKind = 'social';
+        
+        console.log(`[GROUP-MONITOR-LINK] marketplace=Mercado Livre inputKind=${inputKind}`);
+        console.log(`[ML-GROUP-MONITOR] userIdPrefix=${userId.substring(0,8)} hasUserId=true`);
+        console.log(`[ML-GROUP-MONITOR] detected=true count=1`);
+      }
       
       try {
         console.log(`${logPrefix} [ITEM] Convertendo link e buscando metadados...`);
@@ -260,6 +294,13 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
             details: { url: normalized, messageId }
           }, supabase);
           continue;
+        }
+
+        if (isML) {
+          console.log(`[ML-GROUP-MONITOR] processed=true eligibility=${snapshot.factual.eligibility?.status || 'none'}`);
+          if (snapshot.factual.reaffiliation_status === 'reaffiliated') {
+            console.log(`[ML-GROUP-MONITOR] reaffiliate_success=true`);
+          }
         }
 
         // --- GUARDIÃO OPERACIONAL (FRENTE 1 & 2) ---
