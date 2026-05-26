@@ -10,13 +10,10 @@ export const campaignService = {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
-    const { data, error, count } = await supabase
+    // 1. Buscar apenas as campanhas necessárias
+    const { data: campaignsData, error, count } = await supabase
       .from('campaigns')
-      .select(`
-        *,
-        items:campaign_items(*),
-        destinations:campaign_destinations(*)
-      `, { count: 'exact' })
+      .select('id, user_id, name, status, created_at, scheduled_at, origin, metadata', { count: 'exact' })
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -26,10 +23,54 @@ export const campaignService = {
       throw error;
     }
 
+    let campaigns = (campaignsData || []) as unknown as Campaign[];
+
+    // 2. Se houver campanhas, buscar itens e destinos leve (apenas os necessários para a UI)
+    if (campaigns.length > 0) {
+      const campaignIds = campaigns.map(c => c.id);
+
+      const [itemsRes, destsRes] = await Promise.all([
+        supabase
+          .from('campaign_items')
+          .select('id, campaign_id, image_url')
+          .in('campaign_id', campaignIds),
+        supabase
+          .from('campaign_destinations')
+          .select('id, campaign_id')
+          .in('campaign_id', campaignIds)
+      ]);
+
+      if (itemsRes.error) console.error('Error fetching campaign_items:', itemsRes.error);
+      if (destsRes.error) console.error('Error fetching campaign_destinations:', destsRes.error);
+
+      const items = itemsRes.data || [];
+      const destinations = destsRes.data || [];
+
+      // Montar os arrays na memória O(N) para evitar O(N^2)
+      const itemsMap = new Map<string, any[]>();
+      const destsMap = new Map<string, any[]>();
+
+      for (const item of items) {
+        if (!itemsMap.has(item.campaign_id)) itemsMap.set(item.campaign_id, []);
+        itemsMap.get(item.campaign_id)!.push(item);
+      }
+
+      for (const dest of destinations) {
+        if (!destsMap.has(dest.campaign_id)) destsMap.set(dest.campaign_id, []);
+        destsMap.get(dest.campaign_id)!.push(dest);
+      }
+
+      campaigns = campaigns.map(c => ({
+        ...c,
+        items: itemsMap.get(c.id) || [],
+        destinations: destsMap.get(c.id) || []
+      })) as Campaign[];
+    }
+
     const total = count || 0;
 
     return {
-      campaigns: data as Campaign[],
+      campaigns,
       total,
       page,
       pageSize,

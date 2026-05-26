@@ -9,8 +9,10 @@ export function useCampaigns(userId?: string, page: number = 1, pageSize: number
     queryKey: ['campaigns', userId, page, pageSize],
     queryFn: () => userId ? campaignService.list(userId, page, pageSize) : Promise.resolve({ campaigns: [], total: 0, page, pageSize, totalPages: 0 }),
     enabled: !!userId,
-    // Polling mais agressivo para ver novas campanhas
-    refetchInterval: 5000,
+    // Polling agressivo, mas aborta em caso de erro para evitar martelar o DB (Timeout 57014)
+    refetchInterval: (query: any) => (query.state?.error ? false : 5000),
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 }
 
