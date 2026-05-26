@@ -1204,7 +1204,8 @@ export async function processLinks(
           currentPriceFactual: metadata?.currentPriceFactual,
           currentPriceSource: metadata?.currentPriceSource,
           finalLinkToSend: preResult?.generated_affiliate_url || targetUrl,
-          source_text: sourceText
+          source_text: sourceText,
+          coupons: classification.coupons || []
         };
         const { content, isSystem } = await resolveAndRenderTemplate(supabase, partialFactual, userId);
         templatedMessage = content;

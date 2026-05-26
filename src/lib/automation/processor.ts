@@ -248,8 +248,17 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
 
     // Detecção robusta de links Shopee e Mercado Livre
     console.log(`${logPrefix} [STEP] Extraindo links do texto...`);
-    const shopeeLinks = extractShopeeLinks(body);
+    let shopeeLinks = extractShopeeLinks(body);
     const mercadoLivreLinks = extractMercadoLivreLinks(body);
+
+    // --- FILTRAGEM DE LINKS COMPLEMENTARES (FASE 2) ---
+    // Se um link já foi identificado como o link de resgate de um cupom anexo,
+    // não processamos ele de novo como uma entidade separada.
+    if (detectedCoupons.length > 0) {
+      const couponUrls = new Set(detectedCoupons.map(c => c.redemptionUrl).filter(Boolean));
+      shopeeLinks = shopeeLinks.filter(url => !couponUrls.has(url));
+    }
+
     const links = [...shopeeLinks, ...mercadoLivreLinks];
     
     // Se não há links nem cupons de código, então paramos

@@ -139,9 +139,19 @@ export function buildSmartContext(data: FactualData, sourceName?: string): Smart
         ? data.coupons[0].redemptionUrl 
         : data.finalLinkToSend);
       couponBlock = `Para chegar nesse valor, resgate aqui e aplique o cupom de R$ ${insight.couponAmount.value} OFF:\n${couponUrl}`;
+    } else if (data.coupons && data.coupons.length > 0) {
+      const c = data.coupons[0];
+      if (c.code) {
+        couponBlock = `🎟️ Use o cupom: ${c.code}`;
+        if (c.redemptionUrl && c.redemptionUrl !== data.finalLinkToSend) {
+          couponBlock += `\n➡️ ${c.redemptionUrl}`;
+        }
+      } else if (c.redemptionUrl && c.redemptionUrl !== data.finalLinkToSend) {
+        couponBlock = `🎟️ Resgate seu cupom:\n➡️ ${c.redemptionUrl}`;
+      }
     }
 
-    if (insight.canDisplayCouponPrice) {
+    if (insight.canDisplayCouponPrice || couponBlock) {
       disclaimer = '⚠️ Preços e cupons sujeitos à disponibilidade da Shopee.';
     }
   }

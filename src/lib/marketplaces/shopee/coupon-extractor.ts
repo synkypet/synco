@@ -124,12 +124,17 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
     const code = match[1].toUpperCase();
     if (BLACKLISTED_CODES.includes(code)) continue;
 
+    const currentPos = match.index;
+    const remainingText = rawText.substring(currentPos);
+    const nearUrlMatch = remainingText.match(urlRegex);
+    const url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
+
     coupons.push({
       marketplace: 'shopee',
       type: 'codigo',
       code: code,
       couponLabel: null,
-      redemptionUrl: foundUrls.length > 0 ? foundUrls[0] : null,
+      redemptionUrl: url,
       confidence: 0.98, // Aumentado por ser explícito
       status: 'candidate',
       dedupeKey: generateDedupeKey({ type: 'codigo', code })
@@ -154,21 +159,26 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
           const isGeneric = BLACKLISTED_CODES.includes(code);
           
           if (!isGeneric && !/^\d+$/.test(code) && !code.includes('OFF') && !code.includes('HTTP') && hasNumber) {
-          coupons.push({
-            marketplace: 'shopee',
-            type: 'codigo',
-            code: code,
-            couponLabel: null,
-            redemptionUrl: foundUrls.length > 0 ? foundUrls[0] : null,
-            confidence: 0.85,
-            status: 'candidate',
-            dedupeKey: generateDedupeKey({ type: 'codigo', code })
-          });
-          break;
+            const currentPos = line.indexOf(isolatedMatch[0]);
+            const remainingText = line.substring(currentPos);
+            const nearUrlMatch = remainingText.match(urlRegex);
+            const url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
+
+            coupons.push({
+              marketplace: 'shopee',
+              type: 'codigo',
+              code: code,
+              couponLabel: null,
+              redemptionUrl: url,
+              confidence: 0.85,
+              status: 'candidate',
+              dedupeKey: generateDedupeKey({ type: 'codigo', code })
+            });
+            break;
+          }
         }
       }
     }
-  }
 
   // 4. Extração de Desconto + Link
   const discountLinePattern = /((?:R\$\s?\d+|(?:\d+)\s?%)\s?OFF(?:[^\n|]*))/gi;
