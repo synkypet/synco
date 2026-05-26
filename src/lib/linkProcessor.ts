@@ -160,11 +160,12 @@ function findAdapter(url: string): MarketplaceAdapter | null {
  * Classifica a oferta com base em heurísticas de texto e links.
  */
 export function classifyOffer(text: string, factual: Partial<FactualData>): { type: OfferType; reasons: string[]; coupons?: ShopeeCoupon[] } {
-  const content = (text + ' ' + (factual.title || '')).toLowerCase();
+  const textToAnalyze = factual.source_text || text;
+  const content = (textToAnalyze + ' ' + (factual.title || '')).toLowerCase();
   const reasons: string[] = [];
 
   // 1. Uso do novo classificador unificado (Fase 2H)
-  const shopeeClassification = classifyShopeeContentForCoupon(text, {
+  const shopeeClassification = classifyShopeeContentForCoupon(textToAnalyze, {
     title: factual.title,
     canonical_url: factual.canonical_url
   });
@@ -180,10 +181,10 @@ export function classifyOffer(text: string, factual: Partial<FactualData>): { ty
         : 'promo_landing';
 
     // Recuperar cupons para metadados
-    let shopeeCoupons = extractShopeeCoupons(text);
+    let shopeeCoupons = extractShopeeCoupons(textToAnalyze);
 
     // Se for página oficial de cupons, gerar cupom sintético com tipo pagina_cupons
-    const isCouponPage = text.toLowerCase().includes('/m/cupom-de-desconto') || 
+    const isCouponPage = textToAnalyze.toLowerCase().includes('/m/cupom-de-desconto') || 
                          (factual.canonical_url && factual.canonical_url.toLowerCase().includes('/m/cupom-de-desconto'));
     
     if (isCouponPage && shopeeCoupons.length === 0) {
@@ -1020,57 +1021,12 @@ export async function processLinks(
              lower.endsWith('/events/');
     };
 
-    // 1. Checagem inicial por URL de entrada (apenas se NÃO for landing page genérica e não tiver match explícito por ID)
-    if (!existingCoupon && supabase && userId && marketplace === 'Shopee' && !isGenericLanding(targetUrl)) {
-      try {
-        const { data } = await supabase
-          .from('discovered_coupons')
-          .select('*')
-          .eq('user_id', userId)
-          .or(`source_url.eq.${targetUrl},redemption_url.eq.${targetUrl}`);
-        if (data && data.length > 0) {
-          const possibleCoupon = data[0];
-          // Só aceita o match se a URL salva no banco não for uma landing page genérica compartilhada
-          const savedUrlIsGeneric = (possibleCoupon.redemption_url && isGenericLanding(possibleCoupon.redemption_url)) ||
-                                    (possibleCoupon.source_url && isGenericLanding(possibleCoupon.source_url));
-          if (!savedUrlIsGeneric) {
-            existingCoupon = possibleCoupon;
-            matchStrategy = targetUrl === existingCoupon.redemption_url ? 'exact_redemption_url' : 'exact_source_url';
-            finalCouponId = existingCoupon.id;
-            finalCouponCode = existingCoupon.code;
-            finalCouponRedemptionUrl = existingCoupon.redemption_url;
-          }
-        }
-      } catch (err) {
-        console.error('[LINK-PROCESSOR] Erro ao buscar cupom existente por URL de entrada:', err);
-      }
-    }
+    // 1. Checagem inicial por URL de entrada removida para evitar sequestro prematuro de produtos.
+    // A checagem de banco só deve ocorrer se tivermos certeza que a URL é de cupom/voucher,
+    // o que é feito na fase de "Checagem após a resolução".
 
-    // Checagem por código de cupom explícito na URL/texto (se não encontrado e não genérico)
-    if (!existingCoupon && supabase && userId && marketplace === 'Shopee') {
-      const shopeeCodes = extractShopeeCoupons(link);
-      if (shopeeCodes.length > 0) {
-        const firstCode = shopeeCodes[0].code;
-        try {
-          const { data } = await supabase
-            .from('discovered_coupons')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('code', firstCode)
-            .eq('status', 'valid')
-            .limit(1);
-          if (data && data.length > 0) {
-            existingCoupon = data[0];
-            matchStrategy = 'explicit_code';
-            finalCouponId = existingCoupon.id;
-            finalCouponCode = existingCoupon.code;
-            finalCouponRedemptionUrl = existingCoupon.redemption_url;
-          }
-        } catch (err) {
-          console.error('[LINK-PROCESSOR] Erro ao buscar por code explícito:', err);
-        }
-      }
-    }
+    // Checagem por código explícito na string URL removida porque a URL curta raramente contém o código,
+    // e usar sourceText aqui sequestraria produtos.
 
     console.log('[LINK-PROCESSOR-AUDIT]', {
       receivedCouponId: matchedPayloadCoupon?.couponId || null,
@@ -1126,44 +1082,58 @@ export async function processLinks(
                  lower.endsWith('/events/');
         };
 
+        const isProductUrl = (url: string) => {
+          const lower = url.toLowerCase();
+          return lower.includes('-i.') || lower.includes('/product/') || /\/\d+\/\d+/.test(lower);
+        };
+
         if (supabase && userId && preResult) {
           try {
-            const urlsToSearch = [];
-            if (preResult.canonical_url && !isGenericLanding(preResult.canonical_url)) {
-              urlsToSearch.push(`canonical_url.eq.${preResult.canonical_url}`, `source_url.eq.${preResult.canonical_url}`, `redemption_url.eq.${preResult.canonical_url}`);
-            }
-            if (preResult.resolved_url && !isGenericLanding(preResult.resolved_url)) {
-              urlsToSearch.push(`canonical_url.eq.${preResult.resolved_url}`, `source_url.eq.${preResult.resolved_url}`, `redemption_url.eq.${preResult.resolved_url}`);
-            }
+            // Se a URL canônica for de produto, não devemos sequestrá-la como cupom
+            const canonicalIsProduct = preResult.canonical_url && isProductUrl(preResult.canonical_url);
             
-            if (urlsToSearch.length > 0) {
-              const { data } = await supabase
-                .from('discovered_coupons')
-                .select('*')
-                .eq('user_id', userId)
-                .or(urlsToSearch.join(','));
-              if (data && data.length > 0) {
-                const possibleCoupon = data[0];
-                const savedUrlIsGeneric = (possibleCoupon.redemption_url && isGenericLanding(possibleCoupon.redemption_url)) ||
-                                          (possibleCoupon.source_url && isGenericLanding(possibleCoupon.source_url));
-                if (!savedUrlIsGeneric) {
-                  existingCoupon = possibleCoupon;
-                  matchStrategy = 'exact_redemption_url';
-                  finalCouponId = existingCoupon.id;
-                  finalCouponCode = existingCoupon.code;
-                  finalCouponRedemptionUrl = existingCoupon.redemption_url;
-                  
-                  console.log('[LINK-PROCESSOR-AUDIT]', {
-                    receivedCouponId: matchedPayloadCoupon?.couponId || null,
-                    receivedInputUrl: targetUrl,
-                    selectedCouponId: finalCouponId,
-                    selectedCouponCode: finalCouponCode,
-                    selectedCouponLabel: existingCoupon?.coupon_label || null,
-                    selectedCouponRedemptionUrl: finalCouponRedemptionUrl,
-                    matchStrategy: matchStrategy
-                  });
+            if (!canonicalIsProduct) {
+              const urlsToSearch = [];
+              // Apenas busca por redemption_url ou canonical_url para evitar que exact_source_url 
+              // sequestre produtos que estavam na mesma mensagem de um cupom
+              if (preResult.canonical_url && !isGenericLanding(preResult.canonical_url)) {
+                urlsToSearch.push(`canonical_url.eq.${preResult.canonical_url}`, `redemption_url.eq.${preResult.canonical_url}`);
+              }
+              if (preResult.resolved_url && !isGenericLanding(preResult.resolved_url)) {
+                urlsToSearch.push(`canonical_url.eq.${preResult.resolved_url}`, `redemption_url.eq.${preResult.resolved_url}`);
+              }
+              
+              if (urlsToSearch.length > 0) {
+                const { data } = await supabase
+                  .from('discovered_coupons')
+                  .select('*')
+                  .eq('user_id', userId)
+                  .or(urlsToSearch.join(','));
+                if (data && data.length > 0) {
+                  const possibleCoupon = data[0];
+                  const savedUrlIsGeneric = (possibleCoupon.redemption_url && isGenericLanding(possibleCoupon.redemption_url)) ||
+                                            (possibleCoupon.canonical_url && isGenericLanding(possibleCoupon.canonical_url));
+                  if (!savedUrlIsGeneric) {
+                    existingCoupon = possibleCoupon;
+                    matchStrategy = 'exact_redemption_url';
+                    finalCouponId = existingCoupon.id;
+                    finalCouponCode = existingCoupon.code;
+                    finalCouponRedemptionUrl = existingCoupon.redemption_url;
+                    
+                    console.log('[LINK-PROCESSOR-AUDIT]', {
+                      receivedCouponId: matchedPayloadCoupon?.couponId || null,
+                      receivedInputUrl: targetUrl,
+                      selectedCouponId: finalCouponId,
+                      selectedCouponCode: finalCouponCode,
+                      selectedCouponLabel: existingCoupon?.coupon_label || null,
+                      selectedCouponRedemptionUrl: finalCouponRedemptionUrl,
+                      matchStrategy: matchStrategy
+                    });
+                  }
                 }
               }
+            } else {
+               console.log('[SHOPEE-MIXED-OFFER] product_processed=true canonical is product, skipping coupon DB lookup to avoid hijacking');
             }
           } catch (err) {
             console.error('[LINK-PROCESSOR] Erro ao buscar cupom existente após resolução:', err);
@@ -1214,7 +1184,8 @@ export async function processLinks(
       const factualForClassification: any = {
         title: metadata?.name || 'Produto sem título',
         price: price,
-        canonical_url: preResult?.canonical_url || targetUrl
+        canonical_url: preResult?.canonical_url || targetUrl,
+        source_text: sourceText
       };
 
       const classification = classifyOffer(link, factualForClassification);
