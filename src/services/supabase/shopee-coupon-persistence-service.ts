@@ -144,11 +144,11 @@ export const shopeeCouponPersistenceService = {
           .single();
          
          if (errorFallback) throw errorFallback;
-         return { id: savedFallback?.id, reaffiliated: reaffiliationStatus === 'reaffiliated' };
+         return { id: savedFallback?.id, reaffiliated: reaffiliationStatus === 'reaffiliated', redemptionUrl: finalRedemptionUrl };
       }
       throw error;
     }
 
-    return { id: saved?.id, reaffiliated: reaffiliationStatus === 'reaffiliated' };
+    return { id: saved?.id, reaffiliated: reaffiliationStatus === 'reaffiliated', redemptionUrl: finalRedemptionUrl };
   }
 };

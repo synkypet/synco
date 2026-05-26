@@ -231,15 +231,42 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
     const detectedCoupons = extractShopeeCoupons(body);
     
     // --- PERSISTÊNCIA DE CUPONS (FASE 2C.1) ---
+    const couponAffiliateMap: Record<string, {
+      code: string | null;
+      originalRedemptionUrl: string | null;
+      affiliateRedemptionUrl: string | null;
+    }> = {};
+
     if (detectedCoupons.length > 0) {
       console.log(`${logPrefix} [STEP] Persistindo ${detectedCoupons.length} cupons candidatos...`);
       for (const coupon of detectedCoupons) {
         try {
-          await shopeeCouponService.persistCandidate(userId, coupon, {
+          const result = await shopeeCouponService.persistCandidate(userId, coupon, {
             sourceId: source.id,
             sourceUrl: coupon.redemptionUrl || undefined,
             rawText: body
           }, supabase);
+
+          let affiliateUrl = null;
+          if (result && result.redemptionUrl && result.redemptionUrl !== coupon.redemptionUrl) {
+            affiliateUrl = result.redemptionUrl;
+          } else if (result && result.redemption_url && result.redemption_url !== coupon.redemptionUrl) {
+            affiliateUrl = result.redemption_url;
+          }
+
+          if (coupon.code) {
+             couponAffiliateMap[coupon.code] = {
+               code: coupon.code,
+               originalRedemptionUrl: coupon.redemptionUrl,
+               affiliateRedemptionUrl: affiliateUrl
+             };
+          } else if (coupon.redemptionUrl) {
+             couponAffiliateMap[coupon.redemptionUrl] = {
+               code: null,
+               originalRedemptionUrl: coupon.redemptionUrl,
+               affiliateRedemptionUrl: affiliateUrl
+             };
+          }
         } catch (err) {
           console.error(`${logPrefix} [ERROR] Falha ao persistir cupom:`, err);
         }
@@ -329,7 +356,16 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
           console.log(`[ML-GROUP-MONITOR] processlinks_start`);
         }
         
-        const snapshots = await processLinks([rawUrl], connections, 'auto', userId, supabase, body);
+        const snapshots = await processLinks(
+          [rawUrl], 
+          connections, 
+          'auto', 
+          userId, 
+          supabase, 
+          body,
+          undefined,
+          couponAffiliateMap
+        );
         const snapshot = snapshots?.[0];
 
         if (!snapshot) {

@@ -554,7 +554,8 @@ export async function processLinks(
   userId?: string,
   supabase?: SupabaseClient,
   sourceText?: string,
-  coupons?: any[]
+  coupons?: any[],
+  couponAffiliateMap?: Record<string, { code: string | null; originalRedemptionUrl: string | null; affiliateRedemptionUrl: string | null }>
 ): Promise<ProductSnapshot[]> {
   const validLinks = links.filter(link => link.trim().length > 0);
   const results: ProductSnapshot[] = [];
@@ -1193,6 +1194,23 @@ export async function processLinks(
       let templatedMessage = undefined;
       let templateMetadata = undefined;
       if (supabase && metadata) {
+        
+        // Aplica os links afiliados aos cupons caso fornecidos via couponAffiliateMap
+        const finalCoupons = (classification.coupons || []).map(c => {
+          const mapEntry = couponAffiliateMap && (c.code ? couponAffiliateMap[c.code] : (c.redemptionUrl ? couponAffiliateMap[c.redemptionUrl] : undefined));
+          if (mapEntry && mapEntry.affiliateRedemptionUrl) {
+            console.log(`[SHOPEE-MIXED-OFFER] coupon_context_attached code=${c.code || 'none'} hasOriginalRedemptionUrl=true hasAffiliateRedemptionUrl=true`);
+            console.log(`[SHOPEE-MIXED-OFFER] coupon_redemption_source=affiliate`);
+            return { ...c, redemptionUrl: mapEntry.affiliateRedemptionUrl };
+          }
+          if (c.redemptionUrl) {
+            console.log(`[SHOPEE-MIXED-OFFER] coupon_redemption_source=original`);
+          } else {
+            console.log(`[SHOPEE-MIXED-OFFER] coupon_redemption_source=none`);
+          }
+          return c;
+        });
+
         // Criar um objeto factual mínimo para a resolução de template
         const partialFactual: any = {
           marketplace: marketplace,
@@ -1205,7 +1223,7 @@ export async function processLinks(
           currentPriceSource: metadata?.currentPriceSource,
           finalLinkToSend: preResult?.generated_affiliate_url || targetUrl,
           source_text: sourceText,
-          coupons: classification.coupons || []
+          coupons: finalCoupons
         };
         const { content, isSystem } = await resolveAndRenderTemplate(supabase, partialFactual, userId);
         templatedMessage = content;
