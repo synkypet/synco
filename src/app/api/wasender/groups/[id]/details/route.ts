@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { WasenderClient } from '@/lib/wasender/client';
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const logPrefix = `[MESH-DETAIL] [${new Date().toISOString()}]`;
+  const groupIdPrefix = params.id.split('-')[0];
+  const logPrefix = `[WASENDER-GROUP-DETAILS]`;
+  console.log(`${logPrefix} start groupIdPrefix=${groupIdPrefix}`);
   
   try {
     const supabase = createClient();
@@ -17,7 +20,6 @@ export async function GET(
     }
 
     const groupId = params.id;
-    console.log(`${logPrefix} Iniciando sync profundo para grupo local: ${groupId}`);
 
     // 1. Buscar o grupo e o canal vinculado
     const { data: group, error: groupError } = await supabase
@@ -28,17 +30,18 @@ export async function GET(
       .single();
 
     if (groupError || !group || !group.remote_id) {
-       console.error(`${logPrefix} Grupo não encontrado ou sem remote_id: ${groupId}`);
+       console.error(`${logPrefix} Grupo não encontrado ou sem remote_id: ${groupIdPrefix}`);
        return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
     const { config } = group.channels as any;
     const sessionId = config?.wasender_session_id || config?.sessionId;
     if (!sessionId) {
-       console.error(`${logPrefix} Sessão não configurada para o canal do grupo: ${groupId}`);
+       console.error(`${logPrefix} Sessão não configurada para o canal do grupo: ${groupIdPrefix}`);
        return NextResponse.json({ error: 'Channel session not found' }, { status: 404 });
     }
     const remoteId = group.remote_id;
+    console.log(`${logPrefix} local_group_found=true hasChannel=true`);
 
     // 1.1 Buscar Session API Key nas secrets
     const { data: secrets } = await supabase
@@ -48,32 +51,38 @@ export async function GET(
       .single();
 
     let sessionApiKey = secrets?.session_api_key;
+    let operationalKeySource = sessionApiKey && !sessionApiKey.includes(':') ? 'existing' : 'missing';
     
     // 1.2 PONTE DE AUTENTICAÇÃO AUTÔNOMA (Zero-User-Auth)
-    if (!sessionApiKey || sessionApiKey.includes(':')) {
-      console.log(`${logPrefix} Chave operacional ausente. Iniciando ponte administrativa para ${sessionId}...`);
-      
+    if (operationalKeySource === 'missing') {
       try {
         const sessionData = await WasenderClient.getSession(sessionId);
         const fetchedKey = sessionData.api_key || sessionData.data?.api_key;
         
         if (fetchedKey) {
-          console.log(`${logPrefix} Chave recuperada com sucesso via PAT. Persistindo...`);
-          
-          await supabase.from('channel_secrets').upsert({
+          operationalKeySource = 'global_pat';
+          const adminClient = createAdminClient();
+          const { error: upsertError } = await adminClient.from('channel_secrets').upsert({
             channel_id: group.channel_id,
             user_id: user.id,
             session_api_key: fetchedKey,
             updated_at: new Date().toISOString()
           }, { onConflict: 'channel_id' });
           
+          if (upsertError) {
+            console.warn(`[MESH-DETAIL] secret_persist_failed continuing_with_runtime_key`);
+            console.log(`${logPrefix} secret_persist_success=false`);
+          } else {
+            console.log(`${logPrefix} secret_persist_success=true`);
+          }
+          
           sessionApiKey = fetchedKey;
         }
 
         // Validação de estado físico da sessão
-        const status = sessionData.status || sessionData.data?.status;
+        const status = String(sessionData.status || sessionData.data?.status || '').toUpperCase();
+        console.log(`${logPrefix} session_status=${status.toLowerCase()}`);
         if (status !== 'CONNECTED') {
-           console.warn(`${logPrefix} Sessão em estado: ${status}. Abortando deep sync.`);
            return NextResponse.json({ 
              error: 'session_disconnected', 
              message: 'Sessão desconectada — reconecte via QR Code',
@@ -84,6 +93,7 @@ export async function GET(
         console.error(`${logPrefix} Falha na ponte de autenticação administrativa:`, bridgeErr.message);
       }
     }
+    console.log(`${logPrefix} operational_key_source=${operationalKeySource}`);
 
     // 2. Buscar dados na WasenderAPI (4 chamadas em paralelo para Malha Profunda)
     console.log(`${logPrefix} Buscando malha real para ${remoteId} (Session: ${sessionId})...`);
