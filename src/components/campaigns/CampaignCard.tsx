@@ -223,7 +223,7 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
       {/* Footer */}
       <div className="px-6 py-4 bg-black/20 flex items-center justify-between border-t border-white/5">
         <span className="text-[8px] font-bold text-white/10 uppercase tracking-widest">
-           ID: {campaign.id.split('-')[0]}
+           ID: {String(campaign.id ?? '').split('-')[0] || '—'}
         </span>
         <Button 
           variant="ghost" 

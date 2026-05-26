@@ -32,11 +32,11 @@ export const campaignService = {
       const [itemsRes, destsRes] = await Promise.all([
         supabase
           .from('campaign_items')
-          .select('id, campaign_id, image_url')
+          .select('id, campaign_id, image_url, product_name, eligibility_status, eligibility_reasons, affiliate_url, reaffiliation_error')
           .in('campaign_id', campaignIds),
         supabase
           .from('campaign_destinations')
-          .select('id, campaign_id')
+          .select('id, campaign_id, destination_type, destination_id')
           .in('campaign_id', campaignIds)
       ]);
 

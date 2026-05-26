@@ -63,7 +63,7 @@ export function CampaignDetailsDrawer({ isOpen, onClose, campaign }: CampaignDet
                 </button>
                 <div className="flex items-center gap-2">
                    <Badge variant="outline" className="h-6 text-[9px] font-black uppercase tracking-widest bg-white/5 border-none">
-                      ID: {campaign.id.split('-')[0]}
+                      ID: {String(campaign.id ?? '').split('-')[0] || '—'}
                    </Badge>
                 </div>
               </div>
@@ -286,7 +286,7 @@ export function CampaignDetailsDrawer({ isOpen, onClose, campaign }: CampaignDet
                           </div>
                        </div>
                        <Badge variant="outline" className="text-[8px] border-white/10 uppercase font-black text-white/20">
-                         {dest.destination_id.split('-')[0]}
+                         {String(dest.destination_id ?? '').split('-')[0] || '—'}
                        </Badge>
                     </div>
                   ))}
