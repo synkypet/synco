@@ -40,8 +40,7 @@ export const groupService = {
         *,
         channels (
           name, 
-          config,
-          channel_secrets (session_api_key)
+          config
         )
       `)
       .eq('id', id)
@@ -51,10 +50,9 @@ export const groupService = {
     if (error) return null;
 
     const channel = (data as any).channels;
-    const sessionKey = channel?.channel_secrets?.[0]?.session_api_key;
     
-    // Uma chave é válida se existir e não parecer ser de Telegram (sem ':')
-    const hasValidKey = !!sessionKey && !sessionKey.includes(':');
+    // Indicador visual simples baseado na flag de status do config, sem vazar segredos para a UI
+    const hasValidKey = channel?.config?.status === 'active';
 
     return {
       ...data,
