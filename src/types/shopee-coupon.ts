@@ -9,6 +9,8 @@ export interface ShopeeCoupon {
   couponLabel: string | null;
   redemptionUrl: string | null;
   confidence: number;
+  confidenceLevel?: 'high' | 'medium' | 'low';
+  source?: 'explicit_label' | 'emoji_line' | 'nearby_text' | 'discount_label' | 'central_page';
   status: ShopeeCouponStatus;
   dedupeKey: string;
 }

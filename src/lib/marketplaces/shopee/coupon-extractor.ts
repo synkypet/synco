@@ -146,6 +146,8 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
       couponLabel: null,
       redemptionUrl: url,
       confidence: 0.98, // Aumentado por ser explícito
+      confidenceLevel: 'high',
+      source: 'explicit_label',
       status: 'candidate',
       dedupeKey: generateDedupeKey({ type: 'codigo', code })
     });
@@ -191,6 +193,8 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
               couponLabel: null,
               redemptionUrl: url,
               confidence: 0.85,
+              confidenceLevel: 'medium',
+              source: 'emoji_line',
               status: 'candidate',
               dedupeKey: generateDedupeKey({ type: 'codigo', code })
             });
@@ -237,6 +241,8 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
         couponLabel: formattedLabel,
         redemptionUrl: url,
         confidence: isProduct ? 0.40 : 0.85, // Confiança baixa se for produto
+        confidenceLevel: isProduct ? 'low' : 'medium',
+        source: 'discount_label',
         status: 'candidate',
         dedupeKey: generateDedupeKey({ type: 'link_resgate', redemptionUrl: url })
       });
@@ -263,6 +269,8 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
           couponLabel: 'Cupom de Desconto Shopee',
           redemptionUrl: url,
           confidence: 0.90,
+          confidenceLevel: 'high',
+          source: 'central_page',
           status: 'candidate',
           dedupeKey: generateDedupeKey({ type: 'pagina_cupons', redemptionUrl: url })
         });
