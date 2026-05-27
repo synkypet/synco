@@ -115,6 +115,9 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
   const normalizedRaw = normalizeCouponText(rawText);
   const lines = normalizedRaw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   
+  const hasCouponKeyword = normalizedRaw.toLowerCase().includes('cupom') || normalizedRaw.toLowerCase().includes('use');
+  console.log(`[SHOPEE-COUPON-EXTRACTOR] normalized_has_coupon_keyword=${hasCouponKeyword}`);
+  
   // 1. Identificar URLs Shopee no texto (usando o texto original caso a normalização afete URLs, mas NFKC não afeta URLs)
   const urlRegex = /https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:shopee\.com\.br|shp\.ee|shope\.ee|s\.shopee\.com\.br|br\.shp\.ee)[^\s]*/gi;
   const foundUrls = (rawText.match(urlRegex) || []).map(sanitizeUrl).filter(url => {
@@ -329,7 +332,11 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
     }
   }
 
-  return Array.from(new Map(coupons.map(c => [c.dedupeKey, c])).values());
+  const uniqueCoupons = Array.from(new Map(coupons.map(c => [c.dedupeKey, c])).values());
+  const detectedCount = uniqueCoupons.length;
+  const codes = uniqueCoupons.map(c => c.code || 'monetary_or_link').join(',');
+  console.log(`[SHOPEE-COUPON-EXTRACTOR] detected_count=${detectedCount} codes=${codes}`);
+  return uniqueCoupons;
 }
 
 /**

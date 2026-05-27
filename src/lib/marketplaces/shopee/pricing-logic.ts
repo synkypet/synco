@@ -132,13 +132,15 @@ export function generatePricingInsight(
   if (hasExplicitCoupon && textPorPrice && currentPrice.value && textPorPrice < currentPrice.value) {
     const reasonableMin = currentPrice.value * 0.2;
     if (textPorPrice >= reasonableMin) {
-      console.log(`[SHOPEE-PRICING] coupon_adjusted_text_price_detected=true apiPrice=${currentPrice.value} textPrice=${textPorPrice} selected=text`);
+      console.log(`[SHOPEE-PRICING] coupon_text_price_selected=true textPrice=${textPorPrice} apiPrice=${currentPrice.value}`);
       currentPrice.value = textPorPrice;
       currentPrice.source = 'factual_text';
       currentPrice.confidence = 0.95;
     } else {
       console.warn(`[SHOPEE-PRICING] coupon_adjusted_text_price_detected=false apiPrice=${currentPrice.value} textPrice=${textPorPrice} reason=text_price_too_low`);
     }
+  } else {
+    console.log(`[SHOPEE-PRICING] coupon_text_price_selected=false hasExplicitCoupon=${hasExplicitCoupon} textPorPrice=${textPorPrice} apiPrice=${currentPrice.value}`);
   }
 
   // 2. Preço Original (Factual, Textual ou Calculado via Desconto)
