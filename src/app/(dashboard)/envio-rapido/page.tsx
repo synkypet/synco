@@ -173,6 +173,8 @@ export default function EnvioRapidoPage() {
   const [aiHeadlines, setAiHeadlines] = useState<Record<string, string>>({});
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [aiHeadlineLoadingByProductId, setAiHeadlineLoadingByProductId] = useState<Record<string, boolean>>({});
+  const isAnyAiHeadlineLoading = Object.values(aiHeadlineLoadingByProductId).some(Boolean);
 
   const { data: savedLists, isLoading: loadingLists } = useDestinations(user?.id);
 
@@ -186,8 +188,16 @@ export default function EnvioRapidoPage() {
 
   const handleGenerateHeadlines = async (targetProductIds: string[], instruction: string) => {
     setIsAiGenerating(true);
+    setIsAiModalOpen(false); // fechar modal conforme preferência
     let successCount = 0;
+    let failCount = 0;
     
+    setAiHeadlineLoadingByProductId(prev => {
+      const next = { ...prev };
+      targetProductIds.forEach(id => next[id] = true);
+      return next;
+    });
+
     try {
       const targetProducts = processedProducts.filter(p => targetProductIds.includes(p.id));
       
@@ -215,22 +225,35 @@ export default function EnvioRapidoPage() {
               if (data.headline) {
                 setAiHeadlines(prev => ({ ...prev, [product.id]: data.headline }));
                 successCount++;
+              } else {
+                failCount++;
               }
+            } else {
+              failCount++;
             }
           } catch (e) {
             console.error(`Erro ao gerar headline para ${product.id}`, e);
+            failCount++;
+          } finally {
+            setAiHeadlineLoadingByProductId(prev => ({ ...prev, [product.id]: false }));
           }
         }));
       }
       
       if (successCount > 0) {
         toast.success(`${successCount} headline(s) gerada(s) com sucesso!`);
-      } else {
-        toast.error('Não foi possível gerar a headline com IA agora. Você ainda pode enviar a oferta normalmente.');
+      }
+      if (failCount > 0) {
+        toast.error('Não foi possível gerar a headline de um dos produtos. Você ainda pode enviar normalmente.');
       }
     } catch (e) {
       console.error(e);
-      toast.error('Não foi possível gerar a headline com IA agora. Você ainda pode enviar a oferta normalmente.');
+      toast.error('Não foi possível processar as headlines. Você ainda pode enviar normalmente.');
+      setAiHeadlineLoadingByProductId(prev => {
+        const next = { ...prev };
+        targetProductIds.forEach(id => next[id] = false);
+        return next;
+      });
     } finally {
       setIsAiGenerating(false);
     }
@@ -1129,24 +1152,36 @@ export default function EnvioRapidoPage() {
                           </div>
 
                           <div className="space-y-2">
-                            {aiHeadlines[product.id] !== undefined && (
+                            {(aiHeadlineLoadingByProductId[product.id] || aiHeadlines[product.id] !== undefined) && (
                               <div className="relative">
                                 <label className="text-[9px] font-black uppercase tracking-widest text-kinetic-orange flex items-center gap-1.5 mb-1.5">
                                   <Sparkles className="w-3 h-3" />
                                   Headline com IA
                                 </label>
-                                <Input
-                                  value={aiHeadlines[product.id] || ''}
-                                  onChange={e => setAiHeadlines(prev => ({ ...prev, [product.id]: e.target.value }))}
-                                  placeholder="Sua headline aqui..."
-                                  className="bg-deep-void/50 border-kinetic-orange/20 shadow-skeuo-pressed text-[11px] font-black uppercase ring-1 ring-kinetic-orange/10 focus-visible:ring-kinetic-orange/50 text-white/90 pr-16"
-                                />
+                                <div className="relative">
+                                  {aiHeadlineLoadingByProductId[product.id] && (
+                                    <div className="absolute inset-y-0 left-0 flex items-center pl-3">
+                                      <Loader2 className="w-4 h-4 text-kinetic-orange animate-spin" />
+                                    </div>
+                                  )}
+                                  <Input
+                                    value={aiHeadlineLoadingByProductId[product.id] ? 'Gerando headline com IA...' : (aiHeadlines[product.id] || '')}
+                                    onChange={e => setAiHeadlines(prev => ({ ...prev, [product.id]: e.target.value }))}
+                                    placeholder="Sua headline aqui..."
+                                    disabled={aiHeadlineLoadingByProductId[product.id]}
+                                    className={cn(
+                                      "bg-deep-void/50 border-kinetic-orange/20 shadow-skeuo-pressed text-[11px] font-black uppercase ring-1 ring-kinetic-orange/10 focus-visible:ring-kinetic-orange/50 text-white/90 pr-16",
+                                      aiHeadlineLoadingByProductId[product.id] ? "pl-9 text-kinetic-orange animate-pulse ring-kinetic-orange/30 shadow-glow-orange cursor-wait" : ""
+                                    )}
+                                  />
+                                </div>
                                 <div className="absolute top-6 right-1.5 flex gap-1">
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    disabled={aiHeadlineLoadingByProductId[product.id]}
                                     onClick={() => handleGenerateHeadlines([product.id], '')}
-                                    className="h-6 w-6 p-0 rounded bg-white/5 hover:bg-kinetic-orange/20 hover:text-kinetic-orange"
+                                    className="h-6 w-6 p-0 rounded bg-white/5 hover:bg-kinetic-orange/20 hover:text-kinetic-orange disabled:opacity-50"
                                     title="Gerar Novamente"
                                   >
                                     <Sparkles className="w-3 h-3" />
@@ -1154,8 +1189,9 @@ export default function EnvioRapidoPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    disabled={aiHeadlineLoadingByProductId[product.id]}
                                     onClick={() => setAiHeadlines(prev => { const next = {...prev}; delete next[product.id]; return next; })}
-                                    className="h-6 w-6 p-0 rounded bg-white/5 hover:bg-red-500/20 hover:text-red-500"
+                                    className="h-6 w-6 p-0 rounded bg-white/5 hover:bg-red-500/20 hover:text-red-500 disabled:opacity-50"
                                     title="Limpar"
                                   >
                                     <AlertCircle className="w-3 h-3" />
@@ -1380,6 +1416,7 @@ export default function EnvioRapidoPage() {
                     className="w-full h-15 font-black uppercase tracking-[0.2em] text-[11px] font-headline italic rounded-2xl shadow-glow-orange-intense transition-all hover:scale-[1.02] active:scale-[0.98]"
                     disabled={
                       isSending || 
+                      isAnyAiHeadlineLoading ||
                       selectedProductIds.length === 0 || 
                       selectedDestinations.length === 0 ||
                       // Trava Final UI: Não permitir se algum selecionado for inelegível (segurança extra)
@@ -1390,6 +1427,10 @@ export default function EnvioRapidoPage() {
                     {isSending ? (
                       <>
                         <Loader2 className="w-5 h-5 mr-3 animate-spin" /> Iniciando envios...
+                      </>
+                    ) : isAnyAiHeadlineLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-3 animate-spin" /> Aguarde a IA terminar ou limpe a headline
                       </>
                     ) : (
                       <>

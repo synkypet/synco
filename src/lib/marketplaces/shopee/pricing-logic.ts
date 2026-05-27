@@ -93,7 +93,12 @@ export function generatePricingInsight(
     const matches = apiTokens.filter(t => textLower.includes(t));
     
     if (matches.length === 0 && apiTokens.length > 0) {
-      console.warn(`[PRICING-LOGIC] Divergência de produto detectada. API: "${apiTitleForMatch}" vs TEXT: "${textLower.substring(0, 50)}..."`);
+      const isOnlyUrl = /^https?:\/\/\S+$/.test(textLower.trim());
+      if (isOnlyUrl) {
+        console.info(`[PRICING-LOGIC] Comparação textual ignorada: sourceText é URL pura.`);
+      } else {
+        console.warn(`[PRICING-LOGIC] Divergência de produto detectada. API: "${apiTitleForMatch}" vs TEXT: "${textLower.substring(0, 50)}..."`);
+      }
       warnings.push('product_entity_mismatch');
       effectiveRawText = undefined;
     }
