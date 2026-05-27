@@ -118,7 +118,7 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
   };
 
   // 2. Extração de Código (Estratégia A: Com Prefixos)
-  const explicitCodePatterns = /(?:use\s+o\s+)?(?:cupom|código|codigo):\s*([A-Z0-9]{8,20})(?!\w)/gi;
+  const explicitCodePatterns = /(?:(?:use\s+o\s+)?cupom|c[oó]digo|use)\s*:?\s*([A-Z0-9]{5,20})(?!\w)/gi;
   let match;
   while ((match = explicitCodePatterns.exec(rawText)) !== null) {
     const code = match[1].toUpperCase();
@@ -148,7 +148,7 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
       const lineUrlRegex = /https?:\/\/[^\s]+/gi;
       line = line.replace(lineUrlRegex, '').trim();
       
-      const standalonePattern = /(?:⚡|🔥|🎟️)?\s*(?<!\w)([A-Z0-9]{8,15})(?!\w)/i;
+      const standalonePattern = /(?:⚡|🔥|🎟️)?\s*(?<!\w)([A-Z0-9]{5,20})(?!\w)/i;
       const isolatedMatch = line.match(standalonePattern);
         
         if (isolatedMatch) {
@@ -268,7 +268,7 @@ export function normalizeShopeeCouponForMessage(coupon: any): {
   // 1. Tentar extrair código do label se o campo code estiver vazio
   if (!code && rawLabel) {
     // Procura por códigos no início do label ou isolados
-    const standalonePattern = /(?:⚡|🔥|🎟️)?\s*\*?([A-Z0-9]{8,15})\*?/i;
+    const standalonePattern = /(?:⚡|🔥|🎟️)?\s*\*?([A-Z0-9]{5,20})\*?/i;
     const match = rawLabel.match(standalonePattern);
     if (match) {
       const extracted = match[1].toUpperCase();

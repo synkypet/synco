@@ -428,6 +428,36 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
 
         console.log(`${logPrefix} [ITEM] ✓ Produto: "${snapshot.factual.title}" | Preço: ${snapshot.factual.currentPriceFactual}`);
 
+        // --- GUARDIÃO ANTES DE PERSISTIR PRODUTO (FASE 2) ---
+        const offerType = snapshot.factual.eligibility?.offer_type;
+        const isVoucherWallet = snapshot.factual.canonical_url?.includes('/user/voucher-wallet') || 
+                                snapshot.factual.title?.toLowerCase() === 'user/voucher wallet' ||
+                                (snapshot.factual.currentPriceFactual === 0 && (offerType === 'coupon_offer' || offerType === 'promo_landing'));
+
+        if (offerType === 'coupon_offer' || offerType === 'promo_landing' || isVoucherWallet) {
+          console.log(`${logPrefix} [SHOPEE-VOUCHER-SKIP] ignored_standalone_voucher_link=true reason=voucher_wallet_before_product_persist type=${offerType}`);
+          
+          // --- PERSISTÊNCIA DE PROMO LANDINGS ---
+          if (offerType === 'promo_landing' && snapshot.factual.landing_type) {
+            console.log(`${logPrefix} [ITEM] [STEP] Persistindo promo landing candidata: ${snapshot.factual.landing_type}`);
+            try {
+              await shopeePromoPageService.persistCandidate(userId, {
+                landingType: snapshot.factual.landing_type,
+                title: snapshot.factual.title,
+                rawUrl: rawUrl,
+                canonicalUrl: snapshot.factual.canonical_url,
+                confidence: 1.0, 
+                sourceId: source.id,
+                sourceUrl: rawUrl,
+                rawText: body
+              }, supabase);
+            } catch (err) {
+              console.error(`${logPrefix} [ITEM] [ERROR] Falha ao persistir promo landing:`, err);
+            }
+          }
+          continue; // Não salva em products nem envia automático
+        }
+
         // --- ENRIQUECIMENTO DE DADOS (Estilo Radar) ---
         const commissionRate = snapshot.factual.commissionRate || 0;
         const currentPrice = snapshot.factual.currentPriceFactual || 0;
@@ -498,7 +528,7 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
 
           // --- TRAVA DE SEGURANÇA (FASE 2G) ---
           // Promo landings e Cupons nunca são enviados automaticamente pelo Monitor/Radar.
-          // Devem ser apenas persistidos como candidatos.
+          // Como já pulamos esses tipos antes, esse bloco atua apenas como sanity check adicional.
           if (snapshot.factual.eligibility.offer_type === 'promo_landing' || snapshot.factual.eligibility.offer_type === 'coupon_offer') {
             console.log(`${logPrefix} [ITEM] [SAFE-SKIP] Bloqueado: ${snapshot.factual.eligibility.offer_type} exige revisão manual no Radar.`);
             continue;
@@ -566,23 +596,7 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
         }
 
         // --- PERSISTÊNCIA DE PROMO LANDINGS (FASE 2G.1A) ---
-        if (snapshot.factual.eligibility.offer_type === 'promo_landing' && snapshot.factual.landing_type) {
-          console.log(`${logPrefix} [ITEM] [STEP] Persistindo promo landing candidata: ${snapshot.factual.landing_type}`);
-          try {
-            await shopeePromoPageService.persistCandidate(userId, {
-              landingType: snapshot.factual.landing_type,
-              title: snapshot.factual.title,
-              rawUrl: rawUrl,
-              canonicalUrl: snapshot.factual.canonical_url,
-              confidence: 1.0, // Detecção via canonical_url é confiável
-              sourceId: source.id,
-              sourceUrl: rawUrl,
-              rawText: body
-            }, supabase);
-          } catch (err) {
-            console.error(`${logPrefix} [ITEM] [ERROR] Falha ao persistir promo landing:`, err);
-          }
-        }
+        // (Lógica movida para cima, antes do upsert do produto)
 
       } catch (err: any) {
         console.error(`${logPrefix} [ITEM] [EXCEPTION] Erro crítico no processamento do item:`, err);
