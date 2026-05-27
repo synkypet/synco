@@ -201,44 +201,56 @@ export default function EnvioRapidoPage() {
     try {
       const targetProducts = processedProducts.filter(p => targetProductIds.includes(p.id));
       
-      const batchSize = 3;
-      for (let i = 0; i < targetProducts.length; i += batchSize) {
-        const batch = targetProducts.slice(i, i + batchSize);
-        
-        await Promise.all(batch.map(async (product) => {
-          try {
-            const res = await fetch('/api/ai/headline', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                productName: product.factual.title,
-                marketplace: product.factual.marketplace,
-                originalPrice: product.factual.originalPriceFormatted,
-                currentPrice: product.factual.priceFormatted,
-                discountPercent: product.factual.discountPercent,
-                instruction
-              })
-            });
+      for (const product of targetProducts) {
+        try {
+          const res = await fetch('/api/ai/headline', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              productName: product.factual.title,
+              marketplace: product.factual.marketplace,
+              originalPrice: product.factual.originalPriceFormatted,
+              currentPrice: product.factual.priceFormatted,
+              discountPercent: product.factual.discountPercent,
+              instruction
+            })
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
             
-            if (res.ok) {
-              const data = await res.json();
-              if (data.headline) {
-                setAiHeadlines(prev => ({ ...prev, [product.id]: data.headline }));
-                successCount++;
-              } else {
-                failCount++;
-              }
+            if (data.errorCode === 'quota_exhausted') {
+              toast.error('Cota da IA esgotada. Os produtos restantes não usarão IA. Você pode enviar normalmente.');
+              // Cancelar loading deste produto também
+              setAiHeadlineLoadingByProductId(prev => ({ ...prev, [product.id]: false }));
+              break; // Para o lote!
+            }
+            
+            if (data.headline) {
+              setAiHeadlines(prev => ({ ...prev, [product.id]: data.headline }));
+              successCount++;
             } else {
               failCount++;
             }
-          } catch (e) {
-            console.error(`Erro ao gerar headline para ${product.id}`, e);
+          } else {
             failCount++;
-          } finally {
-            setAiHeadlineLoadingByProductId(prev => ({ ...prev, [product.id]: false }));
           }
-        }));
+        } catch (e) {
+          console.error(`Erro ao gerar headline para ${product.id}`, e);
+          failCount++;
+        } finally {
+          setAiHeadlineLoadingByProductId(prev => ({ ...prev, [product.id]: false }));
+        }
       }
+      
+      // Limpar estados de loading de produtos que foram abortados no break
+      setAiHeadlineLoadingByProductId(prev => {
+        const next = { ...prev };
+        targetProductIds.forEach(id => {
+          if (next[id] === true) next[id] = false;
+        });
+        return next;
+      });
       
       if (successCount > 0) {
         toast.success(`${successCount} headline(s) gerada(s) com sucesso!`);

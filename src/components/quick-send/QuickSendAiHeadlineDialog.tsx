@@ -71,8 +71,8 @@ export function QuickSendAiHeadlineDialog({
       if (!val) setShowConfirm(false);
       onOpenChange(val);
     }}>
-      <DialogContent className="sm:max-w-[425px] bg-anthracite-surface border border-white/10 shadow-skeuo-elevated text-white rounded-2xl">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-hidden flex flex-col bg-anthracite-surface border border-white/10 shadow-skeuo-elevated text-white rounded-2xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 font-black uppercase tracking-widest text-sm italic">
             <Sparkles className="w-4 h-4 text-kinetic-orange" />
             Gerar headlines com IA
@@ -80,8 +80,8 @@ export function QuickSendAiHeadlineDialog({
         </DialogHeader>
 
         {!showConfirm ? (
-          <div className="space-y-6 py-4">
-            <div className="space-y-2">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col space-y-6 py-4">
+            <div className="space-y-2 shrink-0">
               <label className="text-[10px] font-black uppercase tracking-widest text-white/50 block">
                 Diga o tema ou estilo que a IA deve seguir (opcional)
               </label>
@@ -93,20 +93,20 @@ export function QuickSendAiHeadlineDialog({
               />
             </div>
 
-            <div className="space-y-3">
-              <label className="text-[10px] font-black uppercase tracking-widest text-white/50 block">
+            <div className="space-y-3 flex-1 min-h-0 flex flex-col">
+              <label className="text-[10px] font-black uppercase tracking-widest text-white/50 block shrink-0">
                 Produtos selecionados ({selectedIds.length}/{products.length})
               </label>
-              <div className="max-h-[200px] overflow-y-auto space-y-2 custom-scrollbar pr-2">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-2 custom-scrollbar pr-2 pb-2">
                 {products.map(p => (
-                  <div key={p.id} className="flex items-center gap-3 bg-deep-void/50 p-2 rounded-xl">
+                  <div key={p.id} className="flex items-center gap-3 bg-deep-void/50 p-2 rounded-xl min-w-0">
                     <Checkbox
                       checked={selectedIds.includes(p.id)}
                       onCheckedChange={() => handleToggleProduct(p.id)}
                       className="border-white/20 data-[state=checked]:bg-kinetic-orange data-[state=checked]:border-none shrink-0"
                     />
-                    <div className="flex-1 min-w-0 overflow-hidden">
-                      <span className="text-xs font-black uppercase tracking-tight text-white/90 truncate block whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                    <div className="flex-1 min-w-0 flex items-center overflow-hidden">
+                      <span className="text-xs font-black uppercase tracking-tight text-white/90 truncate block whitespace-nowrap overflow-hidden text-ellipsis w-full" title={p.factual.title || 'Produto sem título'}>
                         {p.factual.title || 'Produto sem título'}
                       </span>
                     </div>
@@ -115,7 +115,7 @@ export function QuickSendAiHeadlineDialog({
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="shrink-0 flex justify-end gap-3 pt-4 border-t border-white/10">
               <Button
                 variant="ghost"
                 onClick={() => onOpenChange(false)}
