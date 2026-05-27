@@ -103,12 +103,12 @@ export function QuickSendAiHeadlineDialog({
                     <Checkbox
                       checked={selectedIds.includes(p.id)}
                       onCheckedChange={() => handleToggleProduct(p.id)}
-                      className="border-white/20 data-[state=checked]:bg-kinetic-orange data-[state=checked]:border-none"
+                      className="border-white/20 data-[state=checked]:bg-kinetic-orange data-[state=checked]:border-none shrink-0"
                     />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-black uppercase tracking-tight truncate text-white/90">
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <span className="text-xs font-black uppercase tracking-tight text-white/90 truncate block whitespace-nowrap overflow-hidden text-ellipsis w-full">
                         {p.factual.title || 'Produto sem título'}
-                      </p>
+                      </span>
                     </div>
                   </div>
                 ))}
