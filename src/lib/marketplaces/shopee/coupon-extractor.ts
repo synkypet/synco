@@ -127,7 +127,17 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
     const currentPos = match.index;
     const remainingText = rawText.substring(currentPos);
     const nearUrlMatch = remainingText.match(urlRegex);
-    const url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
+    let url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
+
+    if (url) {
+      const urlIndex = rawText.indexOf(url, currentPos);
+      const textBeforeUrl = urlIndex > -1 ? rawText.substring(Math.max(0, urlIndex - 25), urlIndex).toLowerCase() : '';
+      const isExplicitProductContext = textBeforeUrl.includes('compre') || textBeforeUrl.includes('garanta') || textBeforeUrl.includes('produto') || textBeforeUrl.includes('🛒') || textBeforeUrl.includes('📦');
+      
+      if (isLikelyProductUrl(url) || isExplicitProductContext || foundUrls.length === 1) {
+        url = null;
+      }
+    }
 
     coupons.push({
       marketplace: 'shopee',
@@ -162,7 +172,17 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
             const currentPos = line.indexOf(isolatedMatch[0]);
             const remainingText = line.substring(currentPos);
             const nearUrlMatch = remainingText.match(urlRegex);
-            const url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
+            let url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
+
+            if (url) {
+              const urlIndex = rawText.indexOf(url, rawText.indexOf(line));
+              const textBeforeUrl = urlIndex > -1 ? rawText.substring(Math.max(0, urlIndex - 25), urlIndex).toLowerCase() : '';
+              const isExplicitProductContext = textBeforeUrl.includes('compre') || textBeforeUrl.includes('garanta') || textBeforeUrl.includes('produto') || textBeforeUrl.includes('🛒') || textBeforeUrl.includes('📦');
+              
+              if (isLikelyProductUrl(url) || isExplicitProductContext || foundUrls.length === 1) {
+                url = null;
+              }
+            }
 
             coupons.push({
               marketplace: 'shopee',

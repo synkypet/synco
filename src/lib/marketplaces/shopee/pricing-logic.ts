@@ -118,6 +118,27 @@ export function generatePricingInsight(
     warnings: []
   };
 
+  // Ajuste de Preço com Cupom do Texto (Fase 2I)
+  const hasExplicitCoupon = (factual.coupons && factual.coupons.length > 0) || /cupom|c[oó]digo/i.test(text);
+  let textPorPrice: number | null = null;
+  // Extrair o preço "Por" do texto (evitando pegar o preço PIX diretamente)
+  const porMatch = text.match(/(?:por:?\s*)(?:r\$\s*)?([\d.,]+)(?!\s*(?:no\s+)?pix)/i);
+  if (porMatch) {
+    textPorPrice = parseFloat(porMatch[1].replace(/\./g, '').replace(',', '.'));
+  }
+
+  if (hasExplicitCoupon && textPorPrice && currentPrice.value && textPorPrice < currentPrice.value) {
+    const reasonableMin = currentPrice.value * 0.2;
+    if (textPorPrice >= reasonableMin) {
+      console.log(`[SHOPEE-PRICING] coupon_adjusted_text_price_detected=true apiPrice=${currentPrice.value} textPrice=${textPorPrice} selected=text`);
+      currentPrice.value = textPorPrice;
+      currentPrice.source = 'factual_text';
+      currentPrice.confidence = 0.95;
+    } else {
+      console.warn(`[SHOPEE-PRICING] coupon_adjusted_text_price_detected=false apiPrice=${currentPrice.value} textPrice=${textPorPrice} reason=text_price_too_low`);
+    }
+  }
+
   // 2. Preço Original (Factual, Textual ou Calculado via Desconto)
   let opValue: number | null = null;
   let opSource: PriceSource = 'unavailable';
@@ -203,7 +224,8 @@ export function generatePricingInsight(
   // 4. Cálculo de Preço com Cupom (Validado)
   const couponAdjustedPrice: ShopeePriceEvidence = { value: null, source: 'unavailable', field: 'couponAdjustedPrice', confidence: 0, warnings: [] };
   
-  if (currentPrice.value && couponAmount.value && couponAmount.source === 'factual_text') {
+  // Evitar desconto duplo se o currentPrice já foi ajustado pelo texto
+  if (currentPrice.source !== 'factual_text' && currentPrice.value && couponAmount.value && couponAmount.source === 'factual_text') {
     const meetsMinSpend = !couponMinSpend.value || currentPrice.value >= couponMinSpend.value;
     
     if (meetsMinSpend) {
