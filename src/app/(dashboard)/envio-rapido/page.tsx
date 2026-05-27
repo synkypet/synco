@@ -46,6 +46,7 @@ import { Zap } from 'lucide-react';
 import { useSelectedProducts } from '@/contexts/SelectedProductsContext';
 import { OperationalAccessBanner } from '@/components/billing/OperationalAccessBanner';
 import { QuickSendConfirmationDialog } from '@/components/campaigns/QuickSendConfirmationDialog';
+import { QuickSendAiHeadlineDialog } from '@/components/quick-send/QuickSendAiHeadlineDialog';
 
 // Opções de Tonalidade da IA (Base44)
 const TONE_OPTIONS = [
@@ -168,6 +169,11 @@ export default function EnvioRapidoPage() {
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
+  // --- AI HEADLINES STATE ---
+  const [aiHeadlines, setAiHeadlines] = useState<Record<string, string>>({});
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+
   const { data: savedLists, isLoading: loadingLists } = useDestinations(user?.id);
 
   const { data: channels, isLoading: loadingChannels } = useChannels(user?.id);
@@ -177,6 +183,58 @@ export default function EnvioRapidoPage() {
   const [isTesting, setIsTesting] = useState(false);
   const [lastApiResponse, setLastApiResponse] = useState<any>(null);
   const [testGroupId, setTestGroupId] = useState('');
+
+  const handleGenerateHeadlines = async (targetProductIds: string[], instruction: string) => {
+    setIsAiGenerating(true);
+    let successCount = 0;
+    
+    try {
+      const targetProducts = processedProducts.filter(p => targetProductIds.includes(p.id));
+      
+      const batchSize = 3;
+      for (let i = 0; i < targetProducts.length; i += batchSize) {
+        const batch = targetProducts.slice(i, i + batchSize);
+        
+        await Promise.all(batch.map(async (product) => {
+          try {
+            const res = await fetch('/api/ai/headline', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                productName: product.factual.title,
+                marketplace: product.factual.marketplace,
+                originalPrice: product.factual.originalPriceFormatted,
+                currentPrice: product.factual.priceFormatted,
+                discountPercent: product.factual.discountPercent,
+                instruction
+              })
+            });
+            
+            if (res.ok) {
+              const data = await res.json();
+              if (data.headline) {
+                setAiHeadlines(prev => ({ ...prev, [product.id]: data.headline }));
+                successCount++;
+              }
+            }
+          } catch (e) {
+            console.error(`Erro ao gerar headline para ${product.id}`, e);
+          }
+        }));
+      }
+      
+      if (successCount > 0) {
+        toast.success(`${successCount} headline(s) gerada(s) com sucesso!`);
+      } else {
+        toast.error('Não foi possível gerar a headline com IA agora. Você ainda pode enviar a oferta normalmente.');
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Não foi possível gerar a headline com IA agora. Você ainda pode enviar a oferta normalmente.');
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
 
   // Radar Integration
   const { selectedProducts, isHydrated, clearProducts } = useSelectedProducts();
@@ -619,7 +677,7 @@ export default function EnvioRapidoPage() {
       items: selectedProducts.map(p => ({
         product_id: p.id,
         product_name: p.factual.title,
-        custom_text: p.copy.messageText || '',
+        custom_text: aiHeadlines[p.id] ? `*${aiHeadlines[p.id]}*\n\n${p.copy.messageText || ''}` : (p.copy.messageText || ''),
         image_url: p.factual.image || undefined,
         affiliate_url: p.factual.finalLinkToSend || p.factual.originalUrl,
         // --- FÓRMULA OPERACIONAL (Fase 1: Rastreabilidade) ---
@@ -822,8 +880,16 @@ export default function EnvioRapidoPage() {
 
               {processedProducts.length > 0 && (
                 <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
-                  <div className="flex items-center gap-3 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/30 italic">
-                    Produtos Encontrados ({processedProducts.length})
+                  <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/30 italic">
+                      Produtos Encontrados ({processedProducts.length})
+                    </span>
+                    <KineticButton
+                      onClick={() => setIsAiModalOpen(true)}
+                      className="h-8 px-4 text-[9px] rounded-lg bg-kinetic-orange/20 text-kinetic-orange hover:bg-kinetic-orange hover:text-white shadow-none"
+                    >
+                      <Sparkles className="w-3 h-3 mr-2" /> Gerar headlines com IA
+                    </KineticButton>
                   </div>
 
                   {processedProducts.map(product => (
@@ -1062,8 +1128,44 @@ export default function EnvioRapidoPage() {
                             </Button>
                           </div>
 
-                          <div className="relative">
-                            <Textarea
+                          <div className="space-y-2">
+                            {aiHeadlines[product.id] !== undefined && (
+                              <div className="relative">
+                                <label className="text-[9px] font-black uppercase tracking-widest text-kinetic-orange flex items-center gap-1.5 mb-1.5">
+                                  <Sparkles className="w-3 h-3" />
+                                  Headline com IA
+                                </label>
+                                <Input
+                                  value={aiHeadlines[product.id] || ''}
+                                  onChange={e => setAiHeadlines(prev => ({ ...prev, [product.id]: e.target.value }))}
+                                  placeholder="Sua headline aqui..."
+                                  className="bg-deep-void/50 border-kinetic-orange/20 shadow-skeuo-pressed text-[11px] font-black uppercase ring-1 ring-kinetic-orange/10 focus-visible:ring-kinetic-orange/50 text-white/90 pr-16"
+                                />
+                                <div className="absolute top-6 right-1.5 flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleGenerateHeadlines([product.id], '')}
+                                    className="h-6 w-6 p-0 rounded bg-white/5 hover:bg-kinetic-orange/20 hover:text-kinetic-orange"
+                                    title="Gerar Novamente"
+                                  >
+                                    <Sparkles className="w-3 h-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setAiHeadlines(prev => { const next = {...prev}; delete next[product.id]; return next; })}
+                                    className="h-6 w-6 p-0 rounded bg-white/5 hover:bg-red-500/20 hover:text-red-500"
+                                    title="Limpar"
+                                  >
+                                    <AlertCircle className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="relative">
+                              <Textarea
                               value={product.copy.messageText || ''}
                               disabled={editingId !== product.id}
                               onChange={e =>
@@ -1091,6 +1193,7 @@ export default function EnvioRapidoPage() {
                                 </button>
                               </div>
                             )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1516,6 +1619,13 @@ export default function EnvioRapidoPage() {
           </div>
         </TabsContent>}
       </Tabs>
+      <QuickSendAiHeadlineDialog
+        open={isAiModalOpen}
+        onOpenChange={setIsAiModalOpen}
+        products={processedProducts}
+        onGenerate={handleGenerateHeadlines}
+        isGenerating={isAiGenerating}
+      />
       <QuickSendConfirmationDialog 
         open={isConfirmOpen}
         onOpenChange={setIsConfirmOpen}
