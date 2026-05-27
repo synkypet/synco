@@ -14,7 +14,7 @@ export interface CouponPersistenceInput {
   rawText?: string;
   confidence?: number;
   sourceId?: string;
-  couponType?: 'codigo' | 'link_resgate' | 'pagina_cupons' | 'pagina_oferta';
+  couponType?: 'codigo' | 'link_resgate' | 'pagina_cupons' | 'pagina_oferta' | 'monetary_discount';
   metadata?: any;
 }
 
@@ -50,7 +50,7 @@ export const shopeeCouponPersistenceService = {
     }
 
     const rawCouponType = input.couponType || (couponCode ? 'codigo' : 'link_resgate');
-    const dbCouponType = rawCouponType === 'pagina_oferta' ? 'link_resgate' : rawCouponType;
+    const dbCouponType = (rawCouponType === 'pagina_oferta' || rawCouponType === 'monetary_discount') ? 'link_resgate' : rawCouponType;
     const dedupeValue = couponCode || resolvedUrl || originalUrl;
     const dedupeKey = `shopee:coupon:${dbCouponType === 'codigo' ? 'code' : 'url'}:${dedupeValue?.toString().trim().toUpperCase()}`;
     

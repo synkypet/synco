@@ -19,6 +19,21 @@ export function normalizeText(text: string): string {
 }
 
 /**
+ * Normaliza o texto removendo caracteres invisíveis, convertendo espaços especiais para normal,
+ * e padronizando dois-pontos. Essencial para extrair cupons sujos de mensagens de WhatsApp.
+ */
+export function normalizeCouponText(input: string): string {
+  return String(input ?? '')
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '') // zero-width
+    .replace(/\u00A0/g, ' ')              // NBSP
+    .replace(/[\u1680\u180E\u2000-\u200A\u202F\u205F\u3000]/g, ' ') // outros espaços unicode
+    .replace(/[ \t]+/g, ' ')              // colapsar espaços
+    .replace(/[：]/g, ':')               // dois pontos fullwidth
+    .trim();
+}
+
+/**
  * Remove pontuação final comum de uma URL.
  */
 export function sanitizeUrl(url: string): string {
@@ -97,9 +112,10 @@ export function formatDiscountLabel(label: string): string {
  */
 export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
   const coupons: ShopeeCoupon[] = [];
-  const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const normalizedRaw = normalizeCouponText(rawText);
+  const lines = normalizedRaw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   
-  // 1. Identificar URLs Shopee no texto
+  // 1. Identificar URLs Shopee no texto (usando o texto original caso a normalização afete URLs, mas NFKC não afeta URLs)
   const urlRegex = /https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:shopee\.com\.br|shp\.ee|shope\.ee|s\.shopee\.com\.br|br\.shp\.ee)[^\s]*/gi;
   const foundUrls = (rawText.match(urlRegex) || []).map(sanitizeUrl).filter(url => {
     try {
@@ -118,20 +134,20 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
   };
 
   // 2. Extração de Código (Estratégia A: Com Prefixos)
-  const explicitCodePatterns = /(?:(?:use\s+o\s+)?cupom|c[oó]digo|use)\s*:?\s*([A-Z0-9]{5,20})(?!\w)/gi;
+  const explicitCodePatterns = /(?:use\s*o\s*cupom|cupom|c[oó]digo|use)\s*:?\s*([A-Z0-9]{5,20})(?!\w)/gi;
   let match;
-  while ((match = explicitCodePatterns.exec(rawText)) !== null) {
+  while ((match = explicitCodePatterns.exec(normalizedRaw)) !== null) {
     const code = match[1].toUpperCase();
     if (BLACKLISTED_CODES.includes(code)) continue;
 
     const currentPos = match.index;
-    const remainingText = rawText.substring(currentPos);
+    const remainingText = normalizedRaw.substring(currentPos);
     const nearUrlMatch = remainingText.match(urlRegex);
     let url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
 
     if (url) {
-      const urlIndex = rawText.indexOf(url, currentPos);
-      const textBeforeUrl = urlIndex > -1 ? rawText.substring(Math.max(0, urlIndex - 25), urlIndex).toLowerCase() : '';
+      const urlIndex = normalizedRaw.indexOf(url, currentPos);
+      const textBeforeUrl = urlIndex > -1 ? normalizedRaw.substring(Math.max(0, urlIndex - 25), urlIndex).toLowerCase() : '';
       const isExplicitProductContext = textBeforeUrl.includes('compre') || textBeforeUrl.includes('garanta') || textBeforeUrl.includes('produto') || textBeforeUrl.includes('🛒') || textBeforeUrl.includes('📦');
       
       if (isLikelyProductUrl(url) || isExplicitProductContext || foundUrls.length === 1) {
@@ -153,6 +169,41 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
     });
   }
 
+  // 2.5 Extração de Cupom Monetário (R$20 OFF + link)
+  const explicitMonetaryPatterns = /(?:use\s*o\s*cupom|cupom|c[oó]digo|use)\s*:?\s*(R\$\s*\d+(?:[.,]\d+)?\s*OFF)/gi;
+  while ((match = explicitMonetaryPatterns.exec(normalizedRaw)) !== null) {
+    const rawLabel = match[1].trim();
+    const formattedLabel = formatDiscountLabel(rawLabel);
+    
+    const currentPos = match.index;
+    const remainingText = normalizedRaw.substring(currentPos);
+    const nearUrlMatch = remainingText.match(urlRegex);
+    let url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
+
+    if (url) {
+      const urlIndex = normalizedRaw.indexOf(url, currentPos);
+      const textBeforeUrl = urlIndex > -1 ? normalizedRaw.substring(Math.max(0, urlIndex - 25), urlIndex).toLowerCase() : '';
+      const isExplicitProductContext = textBeforeUrl.includes('compre') || textBeforeUrl.includes('garanta') || textBeforeUrl.includes('produto') || textBeforeUrl.includes('🛒') || textBeforeUrl.includes('📦');
+      
+      if (isLikelyProductUrl(url) || isExplicitProductContext || foundUrls.length === 1) {
+        url = null;
+      }
+    }
+
+    coupons.push({
+      marketplace: 'shopee',
+      type: 'monetary_discount',
+      code: null,
+      couponLabel: formattedLabel,
+      redemptionUrl: url,
+      confidence: 0.95,
+      confidenceLevel: 'high',
+      source: 'explicit_label',
+      status: 'candidate',
+      dedupeKey: generateDedupeKey({ type: 'link_resgate', redemptionUrl: url })
+    });
+  }
+
   // 3. Extração de Código (Estratégia B: Primeira Linha ou Linhas com Símbolos)
   if (coupons.length === 0) {
     for (let i = 0; i < Math.min(lines.length, 3); i++) {
@@ -171,14 +222,14 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
           const isGeneric = BLACKLISTED_CODES.includes(code);
           
           if (!isGeneric && !/^\d+$/.test(code) && !code.includes('OFF') && !code.includes('HTTP') && hasNumber) {
-            const currentPos = line.indexOf(isolatedMatch[0]);
-            const remainingText = line.substring(currentPos);
+            const currentPos = normalizedRaw.indexOf(isolatedMatch[0]);
+            const remainingText = normalizedRaw.substring(currentPos);
             const nearUrlMatch = remainingText.match(urlRegex);
             let url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
 
             if (url) {
-              const urlIndex = rawText.indexOf(url, rawText.indexOf(line));
-              const textBeforeUrl = urlIndex > -1 ? rawText.substring(Math.max(0, urlIndex - 25), urlIndex).toLowerCase() : '';
+              const urlIndex = normalizedRaw.indexOf(url, currentPos);
+              const textBeforeUrl = urlIndex > -1 ? normalizedRaw.substring(Math.max(0, urlIndex - 25), urlIndex).toLowerCase() : '';
               const isExplicitProductContext = textBeforeUrl.includes('compre') || textBeforeUrl.includes('garanta') || textBeforeUrl.includes('produto') || textBeforeUrl.includes('🛒') || textBeforeUrl.includes('📦');
               
               if (isLikelyProductUrl(url) || isExplicitProductContext || foundUrls.length === 1) {
@@ -206,12 +257,12 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
 
   // 4. Extração de Desconto + Link
   const discountLinePattern = /((?:R\$\s?\d+|(?:\d+)\s?%)\s?OFF(?:[^\n|]*))/gi;
-  while ((match = discountLinePattern.exec(rawText)) !== null) {
+  while ((match = discountLinePattern.exec(normalizedRaw)) !== null) {
     const rawLabel = match[1].trim();
     const formattedLabel = formatDiscountLabel(rawLabel);
     
     const currentPos = match.index;
-    const remainingText = rawText.substring(currentPos);
+    const remainingText = normalizedRaw.substring(currentPos);
     const nearUrlMatch = remainingText.match(urlRegex);
     const url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[0] : null);
 
@@ -252,7 +303,7 @@ export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
   // 5. Página Central de Cupons (Fallback)
   if (coupons.length === 0) {
     const centralKeywords = ['cupom de desconto shopee', 'resgate os cupons', 'confira os cupons', 'meus cupons', 'carteira de cupons'];
-    const lowerText = rawText.toLowerCase();
+    const lowerText = normalizedRaw.toLowerCase();
     
     for (const url of foundUrls) {
       const lowerUrl = url.toLowerCase();

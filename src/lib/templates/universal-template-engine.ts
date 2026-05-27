@@ -147,7 +147,13 @@ export function buildSmartContext(data: FactualData, sourceName?: string): Smart
           couponBlock += `\n➡️ ${c.redemptionUrl}`;
         }
       } else if (c.redemptionUrl && c.redemptionUrl !== data.finalLinkToSend) {
-        couponBlock = `🎟️ Resgate seu cupom:\n➡️ ${c.redemptionUrl}`;
+        if (c.couponLabel) {
+          couponBlock = `🎟️ Cupom: ${c.couponLabel}\n➡️ ${c.redemptionUrl}`;
+        } else {
+          couponBlock = `🎟️ Resgate seu cupom:\n➡️ ${c.redemptionUrl}`;
+        }
+      } else if (c.couponLabel) {
+        couponBlock = `🎟️ Cupom: ${c.couponLabel}`;
       }
     }
 

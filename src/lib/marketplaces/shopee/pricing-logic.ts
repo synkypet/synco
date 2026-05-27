@@ -2,6 +2,7 @@
 
 import { FactualData } from '@/lib/linkProcessor';
 import { ShopeeCoupon } from '@/types/shopee-coupon';
+import { normalizeCouponText } from '@/lib/marketplaces/shopee/coupon-extractor';
 
 export type PriceSource = 'factual_api' | 'factual_text' | 'calculated_verified' | 'estimated' | 'unavailable';
 
@@ -104,7 +105,8 @@ export function generatePricingInsight(
     }
   }
 
-  const text = (effectiveRawText || '').toLowerCase();
+  const normalizedRaw = normalizeCouponText(effectiveRawText || '');
+  const text = normalizedRaw.toLowerCase();
 
   // ... (Resto da lógica de currentPrice, originalPrice, coupon, Pix e parcelamento permanece idêntica)
   // [CÓDIGO OMITIDO PARA PRESERVAR LÓGICA DE PREÇO - SERÁ MANTIDO NO ARQUIVO FINAL]
