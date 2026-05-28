@@ -3,6 +3,7 @@
 import { FactualData } from '@/lib/linkProcessor';
 import { ShopeeCoupon } from '@/types/shopee-coupon';
 import { normalizeCouponText } from '@/lib/marketplaces/shopee/coupon-extractor';
+import { parseShopeeOfferContext } from './offer-parser';
 
 export type PriceSource = 'factual_api' | 'factual_text' | 'calculated_verified' | 'estimated' | 'unavailable';
 
@@ -105,7 +106,8 @@ export function generatePricingInsight(
     }
   }
 
-  const normalizedRaw = normalizeCouponText(effectiveRawText || '');
+  const context = parseShopeeOfferContext(effectiveRawText || '');
+  const normalizedRaw = context.normalizedText;
   const text = normalizedRaw.toLowerCase();
 
   // ... (Resto da lógica de currentPrice, originalPrice, coupon, Pix e parcelamento permanece idêntica)
@@ -120,14 +122,9 @@ export function generatePricingInsight(
     warnings: []
   };
 
-  // Ajuste de Preço com Cupom do Texto (Fase 2I)
-  const hasExplicitCoupon = (factual.coupons && factual.coupons.length > 0) || /cupom|c[oó]digo/i.test(text);
-  let textPorPrice: number | null = null;
-  // Extrair o preço "Por" do texto (evitando pegar o preço PIX diretamente)
-  const porMatch = text.match(/(?:por:?\s*)(?:r\$\s*)?([\d.,]+)(?!\s*(?:no\s+)?pix)/i);
-  if (porMatch) {
-    textPorPrice = parseFloat(porMatch[1].replace(/\./g, '').replace(',', '.'));
-  }
+  // Ajuste de Preço com Cupom do Texto (Fase 2I -> Fase 3 via Offer Parser)
+  const hasExplicitCoupon = context.hasExplicitCouponSignal || (factual.coupons && factual.coupons.length > 0);
+  let textPorPrice: number | null = context.prices.currentPrice || null;
 
   if (hasExplicitCoupon && textPorPrice && currentPrice.value && textPorPrice < currentPrice.value) {
     const reasonableMin = currentPrice.value * 0.2;
@@ -150,9 +147,8 @@ export function generatePricingInsight(
   const opWarnings: string[] = [];
 
   // Prioridade A: Factual Text (da mensagem original "De: ...")
-  const deMatch = text.match(/(?:de:?\s*)(?:r\$\s*)?([\d.,]+)/i);
-  if (deMatch) {
-    const val = parseFloat(deMatch[1].replace(/\./g, '').replace(',', '.'));
+  if (context.prices.originalPrice) {
+    const val = context.prices.originalPrice;
     if (currentPrice.value && val > currentPrice.value) {
       opValue = val;
       opSource = 'factual_text';
@@ -245,10 +241,9 @@ export function generatePricingInsight(
   // 5. Pix (Factual vs Heurístico)
   const pixPrice: ShopeePriceEvidence = { value: null, source: 'unavailable', field: 'pixPrice', confidence: 0, warnings: [] };
   
-  const pixTextMatch = text.match(/(?:por:?\s*)?(?:r\$\s*)?([\d.,]+)\s*(?:no\s+)?pix/i);
+  const pixTextMatch = context.prices.pixPrice;
   if (pixTextMatch) {
-    const rawVal = pixTextMatch[1];
-    const val = parseFloat(rawVal.replace(/\./g, '').replace(',', '.'));
+    const val = pixTextMatch;
     
     const minReasonable = (currentPrice.value || 0) * 0.4;
     if (currentPrice.value && val < minReasonable) {

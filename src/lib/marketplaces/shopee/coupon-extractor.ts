@@ -107,235 +107,33 @@ export function formatDiscountLabel(label: string): string {
   return formatted;
 }
 
+import { parseShopeeOfferContext } from './offer-parser';
+
 /**
- * Motor de extração de cupons Shopee.
+ * Motor de extração de cupons Shopee (Redirecionado para offer-parser.ts Fase 2)
  */
 export function extractShopeeCoupons(rawText: string): ShopeeCoupon[] {
-  const coupons: ShopeeCoupon[] = [];
-  const normalizedRaw = normalizeCouponText(rawText);
-  const lines = normalizedRaw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const context = parseShopeeOfferContext(rawText);
+  const coupons: ShopeeCoupon[] = context.coupons.map(c => ({
+    marketplace: 'shopee',
+    type: c.type as ShopeeCouponType,
+    code: c.code || null,
+    couponLabel: c.couponLabel || null,
+    redemptionUrl: c.redemptionUrl || null,
+    confidence: c.confidence,
+    confidenceLevel: c.confidenceLevel,
+    source: c.source as any,
+    status: 'candidate',
+    dedupeKey: generateDedupeKey(c as any)
+  }));
   
-  const hasCouponKeyword = normalizedRaw.toLowerCase().includes('cupom') || normalizedRaw.toLowerCase().includes('use');
-  console.log(`[SHOPEE-COUPON-EXTRACTOR] normalized_has_coupon_keyword=${hasCouponKeyword}`);
-  
-  // 1. Identificar URLs Shopee no texto (usando o texto original caso a normalização afete URLs, mas NFKC não afeta URLs)
-  const urlRegex = /https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:shopee\.com\.br|shp\.ee|shope\.ee|s\.shopee\.com\.br|br\.shp\.ee)[^\s]*/gi;
-  const foundUrls = (rawText.match(urlRegex) || []).map(sanitizeUrl).filter(url => {
-    try {
-      const hostname = new URL(url).hostname.toLowerCase();
-      return SHOPEE_DOMAINS.some(domain => hostname === domain || hostname.endsWith('.' + domain));
-    } catch {
-      return false;
-    }
-  });
-
-  // Helper para verificar se uma URL é claramente um produto (sem resolver)
-  const isLikelyProductUrl = (url: string) => {
-    const lower = url.toLowerCase();
-    // Padrões comuns de produto: -i.shop.item ou /product/shop/item ou /slug-i.shop.item
-    return lower.includes('-i.') || lower.includes('/product/') || /\/\d+\/\d+/.test(lower);
-  };
-
-  // 2. Extração de Código (Estratégia A: Com Prefixos)
-  const explicitCodePatterns = /(?:use\s*o\s*cupom|cupom|c[oó]digo|use)\s*:?\s*([A-Z0-9]{5,20})(?!\w)/gi;
-  let match;
-  while ((match = explicitCodePatterns.exec(normalizedRaw)) !== null) {
-    const code = match[1].toUpperCase();
-    if (BLACKLISTED_CODES.includes(code)) continue;
-
-    const currentPos = match.index;
-    const remainingText = normalizedRaw.substring(currentPos);
-    const nearUrlMatch = remainingText.match(urlRegex);
-    let url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
-
-    if (url) {
-      const urlIndex = normalizedRaw.indexOf(url, currentPos);
-      const textBeforeUrl = urlIndex > -1 ? normalizedRaw.substring(Math.max(0, urlIndex - 25), urlIndex).toLowerCase() : '';
-      const isExplicitProductContext = textBeforeUrl.includes('compre') || textBeforeUrl.includes('garanta') || textBeforeUrl.includes('produto') || textBeforeUrl.includes('🛒') || textBeforeUrl.includes('📦');
-      
-      if (isLikelyProductUrl(url) || isExplicitProductContext || foundUrls.length === 1) {
-        url = null;
-      }
-    }
-
-    coupons.push({
-      marketplace: 'shopee',
-      type: 'codigo',
-      code: code,
-      couponLabel: null,
-      redemptionUrl: url,
-      confidence: 0.98, // Aumentado por ser explícito
-      confidenceLevel: 'high',
-      source: 'explicit_label',
-      status: 'candidate',
-      dedupeKey: generateDedupeKey({ type: 'codigo', code })
-    });
-  }
-
-  // 2.5 Extração de Cupom Monetário (R$20 OFF + link)
-  const explicitMonetaryPatterns = /(?:use\s*o\s*cupom|cupom|c[oó]digo|use)\s*:?\s*(R\$\s*\d+(?:[.,]\d+)?\s*OFF)/gi;
-  while ((match = explicitMonetaryPatterns.exec(normalizedRaw)) !== null) {
-    const rawLabel = match[1].trim();
-    const formattedLabel = formatDiscountLabel(rawLabel);
-    
-    const currentPos = match.index;
-    const remainingText = normalizedRaw.substring(currentPos);
-    const nearUrlMatch = remainingText.match(urlRegex);
-    let url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
-
-    if (url) {
-      const urlIndex = normalizedRaw.indexOf(url, currentPos);
-      const textBeforeUrl = urlIndex > -1 ? normalizedRaw.substring(Math.max(0, urlIndex - 25), urlIndex).toLowerCase() : '';
-      const isExplicitProductContext = textBeforeUrl.includes('compre') || textBeforeUrl.includes('garanta') || textBeforeUrl.includes('produto') || textBeforeUrl.includes('🛒') || textBeforeUrl.includes('📦');
-      
-      if (isLikelyProductUrl(url) || isExplicitProductContext || foundUrls.length === 1) {
-        url = null;
-      }
-    }
-
-    coupons.push({
-      marketplace: 'shopee',
-      type: 'monetary_discount',
-      code: null,
-      couponLabel: formattedLabel,
-      redemptionUrl: url,
-      confidence: 0.95,
-      confidenceLevel: 'high',
-      source: 'explicit_label',
-      status: 'candidate',
-      dedupeKey: generateDedupeKey({ type: 'link_resgate', redemptionUrl: url })
-    });
-  }
-
-  // 3. Extração de Código (Estratégia B: Primeira Linha ou Linhas com Símbolos)
-  if (coupons.length === 0) {
-    for (let i = 0; i < Math.min(lines.length, 3); i++) {
-      let line = lines[i];
-      const lineUrlRegex = /https?:\/\/[^\s]+/gi;
-      line = line.replace(lineUrlRegex, '').trim();
-      
-      const standalonePattern = /(?:⚡|🔥|🎟️)?\s*(?<!\w)([A-Z0-9]{5,20})(?!\w)/i;
-      const isolatedMatch = line.match(standalonePattern);
-        
-        if (isolatedMatch) {
-          const code = isolatedMatch[1].toUpperCase();
-          // Heurística extra: Para estratégia B (sem prefixo), exigimos que o código contenha pelo menos um número
-          // ou seja explicitamente não uma palavra comum de produto para evitar falsos positivos como "MASSAGEADOR"
-          const hasNumber = /\d/.test(code);
-          const isGeneric = BLACKLISTED_CODES.includes(code);
-          
-          if (!isGeneric && !/^\d+$/.test(code) && !code.includes('OFF') && !code.includes('HTTP') && hasNumber) {
-            const currentPos = normalizedRaw.indexOf(isolatedMatch[0]);
-            const remainingText = normalizedRaw.substring(currentPos);
-            const nearUrlMatch = remainingText.match(urlRegex);
-            let url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[foundUrls.length - 1] : null);
-
-            if (url) {
-              const urlIndex = normalizedRaw.indexOf(url, currentPos);
-              const textBeforeUrl = urlIndex > -1 ? normalizedRaw.substring(Math.max(0, urlIndex - 25), urlIndex).toLowerCase() : '';
-              const isExplicitProductContext = textBeforeUrl.includes('compre') || textBeforeUrl.includes('garanta') || textBeforeUrl.includes('produto') || textBeforeUrl.includes('🛒') || textBeforeUrl.includes('📦');
-              
-              if (isLikelyProductUrl(url) || isExplicitProductContext || foundUrls.length === 1) {
-                url = null;
-              }
-            }
-
-            coupons.push({
-              marketplace: 'shopee',
-              type: 'codigo',
-              code: code,
-              couponLabel: null,
-              redemptionUrl: url,
-              confidence: 0.85,
-              confidenceLevel: 'medium',
-              source: 'emoji_line',
-              status: 'candidate',
-              dedupeKey: generateDedupeKey({ type: 'codigo', code })
-            });
-            break;
-          }
-        }
-      }
-    }
-
-  // 4. Extração de Desconto + Link
-  const discountLinePattern = /((?:R\$\s?\d+|(?:\d+)\s?%)\s?OFF(?:[^\n|]*))/gi;
-  while ((match = discountLinePattern.exec(normalizedRaw)) !== null) {
-    const rawLabel = match[1].trim();
-    const formattedLabel = formatDiscountLabel(rawLabel);
-    
-    const currentPos = match.index;
-    const remainingText = normalizedRaw.substring(currentPos);
-    const nearUrlMatch = remainingText.match(urlRegex);
-    const url = nearUrlMatch ? sanitizeUrl(nearUrlMatch[0]) : (foundUrls.length > 0 ? foundUrls[0] : null);
-
-    if (url && SHOPEE_DOMAINS.some(domain => url.includes(domain))) {
-      // Se a URL for claramente um produto e não houver palavra "cupom" próxima, ignoramos ou baixamos confiança
-      const isProduct = isLikelyProductUrl(url);
-      const hasCouponWord = rawText.toLowerCase().includes('cupom') || rawText.toLowerCase().includes('voucher');
-      
-      if (isProduct && !hasCouponWord) {
-        console.log(`[EXTRACTOR] Ignorando provável link de produto disfarçado de cupom: ${url}`);
-        continue; 
-      }
-
-      const existingCodeCoupon = coupons.find(c => c.type === 'codigo');
-      if (existingCodeCoupon && !existingCodeCoupon.couponLabel) {
-        existingCodeCoupon.couponLabel = formattedLabel;
-        existingCodeCoupon.redemptionUrl = url;
-        continue;
-      }
-
-      if (coupons.some(c => c.redemptionUrl === url)) continue;
-
-      coupons.push({
-        marketplace: 'shopee',
-        type: 'link_resgate',
-        code: null,
-        couponLabel: formattedLabel,
-        redemptionUrl: url,
-        confidence: isProduct ? 0.40 : 0.85, // Confiança baixa se for produto
-        confidenceLevel: isProduct ? 'low' : 'medium',
-        source: 'discount_label',
-        status: 'candidate',
-        dedupeKey: generateDedupeKey({ type: 'link_resgate', redemptionUrl: url })
-      });
-    }
-  }
-
-  // 5. Página Central de Cupons (Fallback)
-  if (coupons.length === 0) {
-    const centralKeywords = ['cupom de desconto shopee', 'resgate os cupons', 'confira os cupons', 'meus cupons', 'carteira de cupons'];
-    const lowerText = normalizedRaw.toLowerCase();
-    
-    for (const url of foundUrls) {
-      const lowerUrl = url.toLowerCase();
-      const isCentral = centralKeywords.some(k => lowerText.includes(k)) || 
-                        lowerUrl.includes('/m/cupom-de-desconto') ||
-                        lowerUrl.includes('/voucher-wallet') ||
-                        lowerUrl.includes('/user/voucher');
-      
-      if (isCentral) {
-        coupons.push({
-          marketplace: 'shopee',
-          type: 'pagina_cupons',
-          code: null,
-          couponLabel: 'Cupom de Desconto Shopee',
-          redemptionUrl: url,
-          confidence: 0.90,
-          confidenceLevel: 'high',
-          source: 'central_page',
-          status: 'candidate',
-          dedupeKey: generateDedupeKey({ type: 'pagina_cupons', redemptionUrl: url })
-        });
-      }
-    }
-  }
-
   const uniqueCoupons = Array.from(new Map(coupons.map(c => [c.dedupeKey, c])).values());
   const detectedCount = uniqueCoupons.length;
   const codes = uniqueCoupons.map(c => c.code || 'monetary_or_link').join(',');
+  
+  // Debug log solicitado para acompanhar em produção
   console.log(`[SHOPEE-COUPON-EXTRACTOR] detected_count=${detectedCount} codes=${codes}`);
+  
   return uniqueCoupons;
 }
 

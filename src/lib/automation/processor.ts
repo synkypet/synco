@@ -9,6 +9,7 @@ import { fillTemplate } from './template-engine';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Marketplace, UserMarketplaceConnection } from '@/types/marketplace';
 import { extractShopeeCoupons } from '@/lib/marketplaces/shopee/coupon-extractor';
+import { parseShopeeOfferContext } from '@/lib/marketplaces/shopee/offer-parser';
 import { shopeeCouponService } from '@/services/supabase/shopee-coupon-service';
 import { shopeePromoPageService } from '@/services/supabase/shopee-promo-page-service';
 
@@ -226,9 +227,10 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
       return { skipped: 'channel_not_connected', channelId };
     }
 
-    // ─── NOVO MOTOR DE CUPONS (FASE 2B) ───
-    console.log(`${logPrefix} [STEP] Executando extrator de cupons Shopee...`);
-    const detectedCoupons = extractShopeeCoupons(body);
+    // ─── NOVO MOTOR DE CUPONS E LINKS (FASE 4) ───
+    console.log(`${logPrefix} [STEP] Executando extrator de cupons Shopee e classificação de links...`);
+    const context = parseShopeeOfferContext(body);
+    const detectedCoupons = extractShopeeCoupons(body); // Mantém compatibilidade com a struct original
     
     // --- PERSISTÊNCIA DE CUPONS (FASE 2C.1) ---
     const couponAffiliateMap: Record<string, {
@@ -278,12 +280,12 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
     let shopeeLinks = extractShopeeLinks(body);
     const mercadoLivreLinks = extractMercadoLivreLinks(body);
 
-    // --- FILTRAGEM DE LINKS COMPLEMENTARES (FASE 2) ---
-    // Se um link já foi identificado como o link de resgate de um cupom anexo,
-    // não processamos ele de novo como uma entidade separada.
-    if (detectedCoupons.length > 0) {
-      const couponUrls = new Set(detectedCoupons.map(c => c.redemptionUrl).filter(Boolean));
-      shopeeLinks = shopeeLinks.filter(url => !couponUrls.has(url));
+    // --- FILTRAGEM DE LINKS COMPLEMENTARES (FASE 4) ---
+    // Removemos explicitamente links que a inteligência central classificou como 'voucher'.
+    // Mantemos os que foram classificados como 'product'.
+    if (context.links.length > 0) {
+      const voucherUrls = new Set(context.links.filter(l => l.role === 'voucher').map(l => l.url));
+      shopeeLinks = shopeeLinks.filter(url => !voucherUrls.has(url));
     }
 
     const links = [...shopeeLinks, ...mercadoLivreLinks];
