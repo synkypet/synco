@@ -187,17 +187,7 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
       console.warn(`${logPrefix} [SKIP] Motivo: Nenhuma fonte ATIVA encontrada para este conjunto.`);
       
       // Log de Observabilidade: Ajuda o usuário a entender por que o disparo não ocorreu
-      await automationService.logEvent({
-        source_id: '00000000-0000-0000-0000-000000000000', // ID nulo literal para logs sem fonte
-        user_id: userId,
-        status: 'filtered',
-        event_type: 'source_not_found',
-        details: { 
-          channelId, 
-          externalGroupId, 
-          reason: 'Mensagem ignorada: Nenhuma automação ativa configurada para este grupo de origem.'
-        }
-      }, supabase);
+      console.log(`[AUTOMATION-LOG-SKIP] source_missing=true reason=no_active_source channelId=${channelId} externalGroupId=${externalGroupId}`);
 
       return { skipped: 'not_a_source', details: { userId, channelId, externalGroupId } };
     }
