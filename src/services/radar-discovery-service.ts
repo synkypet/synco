@@ -4,6 +4,7 @@ import { productService } from '@/services/supabase/product-service';
 import { marketplaceService } from '@/services/supabase/marketplace-service';
 import { radarCacheService } from './supabase/radar-cache-service';
 import { normalizeKeywords, calculateKeywordBudgets, getBudgetByPreset, hasKeywordMatch } from '@/lib/automation/keyword-utils';
+import { isDebugEnabled } from '@/lib/debug';
 
 export interface DiscoveryResult {
   totalInserted: number;
@@ -253,13 +254,15 @@ export const radarDiscoveryService = {
 
               batchFetched += rawProducts.length;
 
-              console.log(`${logPrefix} [PRE-FILTER]`, { 
-                total_bruto: rawProducts.length, 
-                source_id: s.id,
-                keyword: kw.term,
-                budget_alocado: budget,
-                page_used: pageToUse
-              });
+              if (isDebugEnabled('DEBUG_RADAR')) {
+                console.log(`${logPrefix} [PRE-FILTER]`, { 
+                  total_bruto: rawProducts.length, 
+                  source_id: s.id,
+                  keyword: kw.term,
+                  budget_alocado: budget,
+                  page_used: pageToUse
+                });
+              }
 
               // Contagem de descartes por keyword (Limites de cardinalidade)
               let skippedMatchCount = 0;
@@ -332,19 +335,23 @@ export const radarDiscoveryService = {
                     });
                     skippedMatchCount++;
                   }
-                  console.log(`${logPrefix} [KEYWORD-FILTER-SKIP] "${p.name.slice(0, 30)}..." não deu match em "${kw.term}" (incluindo variantes e aliases)`);
+                  if (isDebugEnabled('DEBUG_RADAR')) {
+                    console.log(`${logPrefix} [KEYWORD-FILTER-SKIP] "${p.name.slice(0, 30)}..." não deu match em "${kw.term}" (incluindo variantes e aliases)`);
+                  }
                   continue;
                 }
 
                 const stableKey = (p.shopId && p.itemId) ? `shopee:${p.shopId}:${p.itemId}` : null;
                 if (!stableKey) continue;
 
-                console.log('[STABLE-KEY-FINAL]', {
-                  itemId: p.itemId,
-                  shopId: p.shopId,
-                  title: p.name?.slice(0, 30),
-                  stableKey
-                });
+                if (isDebugEnabled('DEBUG_RADAR')) {
+                  console.log('[STABLE-KEY-FINAL]', {
+                    itemId: p.itemId,
+                    shopId: p.shopId,
+                    title: p.name?.slice(0, 30),
+                    stableKey
+                  });
+                }
 
                 // Anti-Fadiga (Check individual)
                 const { data: recent } = await supabase
@@ -355,12 +362,14 @@ export const radarDiscoveryService = {
                   .gte('dispatched_at', sevenDaysAgo)
                   .maybeSingle();
 
-                console.log('[DEDUPE-DECISION]', {
-                  stable_key: stableKey,
-                  exists: !!recent,
-                  recent_record: recent,
-                  source_id: s.id
-                });
+                if (isDebugEnabled('DEBUG_RADAR')) {
+                  console.log('[DEDUPE-DECISION]', {
+                    stable_key: stableKey,
+                    exists: !!recent,
+                    recent_record: recent,
+                    source_id: s.id
+                  });
+                }
 
                 if (recent) {
                   console.log('[DEDUPE-DETAIL]', { 
@@ -425,11 +434,13 @@ export const radarDiscoveryService = {
                 }
 
                 // LOG DE DIAGNÓSTICO DE INTEGRIDADE
-                console.log(`${logPrefix} [RADAR-PRODUCT-DEBUG]`, {
-                  product_id: product.id,
-                  product_type: typeof product.id,
-                  has_product: !!product
-                });
+                if (isDebugEnabled('DEBUG_RADAR')) {
+                  console.log(`${logPrefix} [RADAR-PRODUCT-DEBUG]`, {
+                    product_id: product.id,
+                    product_type: typeof product.id,
+                    has_product: !!product
+                  });
+                }
 
                 // Vínculo Operacional (Radar Discovered)
                 const { data: inserted, error: insertedError } = await supabase

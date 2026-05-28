@@ -105,7 +105,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
     // D. Gerar novo link afiliado (Re-afiliação)
     if (!connection?.shopee_app_id || !connection?.shopee_app_secret) {
-      console.warn(`[SHOPEE-PREPROCESS] [${requestId}] Bloqueado: Usuário não possui credenciais Shopee configuradas.`);
+      console.info(`[SHOPEE-PREPROCESS] [${requestId}] Sem credenciais Shopee no contexto atual — tentativa de reafiliação direta ignorada.`);
       return {
         incoming_url: url,
         resolved_url: resolvedUrl,

@@ -581,7 +581,14 @@ export const automationService = {
     details: any;
   }, client?: SupabaseClient): Promise<void> {
     const supabase = client || createClient();
-    await supabase.from('automation_logs').insert(log);
+    const { error } = await supabase.from('automation_logs').insert(log);
+    if (error) {
+      if (error.code === '23505') {
+        console.log('[AUTOMATION-LOG-INSERT-CONFLICT] duplicate_event=true');
+      } else {
+        console.error('[AUTOMATION-LOG-INSERT-ERROR]', error);
+      }
+    }
   },
 
   /**
