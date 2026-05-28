@@ -92,7 +92,40 @@ export const shopeeCouponService = {
       } else if (classificationResult.classification === 'product_offer' || classificationResult.classification === 'product_with_coupon') {
         validationStatus = 'product_link';
         isVerified = false;
-        console.log(`[SHOPEE-COUPON-SERVICE] Classificado como PRODUTO/MISTO (${classificationResult.classification}). Rejeitando como cupom puro.`);
+        console.log(`[SHOPEE-COUPON-SERVICE] Classificado como PRODUTO/MISTO (${classificationResult.classification}). Rejeitando persistência como cupom puro.`);
+        
+        let affiliatedUrl = resolvedUrl || coupon.redemptionUrl;
+        
+        // Afiliar em memória para retornar (runtime only)
+        if (affiliatedUrl && (affiliatedUrl.includes('s.shopee') || affiliatedUrl.includes('shp.ee') || affiliatedUrl.includes('shopee.com'))) {
+          try {
+            const { marketplaceService } = await import('./marketplace-service');
+            const connections = await marketplaceService.getEnrichedConnections(userId, supabase);
+            const shopeeConn = connections.find((c: any) => c.marketplace_name?.toLowerCase() === 'shopee');
+            
+            if (shopeeConn?.shopee_app_secret) {
+              const adapter = new ShopeeAdapter();
+              const affLink = await adapter.generateAffiliateLink(affiliatedUrl, {
+                shopee_app_id: shopeeConn.shopee_app_id,
+                shopee_app_secret: shopeeConn.shopee_app_secret
+              } as any);
+              if (affLink && affLink !== affiliatedUrl) {
+                affiliatedUrl = affLink;
+                console.log(`[SHOPEE-COUPON-SERVICE] Cupom misto afiliado em runtime: ${affiliatedUrl}`);
+              }
+            }
+          } catch (err) {
+            console.warn(`[SHOPEE-COUPON-SERVICE] Falha ao afiliar link misto em runtime, usando original.`);
+          }
+        }
+        
+        return {
+          runtimeOnly: true,
+          code: coupon.code || null,
+          couponLabel: coupon.couponLabel || null,
+          originalRedemptionUrl: coupon.redemptionUrl,
+          redemptionUrl: affiliatedUrl
+        };
       } else if (classificationResult.classification === 'promo_landing') {
         validationStatus = 'candidate';
         isVerified = false;
@@ -113,7 +146,7 @@ export const shopeeCouponService = {
                              classificationResult.classification === 'candidate' ||
                              (coupon.type === 'codigo' && coupon.code);
 
-      if (shouldAffiliate && classificationResult.classification !== 'rejected' && classificationResult.classification !== 'product_offer') {
+      if (shouldAffiliate && classificationResult.classification !== 'rejected') {
         console.log(`[SHOPEE-COUPON-SERVICE] Delegando persistência com afiliação para: ${dedupeKey} (${classificationResult.classification})`);
         return await shopeeCouponPersistenceService.saveVerifiedShopeeCouponForUser({
           userId,

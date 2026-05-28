@@ -283,9 +283,13 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
     // --- FILTRAGEM DE LINKS COMPLEMENTARES (FASE 4) ---
     // Removemos explicitamente links que a inteligência central classificou como 'voucher'.
     // Mantemos os que foram classificados como 'product'.
+    let skippedVoucherLinks = 0;
     if (context.links.length > 0) {
       const voucherUrls = new Set(context.links.filter(l => l.role === 'voucher').map(l => l.url));
+      const initialCount = shopeeLinks.length;
       shopeeLinks = shopeeLinks.filter(url => !voucherUrls.has(url));
+      skippedVoucherLinks = initialCount - shopeeLinks.length;
+      console.log(`[SHOPEE-LINK-FILTER] productLinks=${shopeeLinks.length} voucherLinks=${voucherUrls.size} skippedVoucherLinks=${skippedVoucherLinks}`);
     }
 
     const links = [...shopeeLinks, ...mercadoLivreLinks];

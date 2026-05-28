@@ -87,10 +87,11 @@ export function parseShopeeOfferContext(body: string): ShopeeOfferContext {
   const uniqueUrls = Array.from(new Set(rawUrls));
   
   const parsedLinks: ShopeeParsedLink[] = uniqueUrls.map(url => {
-    // Achar a linha onde a URL está
     const lineIndex = lines.findIndex(l => l.includes(url));
+    const prevLine = lineIndex > 0 ? lines[lineIndex - 1].toLowerCase() : '';
     const line = lineIndex > -1 ? lines[lineIndex].toLowerCase() : '';
-    const nearbyText = line;
+    const nextLine = lineIndex > -1 && lineIndex < lines.length - 1 ? lines[lineIndex + 1].toLowerCase() : '';
+    const nearbyText = `${prevLine} ${line} ${nextLine}`.trim();
     
     const isProductClue = /compre|garanta|comprar|link para|🛒|📦|produto/i.test(nearbyText);
     const isVoucherClue = /resgate|voucher|cupom|🎫|🎟️/i.test(nearbyText);
@@ -214,8 +215,8 @@ export function parseShopeeOfferContext(body: string): ShopeeOfferContext {
     // We will use formatDiscountLabel from coupon-extractor since it's already there
     const formatted = formatDiscountLabel(rawLabel);
     
-    // Tentar achar o redemptionUrl próximo (voucher role)
-    const nearestVoucher = parsedLinks.find(l => l.role === 'voucher' && l.nearbyText?.includes('off'));
+    // Tentar achar o redemptionUrl mais próximo (voucher role)
+    const nearestVoucher = parsedLinks.find(l => l.role === 'voucher');
     
     coupons.push({
       type: 'monetary_discount',

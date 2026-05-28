@@ -122,19 +122,60 @@ export function generatePricingInsight(
     warnings: []
   };
 
-  // Ajuste de Preço com Cupom do Texto (Fase 2I -> Fase 3 via Offer Parser)
+  // 1A. Extração de Cupom do Texto (Necessário para validar preço)
+  const couponAmount: ShopeePriceEvidence = { value: null, source: 'unavailable', field: 'couponAmount', confidence: 0, warnings: [] };
+  const couponMinSpend: ShopeePriceEvidence = { value: null, source: 'unavailable', field: 'couponMinSpend', confidence: 0, warnings: [] };
+  let couponScope: string | null = null;
+
+  if (factual.coupons && factual.coupons.length > 0) {
+    const bestCoupon = factual.coupons[0];
+    const label = (bestCoupon.couponLabel || '').toLowerCase();
+    
+    const amountMatch = label.match(/(?:r\$\s*)?(\d+)\s*(?:off|%)/i);
+    const minSpendMatch = text.match(/(?:acima de|mínimo|min|compra\s+de|a partir de)\s*(?:r\$\s*)?(\d+)/i);
+    
+    if (amountMatch) {
+      const isPercentage = label.includes('%');
+      if (!isPercentage) {
+        couponAmount.value = parseInt(amountMatch[1]);
+        couponAmount.source = 'factual_text';
+        couponAmount.confidence = 0.90;
+      }
+    }
+
+    if (minSpendMatch) {
+      couponMinSpend.value = parseInt(minSpendMatch[1]);
+      couponMinSpend.source = 'factual_text';
+      couponMinSpend.confidence = 0.90;
+    }
+
+    if (label.includes('todas as lojas') || label.includes('site todo') || text.includes('todas as lojas')) {
+      couponScope = 'global';
+    } else if (label.includes('loja oficial') || label.includes('shopee oficial')) {
+      couponScope = 'official_store';
+    }
+  }
+
+  // Ajuste de Preço com Cupom do Texto (Validação de Plausibilidade)
+  // Ajuste de Preço com Cupom do Texto (Validação de Plausibilidade)
   const hasExplicitCoupon = context.hasExplicitCouponSignal || (factual.coupons && factual.coupons.length > 0);
   let textPorPrice: number | null = context.prices.currentPrice || null;
+  let plausibleTextPrice: number | null = null;
 
   if (hasExplicitCoupon && textPorPrice && currentPrice.value && textPorPrice < currentPrice.value) {
-    const reasonableMin = currentPrice.value * 0.2;
-    if (textPorPrice >= reasonableMin) {
-      console.log(`[SHOPEE-PRICING] coupon_text_price_selected=true textPrice=${textPorPrice} apiPrice=${currentPrice.value}`);
-      currentPrice.value = textPorPrice;
-      currentPrice.source = 'factual_text';
-      currentPrice.confidence = 0.95;
+    const difference = currentPrice.value - textPorPrice;
+    
+    // Regra de Plausibilidade: A diferença deve ser explicável por cupom + possível pix (~10-15%)
+    let plausibleDifference = (couponAmount.value || 0) + (currentPrice.value * 0.15); 
+    
+    // Margem de erro de arredondamento ou pequenos cupons extras (ex: moedas)
+    plausibleDifference += 10;
+
+    if (difference <= plausibleDifference) {
+      console.log(`[SHOPEE-PRICING] coupon_text_price_selected=true reason=plausible_coupon_pix textPrice=${textPorPrice} apiPrice=${currentPrice.value} couponAmount=${couponAmount.value || 0}`);
+      plausibleTextPrice = textPorPrice;
     } else {
-      console.warn(`[SHOPEE-PRICING] coupon_adjusted_text_price_detected=false apiPrice=${currentPrice.value} textPrice=${textPorPrice} reason=text_price_too_low`);
+      console.log(`[SHOPEE-PRICING] text_coupon_price_rejected reason=not_plausible textPrice=${textPorPrice} apiPrice=${currentPrice.value} couponAmount=${couponAmount.value || 0}`);
     }
   } else {
     console.log(`[SHOPEE-PRICING] coupon_text_price_selected=false hasExplicitCoupon=${hasExplicitCoupon} textPorPrice=${textPorPrice} apiPrice=${currentPrice.value}`);
@@ -187,45 +228,17 @@ export function generatePricingInsight(
     warnings: opWarnings
   };
 
-  // 3. Extração de Cupom do Texto
-  const couponAmount: ShopeePriceEvidence = { value: null, source: 'unavailable', field: 'couponAmount', confidence: 0, warnings: [] };
-  const couponMinSpend: ShopeePriceEvidence = { value: null, source: 'unavailable', field: 'couponMinSpend', confidence: 0, warnings: [] };
-  let couponScope: string | null = null;
 
-  if (factual.coupons && factual.coupons.length > 0) {
-    const bestCoupon = factual.coupons[0];
-    const label = (bestCoupon.couponLabel || '').toLowerCase();
-    
-    const amountMatch = label.match(/(?:r\$\s*)?(\d+)\s*(?:off|%)/i);
-    const minSpendMatch = text.match(/(?:acima de|mínimo|min|compra\s+de|a partir de)\s*(?:r\$\s*)?(\d+)/i);
-    
-    if (amountMatch) {
-      const isPercentage = label.includes('%');
-      if (!isPercentage) {
-        couponAmount.value = parseInt(amountMatch[1]);
-        couponAmount.source = 'factual_text';
-        couponAmount.confidence = 0.90;
-      }
-    }
-
-    if (minSpendMatch) {
-      couponMinSpend.value = parseInt(minSpendMatch[1]);
-      couponMinSpend.source = 'factual_text';
-      couponMinSpend.confidence = 0.90;
-    }
-
-    if (label.includes('todas as lojas') || label.includes('site todo') || text.includes('todas as lojas')) {
-      couponScope = 'global';
-    } else if (label.includes('loja oficial') || label.includes('shopee oficial')) {
-      couponScope = 'official_store';
-    }
-  }
 
   // 4. Cálculo de Preço com Cupom (Validado)
   const couponAdjustedPrice: ShopeePriceEvidence = { value: null, source: 'unavailable', field: 'couponAdjustedPrice', confidence: 0, warnings: [] };
   
-  // Evitar desconto duplo se o currentPrice já foi ajustado pelo texto
-  if (currentPrice.source !== 'factual_text' && currentPrice.value && couponAmount.value && couponAmount.source === 'factual_text') {
+  if (plausibleTextPrice) {
+    // Se o preço do texto foi considerado plausível, ele JÁ tem o cupom (e possível Pix) embutido!
+    couponAdjustedPrice.value = plausibleTextPrice;
+    couponAdjustedPrice.source = 'factual_text';
+    couponAdjustedPrice.confidence = 0.95;
+  } else if (currentPrice.value && couponAmount.value && couponAmount.source === 'factual_text') {
     const meetsMinSpend = !couponMinSpend.value || currentPrice.value >= couponMinSpend.value;
     
     if (meetsMinSpend) {
