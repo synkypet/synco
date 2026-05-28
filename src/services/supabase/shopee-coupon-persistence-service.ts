@@ -61,9 +61,14 @@ export const shopeeCouponPersistenceService = {
     const shopeeConn = connections.find(c => c.marketplace_name?.toLowerCase() === 'shopee');
 
     let finalRedemptionUrl = resolvedUrl || originalUrl || '';
-    let reaffiliationStatus: 'not_needed' | 'resolved' | 'canonicalized' | 'reaffiliated' | 'blocked' | 'failed' | 'warning' = 'failed';
+    let reaffiliationStatus: 'not_needed' | 'resolved' | 'canonicalized' | 'reaffiliated' | 'blocked' | 'failed' | 'warning' | 'skipped' = 'failed';
 
-    if (shopeeConn?.shopee_app_secret) {
+    const isCodeOnly = dbCouponType === 'codigo' && couponCode && !finalRedemptionUrl;
+
+    if (isCodeOnly) {
+      console.log(`[SHOPEE-COUPON-SERVICE] code_without_redemption_url=true code=${couponCode} affiliate_skipped=true`);
+      reaffiliationStatus = 'skipped';
+    } else if (shopeeConn?.shopee_app_secret) {
       try {
         const adapter = new ShopeeAdapter();
         const affiliateUrl = await adapter.generateAffiliateLink(finalRedemptionUrl, {
@@ -144,9 +149,32 @@ export const shopeeCouponPersistenceService = {
           .single();
          
          if (errorFallback) throw errorFallback;
+         if (isCodeOnly) {
+           return {
+             id: savedFallback?.id,
+             code: couponCode,
+             couponLabel: couponLabel || null,
+             redemptionUrl: null,
+             affiliateUrl: null,
+             skippedAffiliate: true,
+             reason: 'code_without_redemption_url'
+           };
+         }
          return { id: savedFallback?.id, reaffiliated: reaffiliationStatus === 'reaffiliated', redemptionUrl: finalRedemptionUrl };
       }
       throw error;
+    }
+
+    if (isCodeOnly) {
+      return {
+        id: saved?.id,
+        code: couponCode,
+        couponLabel: couponLabel || null,
+        redemptionUrl: null,
+        affiliateUrl: null,
+        skippedAffiliate: true,
+        reason: 'code_without_redemption_url'
+      };
     }
 
     return { id: saved?.id, reaffiliated: reaffiliationStatus === 'reaffiliated', redemptionUrl: finalRedemptionUrl };
