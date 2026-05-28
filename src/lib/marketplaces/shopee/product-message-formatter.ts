@@ -40,8 +40,8 @@ export function formatShopeeProductMessage(factual: FactualData, rawText?: strin
   } else if (insight.canDisplayPix && insight.pixPrice.value) {
     lines.push(`🔥 *Por: ${format(insight.pixPrice.value)} NO PIX*`);
   } else if (hasCouponOnly && insight.couponAdjustedPrice.value) {
-    lines.push(`🔥 *Por: ${format(insight.couponAdjustedPrice.value)} com cupom aplicado*`);
-    lines.push(`(Preço normal: ${format(insight.currentPrice.value!)})`);
+    lines.push(`🔥 *Por: ${format(insight.couponAdjustedPrice.value)} COM CUPOM*`);
+    lines.push(`[Preço normal: ${format(insight.currentPrice.value!)}]`);
   } else if (insight.currentPrice.value) {
     lines.push(`🔥 *Por: ${format(insight.currentPrice.value)}*`);
   } else {
@@ -64,12 +64,18 @@ export function formatShopeeProductMessage(factual: FactualData, rawText?: strin
   // 7. Bloco de Cupom (Instruções)
   if (insight.canDisplayCouponPrice && insight.couponAmount.value) {
     lines.push('');
-    lines.push(`Para chegar nesse valor, resgate aqui e aplique o cupom de R$ ${insight.couponAmount.value} OFF:`);
-    // Se houver um cupom na lista com redemptionUrl, usamos ele, senão o link do produto
+    
+    // Identificar a URL correta de resgate
     const couponUrl = factual.extraCouponLink || ((factual.coupons && factual.coupons.length > 0) 
       ? factual.coupons[0].redemptionUrl 
-      : factual.finalLinkToSend);
-    lines.push(couponUrl || factual.finalLinkToSend);
+      : null);
+      
+    if (couponUrl) {
+      lines.push(`Para chegar nesse valor, resgate aqui e aplique o cupom de R$ ${insight.couponAmount.value} OFF:`);
+      lines.push(couponUrl);
+    } else {
+      lines.push(`🎟️ Cupom: R$ ${insight.couponAmount.value} OFF`);
+    }
   }
 
   lines.push('');
