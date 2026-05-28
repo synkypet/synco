@@ -109,12 +109,16 @@ export function buildSmartContext(data: FactualData, sourceName?: string): Smart
       originalPriceLine = `~De: ${format(insight.originalPrice.value)}~`;
     }
     
-    if (insight.currentPrice.value) {
+    if (insight.canDisplayCouponPrice && insight.couponAdjustedPrice.value) {
+      currentPriceLine = `🔥 *Por: ${format(insight.couponAdjustedPrice.value)}*`;
+    } else if (insight.currentPrice.value) {
       currentPriceLine = `🔥 *Por: ${format(insight.currentPrice.value)}*`;
     }
 
     // O smart_price_block é o "coração" do formatador
     const fullMsg = formatShopeeProductMessage(data, data.source_text || undefined);
+    
+    console.log(`[SHOPEE-FINAL-TEXT] hasCouponAdjustedPrice=${insight.canDisplayCouponPrice && !!insight.couponAdjustedPrice.value} couponAdjustedPrice=${insight.couponAdjustedPrice.value} apiPrice=${insight.currentPrice.value} templateContainsComCupom=${fullMsg.includes('COM CUPOM')}`);
     
     // Se o formatador retornou um erro, o smart_price_block deve ser o marcador técnico
     if (fullMsg.includes('[PRODUCT_PRICE_UNAVAILABLE]')) {

@@ -307,7 +307,7 @@ export function generatePricingInsight(
 
   const canDisplayPix = pixPrice.source === 'factual_text';
   const canDisplayInstallments = installmentCount.source === 'factual_text' && installmentNoInterest;
-  const canDisplayCouponPrice = couponAdjustedPrice.source === 'calculated_verified';
+  const canDisplayCouponPrice = couponAdjustedPrice.source === 'calculated_verified' || couponAdjustedPrice.source === 'factual_text';
 
   let displayMode: ShopeePricingInsight['displayMode'] = 'base_only';
   if (canDisplayPix && canDisplayCouponPrice && canDisplayInstallments) displayMode = 'full_verified';
