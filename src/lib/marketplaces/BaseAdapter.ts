@@ -119,7 +119,7 @@ export abstract class MarketplaceAdapter {
    * Busca metadados do produto (nome, preço, imagem).
    * Retorna null se não conseguir obter.
    */
-  abstract fetchMetadata(url: string, connection?: UserMarketplaceConnection, sourceText?: string): Promise<ProductMetadata | null>;
+  abstract fetchMetadata(url: string, connection?: UserMarketplaceConnection, sourceText?: string, preResolvedMetadata?: any): Promise<ProductMetadata | null>;
 
   /**
    * Gera o link de afiliado a partir da URL limpa.

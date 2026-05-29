@@ -176,9 +176,49 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
     };
   }
 
-  async fetchMetadata(url: string, connection?: UserMarketplaceConnection, sourceText?: string): Promise<ProductMetadata | null> {
+  async fetchMetadata(url: string, connection?: UserMarketplaceConnection, sourceText?: string, preResolvedMetadata?: any): Promise<ProductMetadata | null> {
     const itemData = extractItemId(url);
     const fallbackTitle = 'Produto Mercado Livre';
+
+    if (preResolvedMetadata && preResolvedMetadata.source === 'social_card' && preResolvedMetadata.title && preResolvedMetadata.price && preResolvedMetadata.image) {
+      console.log('[ML-SOCIAL-CARD-METADATA]', {
+        source: 'social_card',
+        hasTitle: true,
+        hasImage: true,
+        hasPrice: true,
+        hasOriginalPrice: !!preResolvedMetadata.originalPrice
+      });
+      console.info('[ML-METADATA-FINAL]', {
+        quality: 'complete',
+        titleSource: 'social_card',
+        imageSource: 'social_card',
+        priceSource: 'social_card'
+      });
+
+      let discountPercent = 0;
+      if (preResolvedMetadata.originalPrice > preResolvedMetadata.price && preResolvedMetadata.originalPrice > 0) {
+        discountPercent = Math.round(((preResolvedMetadata.originalPrice - preResolvedMetadata.price) / preResolvedMetadata.originalPrice) * 100);
+      }
+
+      return {
+        marketplace: 'Mercado Livre',
+        name: preResolvedMetadata.title,
+        imageUrl: preResolvedMetadata.image,
+        currentPrice: preResolvedMetadata.price,
+        originalPrice: preResolvedMetadata.originalPrice || preResolvedMetadata.price,
+        discountPercent,
+        currentPriceFactual: preResolvedMetadata.price,
+        currentPriceSource: 'social_card',
+        commissionValueFactual: 0,
+        commissionSource: 'fallback',
+        fetchedAt: new Date().toISOString(),
+        titleSource: 'social_card',
+        imageSource: 'social_card',
+        priceSource: 'social_card',
+        quality: 'complete',
+        itemId: itemData?.id || null
+      } as any;
+    }
 
     if (!itemData) {
       return this.createFallback(fallbackTitle, 'item_id_not_found');

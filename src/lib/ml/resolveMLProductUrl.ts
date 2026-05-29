@@ -6,6 +6,15 @@ export interface MLResolveResult {
   errorCode: string | null
   rawProductUrl?: string | null
   resolutionSource?: 'meli_redirect' | 'social_cta_href' | 'social_cta_click' | 'dom_fallback' | 'already_product' | 'unknown'
+  metadata?: {
+    source: string
+    title: string | null
+    image: string | null
+    price: number | null
+    originalPrice: number | null
+    discountLabel: string | null
+    productUrl: string | null
+  }
 }
 
 export async function resolveMLProductUrl(inputUrl: string): Promise<MLResolveResult> {
@@ -87,7 +96,8 @@ export async function resolveMLProductUrl(inputUrl: string): Promise<MLResolveRe
       itemId: data.itemId || null,
       errorCode: data.errorCode || null,
       rawProductUrl: data.rawProductUrl || data.productUrl || null,
-      resolutionSource
+      resolutionSource,
+      metadata: data.metadata
     }
 
   } catch (err: any) {

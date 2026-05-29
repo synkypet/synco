@@ -356,7 +356,7 @@ export class ShopeeAdapter extends MarketplaceAdapter {
 
   // ─── Captura de Metadados Pro ──────────────────────────────────────────
 
-  async fetchMetadata(url: string, connection?: UserMarketplaceConnection, sourceText?: string): Promise<ProductMetadata | null> {
+  async fetchMetadata(url: string, connection?: UserMarketplaceConnection, sourceText?: string, preResolvedMetadata?: any): Promise<ProductMetadata | null> {
     const { shopId, itemId } = this.extractIds(url);
     const keyword = this.extractKeyword(url);
     const nameFallback = keyword ? keyword.charAt(0).toUpperCase() + keyword.slice(1) : 'Produto Shopee';

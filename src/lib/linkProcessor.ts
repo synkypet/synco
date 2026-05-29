@@ -571,6 +571,7 @@ export async function processLinks(
     let originalInputUrl = targetUrl;
     let resolvedFromAffiliateUrl = false;
     let reaffiliateSource: string | undefined = undefined;
+    let resolvedMetadata: any = null;
 
     const lowerTarget = targetUrl.toLowerCase();
     const isMeliLa = lowerTarget.includes('meli.la');
@@ -603,6 +604,10 @@ export async function processLinks(
         if (resolved.success && resolved.productUrl) {
           console.log(`[ML-REAFFILIATE-RESOLVE] source=${resolved.sourceType} success=true`);
           
+          if (resolved.metadata) {
+             resolvedMetadata = resolved.metadata;
+          }
+
           const hasPdp = resolved.productUrl.includes('pdp_filters=');
           const hasResolvedWid = resolved.productUrl.includes('wid=');
           console.log(`[ML-REAFFILIATE-URL] hasRawProductUrl=true hasProductUrl=true preservedOfferHints=${hasPdp || hasResolvedWid}`);
@@ -1153,7 +1158,7 @@ export async function processLinks(
               marketplace === 'Mercado Livre'
                 ? (preResult.resolved_url || targetUrl)
                 : (preResult.canonical_url || targetUrl);
-            metadata = await adapter.fetchMetadata(metadataTargetUrl, effectiveConnection);
+            metadata = await adapter.fetchMetadata(metadataTargetUrl, effectiveConnection, undefined, resolvedMetadata);
             
             // C. Validação de Metadados (Metadata Guardrail)
             // Somente falha se NÃO for um cupom identificado (pelo texto ou pela URL canônica)
