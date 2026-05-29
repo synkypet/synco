@@ -145,9 +145,48 @@ export class MLClient {
     // ─── FASE 2: Render scraper — tenta candidatos por prioridade ────────────
     const scraperUrl = process.env.SCRAPER_SERVICE_URL;
     if (scraperUrl && (!hasTitle(best) || !best.imageUrl || best.price_unavailable)) {
+      // Remover candidatos duplicados no contexto de scraper pesado (normalizando hash e params)
+      const renderSeenUrls = new Set<string>();
+      const renderCandidates = [];
+      for (const c of candidates) {
+        try {
+          const parsed = new URL(c.url);
+          parsed.hash = '';
+          const keys = Array.from(parsed.searchParams.keys());
+          for (const key of keys) {
+            if (key.startsWith('matt_') || key === 'tracking_id') {
+              parsed.searchParams.delete(key);
+            }
+          }
+          if (Array.from(parsed.searchParams.keys()).length === 0) parsed.search = '';
+          let norm = parsed.toString().toLowerCase();
+          if (norm.endsWith('?')) norm = norm.slice(0, -1);
+          if (norm.endsWith('/')) norm = norm.slice(0, -1);
+          
+          if (!renderSeenUrls.has(norm)) {
+            renderSeenUrls.add(norm);
+            renderCandidates.push(c);
+          }
+        } catch {
+          if (!renderSeenUrls.has(c.url)) {
+            renderSeenUrls.add(c.url);
+            renderCandidates.push(c);
+          }
+        }
+      }
+
+      if (renderCandidates.length < candidates.length) {
+        console.info('[ML-METADATA-CANDIDATES]', { 
+          deduped: true, 
+          before: candidates.length, 
+          after: renderCandidates.length, 
+          reason: 'normalized_same_product'
+        });
+      }
+
       // Tentar Render nos candidatos em ordem, parando no primeiro completo
-      for (let i = 0; i < candidates.length; i++) {
-        const candidate = candidates[i];
+      for (let i = 0; i < renderCandidates.length; i++) {
+        const candidate = renderCandidates[i];
 
         console.info('[ML-METADATA-RENDER-TARGET]', {
           candidateKind: candidate.kind,
