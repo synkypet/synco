@@ -87,7 +87,8 @@ export async function extractMLStaticMetadata(
     hasPreloadedState = /__PRELOADED_STATE__/i.test(html);
     hasMlstatic = /http2?:\/\/http2\.mlstatic\.com/i.test(html);
     hasPriceLikePattern = /"price":|meta itemprop="price"|"current_price":/i.test(html);
-    botDetected = html.includes('captcha') || html.includes('sec-challenge') || html.includes('Verifique se você é humano') || html.includes('validate') || html.includes('Please verify you are a human') || html.includes('px-captcha') || html.length < 50000;
+    // ML pode servir HTML parcial útil abaixo de 50KB
+    botDetected = html.includes('captcha') || html.includes('sec-challenge') || html.includes('Verifique se você é humano') || html.includes('validate') || html.includes('Please verify you are a human') || html.includes('px-captcha') || html.length < 20000;
 
     if (botDetected) {
       diagReason = 'bot_or_shell';

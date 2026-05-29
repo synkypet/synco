@@ -279,7 +279,7 @@ export class MLClient {
   private async tryPublicApi(best: PartialResult, itemData: MLItemIdData): Promise<void> {
     const apiUrl = `https://api.mercadolibre.com/items/${itemData.id}`;
     try {
-      const response = await fetch(apiUrl, { signal: AbortSignal.timeout(3000) });
+      const response = await fetch(apiUrl, { signal: AbortSignal.timeout(7000) });
       if (response.ok) {
         const data = await response.json();
         if (data.title && !hasTitle(best)) {
