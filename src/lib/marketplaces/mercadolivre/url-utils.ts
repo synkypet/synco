@@ -187,35 +187,43 @@ export function buildMercadoLivreMetadataCandidates(
       url: `https://www.mercadolivre.com.br/p/${idData.catalogProductId}`,
       confidence: 'low',
     });
-
-    return candidates;
-  }
-
-  if (idData.urlKind === 'item' || (idData.urlKind === 'catalog_with_offer' && !idData.offerItemId)) {
+  } else if (idData.urlKind === 'item' || (idData.urlKind === 'catalog_with_offer' && !idData.offerItemId)) {
     candidates.push({
       kind: 'direct_item',
       url: buildDirectOfferUrl(idData.id),
       confidence: 'high',
     });
-    return candidates;
-  }
-
-  // urlKind === 'catalog' sem offerItemId
-  const richClean = buildOriginalRichClean(inputUrl);
-  if (richClean) {
+  } else {
+    // urlKind === 'catalog' sem offerItemId
+    const richClean = buildOriginalRichClean(inputUrl);
+    if (richClean) {
+      candidates.push({
+        kind: 'original_rich_clean',
+        url: richClean,
+        confidence: 'medium',
+      });
+    }
     candidates.push({
-      kind: 'original_rich_clean',
-      url: richClean,
-      confidence: 'medium',
+      kind: 'catalog_clean',
+      url: `https://www.mercadolivre.com.br/p/${idData.id}`,
+      confidence: 'low',
     });
   }
-  candidates.push({
-    kind: 'catalog_clean',
-    url: `https://www.mercadolivre.com.br/p/${idData.id}`,
-    confidence: 'low',
-  });
 
-  return candidates;
+  const seenUrls = new Set<string>();
+  const deduped: MLMetadataCandidate[] = [];
+  for (const c of candidates) {
+    if (!seenUrls.has(c.url)) {
+      seenUrls.add(c.url);
+      deduped.push(c);
+    }
+  }
+
+  if (deduped.length < candidates.length) {
+    console.info('[ML-METADATA-CANDIDATES]', { deduped: true, before: candidates.length, after: deduped.length, urlKind: idData.urlKind });
+  }
+
+  return deduped;
 }
 
 export function buildCanonicalUrl(itemData: { id: string, type: 'catalog' | 'item' }): string {

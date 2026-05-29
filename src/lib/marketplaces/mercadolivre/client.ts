@@ -138,31 +138,7 @@ export class MLClient {
       }
     }
 
-    // ─── FASE 2: API pública — fallback rápido antes do Render demorado ─────────
-    if (!hasTitle(best) || !best.imageUrl || best.price_unavailable) {
-      await this.tryPublicApi(best, itemData);
-    }
-
-    // Se a API pública completou, podemos retornar cedo sem render
-    if (isComplete(best)) {
-      bestCandidateKind = bestCandidateKind !== 'none' ? bestCandidateKind : candidates[0]?.kind || 'none';
-      console.info('[ML-METADATA-FINAL]', {
-        quality: 'complete',
-        titleSource: best.titleSource,
-        imageSource: best.imageSource,
-        priceSource: best.priceSource,
-        candidateKind: bestCandidateKind,
-      });
-      return this.buildResult(best, itemData, {
-        quality: 'complete',
-        titleSource: best.titleSource,
-        imageSource: best.imageSource,
-        priceSource: best.priceSource,
-        candidateKind: bestCandidateKind,
-      });
-    }
-
-    // ─── FASE 3: Render scraper — tenta candidatos por prioridade ────────────
+    // ─── FASE 2: Render scraper — tenta candidatos por prioridade ────────────
     const scraperUrl = process.env.SCRAPER_SERVICE_URL;
     if (scraperUrl && (!hasTitle(best) || !best.imageUrl || best.price_unavailable)) {
       // Tentar Render nos candidatos em ordem, parando no primeiro completo
@@ -212,6 +188,19 @@ export class MLClient {
             candidateKind: bestCandidateKind,
           });
         }
+      }
+    }
+
+    // ─── FASE 3: API pública — fallback final opcional ─────────
+    if (!hasTitle(best) || !best.imageUrl || best.price_unavailable) {
+      const enablePublicApiFallback =
+        process.env.ML_ENABLE_PUBLIC_API_FALLBACK === 'true' ||
+        process.env.ML_ENABLE_PUBLIC_API_FALLBACK === '1';
+
+      if (enablePublicApiFallback) {
+        await this.tryPublicApi(best, itemData);
+      } else {
+        console.info('[ML-PUBLIC-API] skipped reason=disabled_by_env');
       }
     }
 
