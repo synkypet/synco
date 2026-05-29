@@ -39,7 +39,45 @@ export async function resolveMLProductUrl(inputUrl: string): Promise<MLResolveRe
     }
   }
 
-  // 3. Fazer POST para o Scraper
+  // 3. Fast-path HTTP redirect para links meli.la simples (evita Playwright timeout em fila)
+  if (lowerUrl.includes('meli.la')) {
+    try {
+      const fastPathStart = Date.now();
+      console.log(`[ML-RESOLVE-FASTPATH] start inputKind=meli_short`);
+      
+      const getRes = await fetch(inputUrl, { 
+        method: 'GET', 
+        redirect: 'follow', 
+        signal: AbortSignal.timeout(4000) 
+      });
+      
+      const finalUrl = getRes.url;
+      const lowerFinal = finalUrl.toLowerCase();
+      
+      // Se não caiu em /social/ e chegou num domínio ML, assumimos sucesso no fast-path
+      if ((lowerFinal.includes('mercadolivre.com.br') || lowerFinal.includes('mercadolibre.com')) && 
+          !lowerFinal.includes('/social/')) {
+        console.log(`[ML-RESOLVE-FASTPATH] success=true finalKind=product durationMs=${Date.now() - fastPathStart}`);
+        return {
+          success: true,
+          sourceType: 'meli_short',
+          productUrl: finalUrl,
+          itemId: null,
+          errorCode: null,
+          rawProductUrl: finalUrl,
+          resolutionSource: 'meli_redirect'
+        }
+      } else {
+        console.log(`[ML-RESOLVE-FASTPATH] success=false fallback=render reason=non_product_url`);
+      }
+    } catch (e: any) {
+      console.log(`[ML-RESOLVE-FASTPATH] success=false fallback=render reason=error_or_timeout msg="${e.message}"`);
+    }
+  }
+
+  // 4. Fazer POST para o Scraper
+  const resolveStart = Date.now();
+  console.log(`[ML-RESOLVE] start timeoutMs=35000 inputKind=${lowerUrl.includes('meli.la') ? 'meli_short' : 'social'}`);
   try {
     const res = await fetch(`${scraperUrl}/scrape/resolve-social`, {
       method: 'POST',
@@ -48,12 +86,12 @@ export async function resolveMLProductUrl(inputUrl: string): Promise<MLResolveRe
         'x-api-key': scraperKey
       },
       body: JSON.stringify({ url: inputUrl }),
-      // Timeout de 20 segundos pois o Playwright é lento
-      signal: AbortSignal.timeout(20000)
+      // Timeout aumentado para 35 segundos para suportar filas no Render
+      signal: AbortSignal.timeout(35000)
     })
 
     if (!res.ok) {
-      console.log(`[ML-RESOLVE] Scraper retornou status ${res.status}`)
+      console.log(`[ML-RESOLVE] failed durationMs=${Date.now() - resolveStart} status=${res.status}`)
       return {
         success: false,
         sourceType: 'unknown',
@@ -80,6 +118,8 @@ export async function resolveMLProductUrl(inputUrl: string): Promise<MLResolveRe
       resolutionSource = 'social_cta_click'
     }
 
+    console.log(`[ML-RESOLVE] done durationMs=${Date.now() - resolveStart} success=${data.success}`);
+
     return {
       success: data.success,
       sourceType: data.sourceType || 'unknown',
@@ -91,13 +131,19 @@ export async function resolveMLProductUrl(inputUrl: string): Promise<MLResolveRe
     }
 
   } catch (err: any) {
-    console.log('[ML-RESOLVE] Erro na requisição:', err.message)
+    const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError';
+    if (isTimeout) {
+      console.log(`[ML-RESOLVE] timeout durationMs=${Date.now() - resolveStart}`);
+    } else {
+      console.log(`[ML-RESOLVE] failed durationMs=${Date.now() - resolveStart} msg="${err.message}"`);
+    }
+
     return {
       success: false,
       sourceType: 'unknown',
       productUrl: null,
       itemId: null,
-      errorCode: 'scraper_error',
+      errorCode: isTimeout ? 'timeout' : 'scraper_error',
       rawProductUrl: null,
       resolutionSource: 'unknown'
     }
