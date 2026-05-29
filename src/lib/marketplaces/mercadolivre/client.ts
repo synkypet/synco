@@ -184,6 +184,22 @@ export class MLClient {
         });
       }
 
+      // Escolher apenas O MELHOR candidato para não floodar o Render
+      let bestRenderCandidate = renderCandidates.find(c => c.kind === 'direct_item' || c.kind === 'direct_offer') ||
+                                renderCandidates.find(c => c.kind === 'original_rich_clean') ||
+                                renderCandidates[0]; // fallback (ex: catalog_clean)
+                                
+      if (bestRenderCandidate) {
+        console.info('[ML-METADATA-SELECTED-FOR-RENDER]', {
+          selected_for_render: bestRenderCandidate.kind,
+          url: bestRenderCandidate.url
+        });
+        
+        // Sobrescreve o array para o for loop abaixo iterar apenas 1 vez
+        renderCandidates.length = 0;
+        renderCandidates.push(bestRenderCandidate);
+      }
+
       // Tentar Render nos candidatos em ordem, parando no primeiro completo
       for (let i = 0; i < renderCandidates.length; i++) {
         const candidate = renderCandidates[i];
