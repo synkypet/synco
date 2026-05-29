@@ -1154,11 +1154,41 @@ export async function processLinks(
         // B. Enrichment (Metadata) - Somente se não estiver bloqueado/falhado
         const canEnrich = preResult.reaffiliation_status !== 'blocked' && preResult.reaffiliation_status !== 'failed';
         if (canEnrich) {
+            let finalResolvedMetadata = resolvedMetadata;
+
+            if (marketplace === 'Mercado Livre' && preResult.generated_affiliate_url && !finalResolvedMetadata) {
+              const affiliateKind = preResult.generated_affiliate_url.includes('meli.la') ? 'meli_short' : (preResult.generated_affiliate_url.includes('/social/') ? 'social' : 'product');
+              console.log('[ML-AFFILIATE-LINK-GENERATED]', {
+                hasAffiliateUrl: true,
+                affiliateKind
+              });
+              
+              try {
+                const { resolveMLProductUrl } = await import('@/lib/ml/resolveMLProductUrl');
+                const postResolve = await resolveMLProductUrl(preResult.generated_affiliate_url, true);
+                
+                if (postResolve.metadata && postResolve.metadata.source === 'social_card') {
+                  console.log('[ML-SOCIAL-CARD-AFTER-CREATELINK]', {
+                    success: true,
+                    hasTitle: !!postResolve.metadata.title,
+                    hasImage: !!postResolve.metadata.image,
+                    hasPrice: !!postResolve.metadata.price
+                  });
+                  finalResolvedMetadata = postResolve.metadata;
+                  finalResolvedMetadata.titleSource = 'social_card_after_createlink';
+                  finalResolvedMetadata.imageSource = 'social_card_after_createlink';
+                  finalResolvedMetadata.priceSource = 'social_card_after_createlink';
+                }
+              } catch (err: any) {
+                console.warn('[ML-SOCIAL-CARD-AFTER-CREATELINK] error:', err.message);
+              }
+            }
+
             const metadataTargetUrl =
               marketplace === 'Mercado Livre'
                 ? (preResult.resolved_url || targetUrl)
                 : (preResult.canonical_url || targetUrl);
-            metadata = await adapter.fetchMetadata(metadataTargetUrl, effectiveConnection, undefined, resolvedMetadata);
+            metadata = await adapter.fetchMetadata(metadataTargetUrl, effectiveConnection, undefined, finalResolvedMetadata);
             
             // C. Validação de Metadados (Metadata Guardrail)
             // Somente falha se NÃO for um cupom identificado (pelo texto ou pela URL canônica)

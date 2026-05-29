@@ -17,7 +17,7 @@ export interface MLResolveResult {
   }
 }
 
-export async function resolveMLProductUrl(inputUrl: string): Promise<MLResolveResult> {
+export async function resolveMLProductUrl(inputUrl: string, forceScraper = false): Promise<MLResolveResult> {
   const scraperUrl = process.env.SCRAPER_SERVICE_URL
   const scraperKey = process.env.SCRAPER_API_KEY
 
@@ -35,7 +35,7 @@ export async function resolveMLProductUrl(inputUrl: string): Promise<MLResolveRe
 
   // 2. Se inputUrl já é URL de produto ML (não meli.la, não /social/)
   const lowerUrl = inputUrl.toLowerCase()
-  if ((lowerUrl.includes('mercadolivre.com.br') || lowerUrl.includes('mercadolibre.com')) &&
+  if (!forceScraper && (lowerUrl.includes('mercadolivre.com.br') || lowerUrl.includes('mercadolibre.com')) &&
       !lowerUrl.includes('/social/') && !lowerUrl.includes('meli.la')) {
     return {
       success: true,

@@ -188,11 +188,12 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
         hasPrice: true,
         hasOriginalPrice: !!preResolvedMetadata.originalPrice
       });
+      const logSource = preResolvedMetadata.titleSource || 'social_card';
       console.info('[ML-METADATA-FINAL]', {
         quality: 'complete',
-        titleSource: 'social_card',
-        imageSource: 'social_card',
-        priceSource: 'social_card'
+        titleSource: logSource,
+        imageSource: logSource,
+        priceSource: logSource
       });
 
       let discountPercent = 0;
@@ -208,13 +209,13 @@ export class MercadoLivreAdapter extends MarketplaceAdapter {
         originalPrice: preResolvedMetadata.originalPrice || preResolvedMetadata.price,
         discountPercent,
         currentPriceFactual: preResolvedMetadata.price,
-        currentPriceSource: 'social_card',
+        currentPriceSource: logSource,
         commissionValueFactual: 0,
         commissionSource: 'fallback',
         fetchedAt: new Date().toISOString(),
-        titleSource: 'social_card',
-        imageSource: 'social_card',
-        priceSource: 'social_card',
+        titleSource: logSource,
+        imageSource: logSource,
+        priceSource: logSource,
         quality: 'complete',
         itemId: itemData?.id || null
       } as any;
