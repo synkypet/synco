@@ -18,6 +18,8 @@ interface PartialResult {
   imageSource: string;
   price_unavailable: boolean;
   pipelineSource: string;
+  offerItemId?: string | null;
+  catalogProductId?: string | null;
 }
 
 function emptyPartial(): PartialResult {
@@ -31,6 +33,8 @@ function emptyPartial(): PartialResult {
     imageSource: 'fallback',
     price_unavailable: true,
     pipelineSource: 'none',
+    offerItemId: null,
+    catalogProductId: null,
   };
 }
 
@@ -253,6 +257,12 @@ export class MLClient {
           r.price_unavailable = false;
           r.pipelineSource = 'static_html';
         }
+        if (staticResult.offerItemId) {
+          r.offerItemId = staticResult.offerItemId;
+        }
+        if (staticResult.catalogProductId) {
+          r.catalogProductId = staticResult.catalogProductId;
+        }
       }
     } catch (err: any) {
       console.warn(`[ML-METADATA-PIPELINE] static_html error on candidate ${index}:`, err.message);
@@ -398,6 +408,12 @@ export class MLClient {
       best.price_unavailable = false;
       best.pipelineSource = partial.pipelineSource;
     }
+    if (!best.offerItemId && partial.offerItemId) {
+      best.offerItemId = partial.offerItemId;
+    }
+    if (!best.catalogProductId && partial.catalogProductId) {
+      best.catalogProductId = partial.catalogProductId;
+    }
   }
 
   private buildResult(
@@ -439,6 +455,8 @@ export class MLClient {
       imageSource: extra?.imageSource || r.imageSource,
       priceSource: extra?.priceSource || r.priceSource,
       candidateKind: extra?.candidateKind,
+      metadataOfferItemId: r.offerItemId,
+      metadataCatalogProductId: r.catalogProductId,
     } as any;
   }
 }

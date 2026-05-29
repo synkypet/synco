@@ -151,6 +151,9 @@ function buildOriginalRichClean(inputUrl: string): string | null {
     }
     // Remover fragment (hash) — contém rastreios como #is_advertising=true
     parsed.hash = '';
+    if ([...parsed.searchParams.keys()].length === 0) {
+      parsed.search = '';
+    }
     return parsed.toString();
   } catch {
     return null;
@@ -213,14 +216,24 @@ export function buildMercadoLivreMetadataCandidates(
   const seenUrls = new Set<string>();
   const deduped: MLMetadataCandidate[] = [];
   for (const c of candidates) {
-    if (!seenUrls.has(c.url)) {
-      seenUrls.add(c.url);
+    let norm = c.url.toLowerCase().split('#')[0];
+    if (norm.endsWith('?')) norm = norm.slice(0, -1);
+    if (norm.endsWith('/')) norm = norm.slice(0, -1);
+
+    if (!seenUrls.has(norm)) {
+      seenUrls.add(norm);
       deduped.push(c);
     }
   }
 
   if (deduped.length < candidates.length) {
-    console.info('[ML-METADATA-CANDIDATES]', { deduped: true, before: candidates.length, after: deduped.length, urlKind: idData.urlKind });
+    console.info('[ML-METADATA-CANDIDATES]', { 
+      deduped: true, 
+      before: candidates.length, 
+      after: deduped.length, 
+      reason: 'normalized_same_product',
+      urlKind: idData.urlKind 
+    });
   }
 
   return deduped;

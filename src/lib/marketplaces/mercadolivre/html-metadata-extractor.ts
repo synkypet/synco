@@ -24,6 +24,9 @@ interface ExtractedMetadata {
   priceSource: string | null;
   titleSource: string | null;
   imageSource: string | null;
+  offerItemId?: string | null;
+  catalogProductId?: string | null;
+  sellerName?: string | null;
 }
 
 /**
@@ -43,6 +46,9 @@ export async function extractMLStaticMetadata(
     priceSource: null,
     titleSource: null,
     imageSource: null,
+    offerItemId: null,
+    catalogProductId: null,
+    sellerName: null,
   };
 
   const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -167,6 +173,105 @@ export async function extractMLStaticMetadata(
           result.priceSource = "og";
         }
       }
+    }
+
+    // 2.5 Tentar extração de Imagem via Preload (HTML Hydration)
+    if (!result.imageUrl) {
+      const preloadSetMatch = html.match(/<link[^>]*rel=["']preload["'][^>]*as=["']image["'][^>]*imagesrcset=["']([^"']+)["']/i) ||
+                              html.match(/<link[^>]*imagesrcset=["']([^"']+)["'][^>]*rel=["']preload["'][^>]*as=["']image["']/i);
+      if (preloadSetMatch) {
+        const srcset = decodeHTMLEntities(preloadSetMatch[1]);
+        const urls = srcset.split(',').map(s => s.trim().split(' ')[0]).filter(u => u.includes('mlstatic.com'));
+        if (urls.length > 0) {
+          const fOrO = urls.find(u => u.includes('-F.') || u.includes('-O.'));
+          const b = urls.find(u => u.includes('-B.'));
+          const l = urls.find(u => u.includes('-L.'));
+          result.imageUrl = fOrO || b || l || urls[0];
+          result.imageSource = "hydration_preload";
+        }
+      } else {
+        const preloadHrefMatch = html.match(/<link[^>]*rel=["']preload["'][^>]*as=["']image["'][^>]*href=["']([^"']+)["']/i);
+        if (preloadHrefMatch) {
+          result.imageUrl = decodeHTMLEntities(preloadHrefMatch[1]);
+          if (result.imageUrl.includes('mlstatic.com')) {
+            result.imageSource = "hydration_preload";
+          } else {
+            result.imageUrl = null;
+          }
+        }
+      }
+    }
+
+    // 2.6 Tentar extração via event_data (Hydration)
+    let hasEventData = false;
+    let priceCandidates = 0;
+    
+    // Buscar blocos JSON que contêm "event_data" ou "main_actions"
+    // Pega um fragmento suficientemente grande após "event_data": {
+    const eventDataRegex = /"event_data"\s*:\s*({[^]*?})/g;
+    let edMatch;
+    
+    // Como a regex completa com [^]* pode falhar ou ser cara, vamos por strings manuais mais seguras:
+    const scriptsWithEventData = html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi);
+    for (const match of scriptsWithEventData) {
+      const scriptText = match[1];
+      if (scriptText.includes('"event_data"') || scriptText.includes('"main_actions"')) {
+        hasEventData = true;
+        
+        // Tentar regex simples para itens de price/original_price/item_id dentro deste script
+        // Isso é mais seguro que JSON.parse de blocos recortados
+        const priceMatch = scriptText.match(/"price"\s*:\s*([0-9.]+)/);
+        const originalPriceMatch = scriptText.match(/"original_price"\s*:\s*([0-9.]+)/);
+        const itemIdMatch = scriptText.match(/"item_id"\s*:\s*"((?:MLB|MLA|MLU|MLC|MLM|MLBU)[0-9]+)"/i);
+        const catalogIdMatch = scriptText.match(/"catalog_product_id"\s*:\s*"((?:MLB|MLA|MLU|MLC|MLM|MLBU)[0-9]+)"/i);
+        const sellerNameMatch = scriptText.match(/"seller_name"\s*:\s*"([^"]+)"/i);
+
+        if (priceMatch) {
+          priceCandidates++;
+          const val = parseFloat(priceMatch[1]);
+          if (!isNaN(val) && val > 0 && !result.price) {
+            result.price = val;
+            result.priceSource = "hydration_event_data";
+            
+            if (originalPriceMatch) {
+              const oVal = parseFloat(originalPriceMatch[1]);
+              if (!isNaN(oVal) && oVal > 0) {
+                result.originalPrice = oVal;
+              }
+            }
+          }
+        }
+
+        if (itemIdMatch && !result.offerItemId) {
+          result.offerItemId = itemIdMatch[1].toUpperCase();
+        }
+
+        if (catalogIdMatch && !result.catalogProductId) {
+          result.catalogProductId = catalogIdMatch[1].toUpperCase();
+        }
+        
+        if (sellerNameMatch && !result.sellerName) {
+          result.sellerName = decodeHTMLEntities(sellerNameMatch[1]);
+        }
+      }
+    }
+
+    if (result.offerItemId || result.priceSource === 'hydration_event_data') {
+      console.info('[ML-HYDRATION-PARSER]', {
+        found: true,
+        hasPrice: !!result.price,
+        hasOriginalPrice: !!result.originalPrice,
+        hasImage: !!result.imageUrl,
+        hasItemId: !!result.offerItemId,
+        source: 'event_data'
+      });
+    } else if (hasEventData) {
+      console.info('[ML-HYDRATION-PARSER]', {
+        found: false,
+        hasEventData,
+        priceCandidates,
+        imageCandidates: 0
+      });
     }
 
     // 3. Tentar extração via Hydrated / State JSON de scripts internos do Mercado Livre
