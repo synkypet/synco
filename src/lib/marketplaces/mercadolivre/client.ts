@@ -34,17 +34,26 @@ function emptyPartial(): PartialResult {
   };
 }
 
+function isInvalidTitle(title: string): boolean {
+  if (!title) return true;
+  const t = title.toLowerCase().trim();
+  return t === 'produto mercado livre' || 
+         t === 'mercado libre' || 
+         t === 'mercado livre' || 
+         t === 'mercado livre brasil' || 
+         t === 'mercadolibre';
+}
+
 function isComplete(r: PartialResult): boolean {
   return (
-    !!r.name &&
-    r.name !== 'Produto Mercado Livre' &&
+    !isInvalidTitle(r.name) &&
     !!r.imageUrl &&
     !r.price_unavailable
   );
 }
 
 function hasTitle(r: PartialResult): boolean {
-  return !!r.name && r.name !== 'Produto Mercado Livre';
+  return !isInvalidTitle(r.name);
 }
 
 // ─── MLClient ────────────────────────────────────────────────────────────────
@@ -129,9 +138,33 @@ export class MLClient {
       }
     }
 
-    // ─── FASE 2: Render scraper — tenta candidatos por prioridade ────────────
+    // ─── FASE 2: API pública — fallback rápido antes do Render demorado ─────────
+    if (!hasTitle(best) || !best.imageUrl || best.price_unavailable) {
+      await this.tryPublicApi(best, itemData);
+    }
+
+    // Se a API pública completou, podemos retornar cedo sem render
+    if (isComplete(best)) {
+      bestCandidateKind = bestCandidateKind !== 'none' ? bestCandidateKind : candidates[0]?.kind || 'none';
+      console.info('[ML-METADATA-FINAL]', {
+        quality: 'complete',
+        titleSource: best.titleSource,
+        imageSource: best.imageSource,
+        priceSource: best.priceSource,
+        candidateKind: bestCandidateKind,
+      });
+      return this.buildResult(best, itemData, {
+        quality: 'complete',
+        titleSource: best.titleSource,
+        imageSource: best.imageSource,
+        priceSource: best.priceSource,
+        candidateKind: bestCandidateKind,
+      });
+    }
+
+    // ─── FASE 3: Render scraper — tenta candidatos por prioridade ────────────
     const scraperUrl = process.env.SCRAPER_SERVICE_URL;
-    if (scraperUrl) {
+    if (scraperUrl && (!hasTitle(best) || !best.imageUrl || best.price_unavailable)) {
       // Tentar Render nos candidatos em ordem, parando no primeiro completo
       for (let i = 0; i < candidates.length; i++) {
         const candidate = candidates[i];
@@ -180,11 +213,6 @@ export class MLClient {
           });
         }
       }
-    }
-
-    // ─── FASE 3: API pública — fallback para título e imagem ou preço ─────────────────
-    if (!hasTitle(best) || !best.imageUrl || best.price_unavailable) {
-      await this.tryPublicApi(best, itemData);
     }
 
     // ─── FASE 4: Slug fallback para título ───────────────────────────────────
@@ -287,14 +315,31 @@ export class MLClient {
   private async tryPublicApi(best: PartialResult, itemData: MLItemIdData): Promise<void> {
     const isCatalog = itemData.type === 'catalog' || itemData.urlKind === 'catalog';
     const idToUse = isCatalog ? (itemData.catalogProductId || itemData.id) : (itemData.offerItemId || itemData.id);
-    const apiUrl = isCatalog 
-      ? `https://api.mercadolibre.com/products/${idToUse}`
-      : `https://api.mercadolibre.com/items/${idToUse}`;
+    const endpointStr = isCatalog ? 'products' : 'items';
+    const apiUrl = `https://api.mercadolibre.com/${endpointStr}/${idToUse}`;
+
+    console.info(`[ML-PUBLIC-API] start endpoint=${endpointStr} id=${idToUse} urlKind=${itemData.urlKind}`);
 
     try {
       const response = await fetch(apiUrl, { signal: AbortSignal.timeout(7000) });
       if (response.ok) {
         const data = await response.json();
+        const hasName = !!(data.name || data.title);
+        const hasImage = !!(data.pictures?.length > 0);
+        
+        let priceValue = 0;
+        let originalPriceValue = 0;
+
+        if (data.price) {
+          priceValue = data.price;
+          originalPriceValue = data.original_price || data.price;
+        } else if (data.buy_box_winner && data.buy_box_winner.price) {
+          priceValue = data.buy_box_winner.price;
+          originalPriceValue = data.buy_box_winner.original_price || data.buy_box_winner.price;
+        }
+
+        const hasPrice = priceValue > 0;
+        console.info(`[ML-PUBLIC-API] response endpoint=${endpointStr} status=${response.status} hasName=${hasName} hasImage=${hasImage} hasPrice=${hasPrice}`);
         
         if (data.name && !hasTitle(best)) {
           best.name = data.name;
@@ -309,17 +354,6 @@ export class MLClient {
           best.imageSource = isCatalog ? 'catalog_api' : 'public_api';
         }
 
-        let priceValue = 0;
-        let originalPriceValue = 0;
-
-        if (data.price) {
-          priceValue = data.price;
-          originalPriceValue = data.original_price || data.price;
-        } else if (data.buy_box_winner && data.buy_box_winner.price) {
-          priceValue = data.buy_box_winner.price;
-          originalPriceValue = data.buy_box_winner.original_price || data.buy_box_winner.price;
-        }
-
         if (priceValue > 0 && best.price_unavailable) {
           best.currentPrice = priceValue;
           best.originalPrice = originalPriceValue;
@@ -327,9 +361,11 @@ export class MLClient {
           best.price_unavailable = false;
           best.pipelineSource = isCatalog ? 'catalog_api' : 'public_api';
         }
+      } else {
+        console.warn(`[ML-PUBLIC-API] failed endpoint=${endpointStr} status=${response.status} reason=${response.statusText}`);
       }
     } catch (err: any) {
-      console.warn('[ML-METADATA-PIPELINE] Public API fallback failed:', err.message);
+      console.warn(`[ML-PUBLIC-API] failed endpoint=${endpointStr} status=error reason=${err.message}`);
     }
   }
 

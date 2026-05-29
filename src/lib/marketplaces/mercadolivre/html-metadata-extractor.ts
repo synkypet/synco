@@ -268,6 +268,18 @@ export async function extractMLStaticMetadata(
       }
     }
     
+    if (result.title) {
+      const lowerTitle = result.title.toLowerCase().trim();
+      if (lowerTitle === 'produto mercado livre' || 
+          lowerTitle === 'mercado libre' || 
+          lowerTitle === 'mercado livre' || 
+          lowerTitle === 'mercado livre brasil' || 
+          lowerTitle === 'mercadolibre') {
+        result.title = null;
+        result.titleSource = null;
+      }
+    }
+    
     if (result.title || result.imageUrl || result.price) {
       if (diagReason === 'none' || diagReason === 'bot_or_shell') {
         diagReason = 'success_partial_or_full';
