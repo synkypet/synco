@@ -218,10 +218,21 @@ export async function extractMLStaticMetadata(
     if (!result.title) {
       const h1Match = html.match(/<h1[^>]*class=["'][^"']*ui-pdp-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i) ||
                       html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) ||
-                      html.match(/<title>([\s\S]*?)<\/title>/i);
+                      html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
       if (h1Match) {
-        result.title = decodeHTMLEntities(h1Match[1].replace(/<[^>]*>/g, '').trim());
+        let t = decodeHTMLEntities(h1Match[1].replace(/<[^>]*>/g, '').trim());
+        t = t.replace(/\s*\|.*$/, '').replace(/\s*-.*$/, '').replace(/Mercado Livre Brasil/i, '').replace(/Mercado Livre/i, '').trim();
+        result.title = t;
         result.titleSource = "html_regex";
+      }
+    }
+
+    if (!result.imageUrl) {
+      const twImage = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i) ||
+                      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i);
+      if (twImage) {
+        result.imageUrl = decodeHTMLEntities(twImage[1].trim());
+        result.imageSource = "twitter_image";
       }
     }
 
@@ -234,8 +245,27 @@ export async function extractMLStaticMetadata(
       }
     }
 
+    if (!result.imageUrl) {
+      const staticImg = html.match(/https?:\/\/http2\.mlstatic\.com\/D_[A-Za-z0-9_-]+\.(jpg|jpeg|webp|png)/i);
+      if (staticImg) {
+        result.imageUrl = staticImg[0].replace(/\\u002F/g, '/');
+        result.imageSource = "html_regex_mlstatic";
+      }
+    }
+
     if (result.imageUrl && result.imageUrl.startsWith('//')) {
       result.imageUrl = 'https:' + result.imageUrl;
+    }
+    
+    if (!result.price) {
+      const andesMatch = html.match(/class=["'][^"']*andes-money-amount__fraction[^"']*["'][^>]*>([\d.,]+)<\//i);
+      if (andesMatch) {
+        const val = parseFloat(andesMatch[1].replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(val) && val > 0) {
+          result.price = val;
+          result.priceSource = "html_andes";
+        }
+      }
     }
     
     if (result.title || result.imageUrl || result.price) {

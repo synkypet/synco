@@ -144,6 +144,14 @@ export class MLClient {
         const renderPartial = await this.tryRender(candidate, i + 1, scraperUrl, 25000);
         this.mergeBetter(best, renderPartial);
 
+        if (!hasTitle(renderPartial) && !renderPartial.imageUrl && renderPartial.price_unavailable) {
+          console.info('[ML-METADATA-RENDER-EMPTY]', {
+            candidateKind: candidate.kind,
+            urlKind: itemData.urlKind,
+            reason: 'no_selectors_matched'
+          });
+        }
+
         console.info('[ML-METADATA-CANDIDATE]', {
           index: i + 1,
           kind: candidate.kind,
@@ -277,25 +285,47 @@ export class MLClient {
   }
 
   private async tryPublicApi(best: PartialResult, itemData: MLItemIdData): Promise<void> {
-    const apiUrl = `https://api.mercadolibre.com/items/${itemData.id}`;
+    const isCatalog = itemData.type === 'catalog' || itemData.urlKind === 'catalog';
+    const idToUse = isCatalog ? (itemData.catalogProductId || itemData.id) : (itemData.offerItemId || itemData.id);
+    const apiUrl = isCatalog 
+      ? `https://api.mercadolibre.com/products/${idToUse}`
+      : `https://api.mercadolibre.com/items/${idToUse}`;
+
     try {
       const response = await fetch(apiUrl, { signal: AbortSignal.timeout(7000) });
       if (response.ok) {
         const data = await response.json();
-        if (data.title && !hasTitle(best)) {
+        
+        if (data.name && !hasTitle(best)) {
+          best.name = data.name;
+          best.titleSource = isCatalog ? 'catalog_api' : 'public_api';
+        } else if (data.title && !hasTitle(best)) {
           best.name = data.title;
-          best.titleSource = 'public_api';
+          best.titleSource = isCatalog ? 'catalog_api' : 'public_api';
         }
+
         if (data.pictures?.length > 0 && !best.imageUrl) {
           best.imageUrl = data.pictures[0].secure_url || data.pictures[0].url;
-          best.imageSource = 'public_api';
+          best.imageSource = isCatalog ? 'catalog_api' : 'public_api';
         }
-        if (data.price && data.price > 0 && best.price_unavailable) {
-          best.currentPrice = data.price;
-          best.originalPrice = data.original_price || data.price;
-          best.priceSource = 'public_api';
+
+        let priceValue = 0;
+        let originalPriceValue = 0;
+
+        if (data.price) {
+          priceValue = data.price;
+          originalPriceValue = data.original_price || data.price;
+        } else if (data.buy_box_winner && data.buy_box_winner.price) {
+          priceValue = data.buy_box_winner.price;
+          originalPriceValue = data.buy_box_winner.original_price || data.buy_box_winner.price;
+        }
+
+        if (priceValue > 0 && best.price_unavailable) {
+          best.currentPrice = priceValue;
+          best.originalPrice = originalPriceValue;
+          best.priceSource = isCatalog ? 'catalog_api' : 'public_api';
           best.price_unavailable = false;
-          best.pipelineSource = 'public_api';
+          best.pipelineSource = isCatalog ? 'catalog_api' : 'public_api';
         }
       }
     } catch (err: any) {
