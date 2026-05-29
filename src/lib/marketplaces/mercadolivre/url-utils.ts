@@ -151,9 +151,6 @@ function buildOriginalRichClean(inputUrl: string): string | null {
     }
     // Remover fragment (hash) — contém rastreios como #is_advertising=true
     parsed.hash = '';
-    if ([...parsed.searchParams.keys()].length === 0) {
-      parsed.search = '';
-    }
     return parsed.toString();
   } catch {
     return null;
@@ -190,53 +187,35 @@ export function buildMercadoLivreMetadataCandidates(
       url: `https://www.mercadolivre.com.br/p/${idData.catalogProductId}`,
       confidence: 'low',
     });
-  } else if (idData.urlKind === 'item' || (idData.urlKind === 'catalog_with_offer' && !idData.offerItemId)) {
+
+    return candidates;
+  }
+
+  if (idData.urlKind === 'item' || (idData.urlKind === 'catalog_with_offer' && !idData.offerItemId)) {
     candidates.push({
       kind: 'direct_item',
       url: buildDirectOfferUrl(idData.id),
       confidence: 'high',
     });
-  } else {
-    // urlKind === 'catalog' sem offerItemId
-    const richClean = buildOriginalRichClean(inputUrl);
-    if (richClean) {
-      candidates.push({
-        kind: 'original_rich_clean',
-        url: richClean,
-        confidence: 'medium',
-      });
-    }
+    return candidates;
+  }
+
+  // urlKind === 'catalog' sem offerItemId
+  const richClean = buildOriginalRichClean(inputUrl);
+  if (richClean) {
     candidates.push({
-      kind: 'catalog_clean',
-      url: `https://www.mercadolivre.com.br/p/${idData.id}`,
-      confidence: 'low',
+      kind: 'original_rich_clean',
+      url: richClean,
+      confidence: 'medium',
     });
   }
+  candidates.push({
+    kind: 'catalog_clean',
+    url: `https://www.mercadolivre.com.br/p/${idData.id}`,
+    confidence: 'low',
+  });
 
-  const seenUrls = new Set<string>();
-  const deduped: MLMetadataCandidate[] = [];
-  for (const c of candidates) {
-    let norm = c.url.toLowerCase().split('#')[0];
-    if (norm.endsWith('?')) norm = norm.slice(0, -1);
-    if (norm.endsWith('/')) norm = norm.slice(0, -1);
-
-    if (!seenUrls.has(norm)) {
-      seenUrls.add(norm);
-      deduped.push(c);
-    }
-  }
-
-  if (deduped.length < candidates.length) {
-    console.info('[ML-METADATA-CANDIDATES]', { 
-      deduped: true, 
-      before: candidates.length, 
-      after: deduped.length, 
-      reason: 'normalized_same_product',
-      urlKind: idData.urlKind 
-    });
-  }
-
-  return deduped;
+  return candidates;
 }
 
 export function buildCanonicalUrl(itemData: { id: string, type: 'catalog' | 'item' }): string {

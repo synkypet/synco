@@ -119,69 +119,38 @@ function normalizeShopeeUrl(url: string): string {
   }
 }
 
-function diagnoseAutomationGate(snapshot: ProductSnapshot) {
+function isCompleteForAutomation(snapshot: ProductSnapshot): boolean {
   const factual = snapshot.factual;
 
   const title = factual.title || '';
   const image = factual.image || '';
   const price = Number(factual.currentPriceFactual ?? factual.price ?? 0);
   const finalLink = factual.finalLinkToSend || factual.affiliateLink || '';
-  const canonicalUrl = factual.canonical_url || (factual as any).canonicalUrl || '';
 
   const titleOk =
     title.trim().length >= 4 &&
     title !== 'Produto Mercado Livre' &&
-    !title.toLowerCase().includes('produto mercado livre');
+    !title.toLowerCase().includes('produto Mercado Livre');
 
-  const imageOk = image.length > 5 && factual.imageSource !== 'fallback';
-  const priceOk = price > 0 && factual.price_unavailable !== true && factual.priceSource !== 'fallback';
-  const finalLinkOk = Boolean(finalLink);
-  
-  const hasValidAffiliateLongLink = finalLinkOk && finalLink !== canonicalUrl;
+  const hardFailed =
+    factual.reaffiliation_status === 'failed' ||
+    factual.reaffiliation_status === 'blocked' ||
+    factual.shortGenerationStatus === 'no_session' ||
+    factual.shortGenerationStatus === 'fallback';
 
-  const missingFields: string[] = [];
-  if (!titleOk) missingFields.push('title');
-  if (!imageOk) missingFields.push('image');
-  if (!priceOk) missingFields.push('price');
-  if (!finalLinkOk) missingFields.push('link');
-
-  const blockedReasons: string[] = [];
-
-  if (factual.reaffiliation_status === 'failed') blockedReasons.push('reaffiliation_failed');
-  if (factual.reaffiliation_status === 'blocked') blockedReasons.push('reaffiliation_blocked');
-  
-  if (factual.shortGenerationStatus === 'fallback' && !hasValidAffiliateLongLink) {
-    blockedReasons.push('short_fallback_without_valid_long_link');
-  }
-  if (factual.shortGenerationStatus === 'no_session' && !hasValidAffiliateLongLink) {
-    blockedReasons.push('no_session_without_valid_long_link');
-  }
-
-  if (factual.quality !== 'complete') blockedReasons.push('quality_not_complete');
-  if (factual.titleSource === 'url_slug_fallback') blockedReasons.push('title_source_invalid');
-
-  if (missingFields.length > 0) blockedReasons.push('missing_fields');
-
-  const passed = blockedReasons.length === 0;
-
-  return {
-    passed,
-    missingFields,
-    blockedReasons,
-    signals: {
-      titleOk,
-      imageOk,
-      priceOk,
-      finalLinkOk,
-      quality: factual.quality || null,
-      titleSource: factual.titleSource || null,
-      imageSource: factual.imageSource || null,
-      priceSource: factual.priceSource || null,
-      reaffiliationStatus: factual.reaffiliation_status || null,
-      shortGenerationStatus: factual.shortGenerationStatus || null,
-      hasValidAffiliateLongLink
-    }
-  };
+  return Boolean(
+    titleOk &&
+    image &&
+    image.length > 5 &&
+    price > 0 &&
+    finalLink &&
+    factual.price_unavailable !== true &&
+    factual.quality === 'complete' &&
+    factual.priceSource !== 'fallback' &&
+    factual.imageSource !== 'fallback' &&
+    factual.titleSource !== 'url_slug_fallback' &&
+    !hardFailed
+  );
 }
 
 export async function processInboundAutomation(payload: InboundPayload, client?: SupabaseClient) {
@@ -408,13 +377,10 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
         }
 
         if (isML) {
-          console.log(`[ML-GROUP-MONITOR] processlinks_start`);
           console.log(`[ML-GROUP-MONITOR] processlinks_done hasSnapshot=true`);
           
-          const diag = diagnoseAutomationGate(snapshot);
-
-          if (!diag.passed) {
-            console.warn(`${logPrefix} [ML-GROUP-MONITOR] blocked=true reason=incomplete_metadata missing=${diag.missingFields.join(',')} quality=${diag.signals.quality} titleOk=${diag.signals.titleOk} priceOk=${diag.signals.priceOk} imageOk=${diag.signals.imageOk} affiliateOk=${diag.signals.hasValidAffiliateLongLink} shortStatus=${diag.signals.shortGenerationStatus} titleSource=${diag.signals.titleSource} priceSource=${diag.signals.priceSource} imageSource=${diag.signals.imageSource}`);
+          if (!isCompleteForAutomation(snapshot)) {
+            console.warn(`${logPrefix} [ML-GROUP-MONITOR] blocked=true reason=incomplete_metadata`);
             
             await automationService.logEvent({
               source_id: source.id,
@@ -425,18 +391,12 @@ export async function processInboundAutomation(payload: InboundPayload, client?:
                 url: normalized, 
                 status: snapshot.factual?.eligibility?.status || 'incomplete', 
                 error: 'Oferta com metadados incompletos ou inválidos (Mercado Livre Quality Gate)', 
-                messageId,
-                diag
+                messageId 
               }
             }, supabase);
 
             continue;
           }
-          
-          if (diag.signals.shortGenerationStatus === 'fallback' && diag.signals.hasValidAffiliateLongLink) {
-            console.log(`[ML-GROUP-MONITOR] pass_with_long_affiliate=true shortStatus=fallback`);
-          }
-
           console.log(`[ML-GROUP-MONITOR] passed=true`);
           console.log(`[ML-GROUP-MONITOR] processed=true eligibility=${snapshot.factual.eligibility?.status || 'none'}`);
           if (snapshot.factual.reaffiliation_status === 'reaffiliated') {

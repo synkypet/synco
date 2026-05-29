@@ -603,20 +603,11 @@ export async function processLinks(
         if (resolved.success && resolved.productUrl) {
           console.log(`[ML-REAFFILIATE-RESOLVE] source=${resolved.sourceType} success=true`);
           
-          let selectedUrl = resolved.productUrl;
-          let rawHasOfferHints = false;
-
-          if (resolved.rawProductUrl) {
-            const lowerRaw = resolved.rawProductUrl.toLowerCase();
-            rawHasOfferHints = lowerRaw.includes('pdp_filters=') || lowerRaw.includes('wid=') || lowerRaw.includes('mlb-');
-            if (rawHasOfferHints) {
-              selectedUrl = resolved.rawProductUrl;
-            }
-          }
-
-          console.log(`[ML-RESOLVE-RICH-URL] hasRawProductUrl=${!!resolved.rawProductUrl} rawHasOfferHints=${rawHasOfferHints} selected=${rawHasOfferHints ? 'rawProductUrl' : 'productUrl'}`);
+          const hasPdp = resolved.productUrl.includes('pdp_filters=');
+          const hasResolvedWid = resolved.productUrl.includes('wid=');
+          console.log(`[ML-REAFFILIATE-URL] hasRawProductUrl=true hasProductUrl=true preservedOfferHints=${hasPdp || hasResolvedWid}`);
           
-          targetUrl = selectedUrl;
+          targetUrl = resolved.productUrl;
           resolvedFromAffiliateUrl = true;
           reaffiliateSource = resolved.sourceType;
           resolveSuccess = true;

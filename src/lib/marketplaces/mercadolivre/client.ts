@@ -18,8 +18,6 @@ interface PartialResult {
   imageSource: string;
   price_unavailable: boolean;
   pipelineSource: string;
-  offerItemId?: string | null;
-  catalogProductId?: string | null;
 }
 
 function emptyPartial(): PartialResult {
@@ -33,31 +31,20 @@ function emptyPartial(): PartialResult {
     imageSource: 'fallback',
     price_unavailable: true,
     pipelineSource: 'none',
-    offerItemId: null,
-    catalogProductId: null,
   };
-}
-
-function isInvalidTitle(title: string): boolean {
-  if (!title) return true;
-  const t = title.toLowerCase().trim();
-  return t === 'produto mercado livre' || 
-         t === 'mercado libre' || 
-         t === 'mercado livre' || 
-         t === 'mercado livre brasil' || 
-         t === 'mercadolibre';
 }
 
 function isComplete(r: PartialResult): boolean {
   return (
-    !isInvalidTitle(r.name) &&
+    !!r.name &&
+    r.name !== 'Produto Mercado Livre' &&
     !!r.imageUrl &&
     !r.price_unavailable
   );
 }
 
 function hasTitle(r: PartialResult): boolean {
-  return !isInvalidTitle(r.name);
+  return !!r.name && r.name !== 'Produto Mercado Livre';
 }
 
 // ─── MLClient ────────────────────────────────────────────────────────────────
@@ -144,65 +131,10 @@ export class MLClient {
 
     // ─── FASE 2: Render scraper — tenta candidatos por prioridade ────────────
     const scraperUrl = process.env.SCRAPER_SERVICE_URL;
-    if (scraperUrl && (!hasTitle(best) || !best.imageUrl || best.price_unavailable)) {
-      // Remover candidatos duplicados no contexto de scraper pesado (normalizando hash e params)
-      const renderSeenUrls = new Set<string>();
-      const renderCandidates = [];
-      for (const c of candidates) {
-        try {
-          const parsed = new URL(c.url);
-          parsed.hash = '';
-          const keys = Array.from(parsed.searchParams.keys());
-          for (const key of keys) {
-            if (key.startsWith('matt_') || key === 'tracking_id') {
-              parsed.searchParams.delete(key);
-            }
-          }
-          if (Array.from(parsed.searchParams.keys()).length === 0) parsed.search = '';
-          let norm = parsed.toString().toLowerCase();
-          if (norm.endsWith('?')) norm = norm.slice(0, -1);
-          if (norm.endsWith('/')) norm = norm.slice(0, -1);
-          
-          if (!renderSeenUrls.has(norm)) {
-            renderSeenUrls.add(norm);
-            renderCandidates.push(c);
-          }
-        } catch {
-          if (!renderSeenUrls.has(c.url)) {
-            renderSeenUrls.add(c.url);
-            renderCandidates.push(c);
-          }
-        }
-      }
-
-      if (renderCandidates.length < candidates.length) {
-        console.info('[ML-METADATA-CANDIDATES]', { 
-          deduped: true, 
-          before: candidates.length, 
-          after: renderCandidates.length, 
-          reason: 'normalized_same_product'
-        });
-      }
-
-      // Escolher apenas O MELHOR candidato para não floodar o Render
-      let bestRenderCandidate = renderCandidates.find(c => c.kind === 'direct_item' || c.kind === 'direct_offer') ||
-                                renderCandidates.find(c => c.kind === 'original_rich_clean') ||
-                                renderCandidates[0]; // fallback (ex: catalog_clean)
-                                
-      if (bestRenderCandidate) {
-        console.info('[ML-METADATA-SELECTED-FOR-RENDER]', {
-          selected_for_render: bestRenderCandidate.kind,
-          url: bestRenderCandidate.url
-        });
-        
-        // Sobrescreve o array para o for loop abaixo iterar apenas 1 vez
-        renderCandidates.length = 0;
-        renderCandidates.push(bestRenderCandidate);
-      }
-
+    if (scraperUrl) {
       // Tentar Render nos candidatos em ordem, parando no primeiro completo
-      for (let i = 0; i < renderCandidates.length; i++) {
-        const candidate = renderCandidates[i];
+      for (let i = 0; i < candidates.length; i++) {
+        const candidate = candidates[i];
 
         console.info('[ML-METADATA-RENDER-TARGET]', {
           candidateKind: candidate.kind,
@@ -211,14 +143,6 @@ export class MLClient {
 
         const renderPartial = await this.tryRender(candidate, i + 1, scraperUrl, 25000);
         this.mergeBetter(best, renderPartial);
-
-        if (!hasTitle(renderPartial) && !renderPartial.imageUrl && renderPartial.price_unavailable) {
-          console.info('[ML-METADATA-RENDER-EMPTY]', {
-            candidateKind: candidate.kind,
-            urlKind: itemData.urlKind,
-            reason: 'no_selectors_matched'
-          });
-        }
 
         console.info('[ML-METADATA-CANDIDATE]', {
           index: i + 1,
@@ -250,17 +174,9 @@ export class MLClient {
       }
     }
 
-    // ─── FASE 3: API pública — fallback final opcional ─────────
+    // ─── FASE 3: API pública — fallback para título e imagem ou preço ─────────────────
     if (!hasTitle(best) || !best.imageUrl || best.price_unavailable) {
-      const enablePublicApiFallback =
-        process.env.ML_ENABLE_PUBLIC_API_FALLBACK === 'true' ||
-        process.env.ML_ENABLE_PUBLIC_API_FALLBACK === '1';
-
-      if (enablePublicApiFallback) {
-        await this.tryPublicApi(best, itemData);
-      } else {
-        console.info('[ML-PUBLIC-API] skipped reason=disabled_by_env');
-      }
+      await this.tryPublicApi(best, itemData);
     }
 
     // ─── FASE 4: Slug fallback para título ───────────────────────────────────
@@ -312,12 +228,6 @@ export class MLClient {
           r.price_unavailable = false;
           r.pipelineSource = 'static_html';
         }
-        if (staticResult.offerItemId) {
-          r.offerItemId = staticResult.offerItemId;
-        }
-        if (staticResult.catalogProductId) {
-          r.catalogProductId = staticResult.catalogProductId;
-        }
       }
     } catch (err: any) {
       console.warn(`[ML-METADATA-PIPELINE] static_html error on candidate ${index}:`, err.message);
@@ -367,59 +277,29 @@ export class MLClient {
   }
 
   private async tryPublicApi(best: PartialResult, itemData: MLItemIdData): Promise<void> {
-    const isCatalog = itemData.type === 'catalog' || itemData.urlKind === 'catalog';
-    const idToUse = isCatalog ? (itemData.catalogProductId || itemData.id) : (itemData.offerItemId || itemData.id);
-    const endpointStr = isCatalog ? 'products' : 'items';
-    const apiUrl = `https://api.mercadolibre.com/${endpointStr}/${idToUse}`;
-
-    console.info(`[ML-PUBLIC-API] start endpoint=${endpointStr} id=${idToUse} urlKind=${itemData.urlKind}`);
-
+    const apiUrl = `https://api.mercadolibre.com/items/${itemData.id}`;
     try {
-      const response = await fetch(apiUrl, { signal: AbortSignal.timeout(7000) });
+      const response = await fetch(apiUrl, { signal: AbortSignal.timeout(3000) });
       if (response.ok) {
         const data = await response.json();
-        const hasName = !!(data.name || data.title);
-        const hasImage = !!(data.pictures?.length > 0);
-        
-        let priceValue = 0;
-        let originalPriceValue = 0;
-
-        if (data.price) {
-          priceValue = data.price;
-          originalPriceValue = data.original_price || data.price;
-        } else if (data.buy_box_winner && data.buy_box_winner.price) {
-          priceValue = data.buy_box_winner.price;
-          originalPriceValue = data.buy_box_winner.original_price || data.buy_box_winner.price;
-        }
-
-        const hasPrice = priceValue > 0;
-        console.info(`[ML-PUBLIC-API] response endpoint=${endpointStr} status=${response.status} hasName=${hasName} hasImage=${hasImage} hasPrice=${hasPrice}`);
-        
-        if (data.name && !hasTitle(best)) {
-          best.name = data.name;
-          best.titleSource = isCatalog ? 'catalog_api' : 'public_api';
-        } else if (data.title && !hasTitle(best)) {
+        if (data.title && !hasTitle(best)) {
           best.name = data.title;
-          best.titleSource = isCatalog ? 'catalog_api' : 'public_api';
+          best.titleSource = 'public_api';
         }
-
         if (data.pictures?.length > 0 && !best.imageUrl) {
           best.imageUrl = data.pictures[0].secure_url || data.pictures[0].url;
-          best.imageSource = isCatalog ? 'catalog_api' : 'public_api';
+          best.imageSource = 'public_api';
         }
-
-        if (priceValue > 0 && best.price_unavailable) {
-          best.currentPrice = priceValue;
-          best.originalPrice = originalPriceValue;
-          best.priceSource = isCatalog ? 'catalog_api' : 'public_api';
+        if (data.price && data.price > 0 && best.price_unavailable) {
+          best.currentPrice = data.price;
+          best.originalPrice = data.original_price || data.price;
+          best.priceSource = 'public_api';
           best.price_unavailable = false;
-          best.pipelineSource = isCatalog ? 'catalog_api' : 'public_api';
+          best.pipelineSource = 'public_api';
         }
-      } else {
-        console.warn(`[ML-PUBLIC-API] failed endpoint=${endpointStr} status=${response.status} reason=${response.statusText}`);
       }
     } catch (err: any) {
-      console.warn(`[ML-PUBLIC-API] failed endpoint=${endpointStr} status=error reason=${err.message}`);
+      console.warn('[ML-METADATA-PIPELINE] Public API fallback failed:', err.message);
     }
   }
 
@@ -463,12 +343,6 @@ export class MLClient {
       best.price_unavailable = false;
       best.pipelineSource = partial.pipelineSource;
     }
-    if (!best.offerItemId && partial.offerItemId) {
-      best.offerItemId = partial.offerItemId;
-    }
-    if (!best.catalogProductId && partial.catalogProductId) {
-      best.catalogProductId = partial.catalogProductId;
-    }
   }
 
   private buildResult(
@@ -510,8 +384,6 @@ export class MLClient {
       imageSource: extra?.imageSource || r.imageSource,
       priceSource: extra?.priceSource || r.priceSource,
       candidateKind: extra?.candidateKind,
-      metadataOfferItemId: r.offerItemId,
-      metadataCatalogProductId: r.catalogProductId,
     } as any;
   }
 }

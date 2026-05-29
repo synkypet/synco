@@ -24,9 +24,6 @@ interface ExtractedMetadata {
   priceSource: string | null;
   titleSource: string | null;
   imageSource: string | null;
-  offerItemId?: string | null;
-  catalogProductId?: string | null;
-  sellerName?: string | null;
 }
 
 /**
@@ -46,9 +43,6 @@ export async function extractMLStaticMetadata(
     priceSource: null,
     titleSource: null,
     imageSource: null,
-    offerItemId: null,
-    catalogProductId: null,
-    sellerName: null,
   };
 
   const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -93,8 +87,7 @@ export async function extractMLStaticMetadata(
     hasPreloadedState = /__PRELOADED_STATE__/i.test(html);
     hasMlstatic = /http2?:\/\/http2\.mlstatic\.com/i.test(html);
     hasPriceLikePattern = /"price":|meta itemprop="price"|"current_price":/i.test(html);
-    // ML pode servir HTML parcial útil abaixo de 50KB
-    botDetected = html.includes('captcha') || html.includes('sec-challenge') || html.includes('Verifique se você é humano') || html.includes('validate') || html.includes('Please verify you are a human') || html.includes('px-captcha') || html.length < 20000;
+    botDetected = html.includes('captcha') || html.includes('sec-challenge') || html.includes('Verifique se você é humano') || html.includes('validate') || html.includes('Please verify you are a human') || html.includes('px-captcha') || html.length < 50000;
 
     if (botDetected) {
       diagReason = 'bot_or_shell';
@@ -175,105 +168,6 @@ export async function extractMLStaticMetadata(
       }
     }
 
-    // 2.5 Tentar extração de Imagem via Preload (HTML Hydration)
-    if (!result.imageUrl) {
-      const preloadSetMatch = html.match(/<link[^>]*rel=["']preload["'][^>]*as=["']image["'][^>]*imagesrcset=["']([^"']+)["']/i) ||
-                              html.match(/<link[^>]*imagesrcset=["']([^"']+)["'][^>]*rel=["']preload["'][^>]*as=["']image["']/i);
-      if (preloadSetMatch) {
-        const srcset = decodeHTMLEntities(preloadSetMatch[1]);
-        const urls = srcset.split(',').map(s => s.trim().split(' ')[0]).filter(u => u.includes('mlstatic.com'));
-        if (urls.length > 0) {
-          const fOrO = urls.find(u => u.includes('-F.') || u.includes('-O.'));
-          const b = urls.find(u => u.includes('-B.'));
-          const l = urls.find(u => u.includes('-L.'));
-          result.imageUrl = fOrO || b || l || urls[0];
-          result.imageSource = "hydration_preload";
-        }
-      } else {
-        const preloadHrefMatch = html.match(/<link[^>]*rel=["']preload["'][^>]*as=["']image["'][^>]*href=["']([^"']+)["']/i);
-        if (preloadHrefMatch) {
-          result.imageUrl = decodeHTMLEntities(preloadHrefMatch[1]);
-          if (result.imageUrl.includes('mlstatic.com')) {
-            result.imageSource = "hydration_preload";
-          } else {
-            result.imageUrl = null;
-          }
-        }
-      }
-    }
-
-    // 2.6 Tentar extração via event_data (Hydration)
-    let hasEventData = false;
-    let priceCandidates = 0;
-    
-    // Buscar blocos JSON que contêm "event_data" ou "main_actions"
-    // Pega um fragmento suficientemente grande após "event_data": {
-    const eventDataRegex = /"event_data"\s*:\s*({[^]*?})/g;
-    let edMatch;
-    
-    // Como a regex completa com [^]* pode falhar ou ser cara, vamos por strings manuais mais seguras:
-    const scriptsWithEventData = html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi);
-    for (const match of scriptsWithEventData) {
-      const scriptText = match[1];
-      if (scriptText.includes('"event_data"') || scriptText.includes('"main_actions"')) {
-        hasEventData = true;
-        
-        // Tentar regex simples para itens de price/original_price/item_id dentro deste script
-        // Isso é mais seguro que JSON.parse de blocos recortados
-        const priceMatch = scriptText.match(/"price"\s*:\s*([0-9.]+)/);
-        const originalPriceMatch = scriptText.match(/"original_price"\s*:\s*([0-9.]+)/);
-        const itemIdMatch = scriptText.match(/"item_id"\s*:\s*"((?:MLB|MLA|MLU|MLC|MLM|MLBU)[0-9]+)"/i);
-        const catalogIdMatch = scriptText.match(/"catalog_product_id"\s*:\s*"((?:MLB|MLA|MLU|MLC|MLM|MLBU)[0-9]+)"/i);
-        const sellerNameMatch = scriptText.match(/"seller_name"\s*:\s*"([^"]+)"/i);
-
-        if (priceMatch) {
-          priceCandidates++;
-          const val = parseFloat(priceMatch[1]);
-          if (!isNaN(val) && val > 0 && !result.price) {
-            result.price = val;
-            result.priceSource = "hydration_event_data";
-            
-            if (originalPriceMatch) {
-              const oVal = parseFloat(originalPriceMatch[1]);
-              if (!isNaN(oVal) && oVal > 0) {
-                result.originalPrice = oVal;
-              }
-            }
-          }
-        }
-
-        if (itemIdMatch && !result.offerItemId) {
-          result.offerItemId = itemIdMatch[1].toUpperCase();
-        }
-
-        if (catalogIdMatch && !result.catalogProductId) {
-          result.catalogProductId = catalogIdMatch[1].toUpperCase();
-        }
-        
-        if (sellerNameMatch && !result.sellerName) {
-          result.sellerName = decodeHTMLEntities(sellerNameMatch[1]);
-        }
-      }
-    }
-
-    if (result.offerItemId || result.priceSource === 'hydration_event_data') {
-      console.info('[ML-HYDRATION-PARSER]', {
-        found: true,
-        hasPrice: !!result.price,
-        hasOriginalPrice: !!result.originalPrice,
-        hasImage: !!result.imageUrl,
-        hasItemId: !!result.offerItemId,
-        source: 'event_data'
-      });
-    } else if (hasEventData) {
-      console.info('[ML-HYDRATION-PARSER]', {
-        found: false,
-        hasEventData,
-        priceCandidates,
-        imageCandidates: 0
-      });
-    }
-
     // 3. Tentar extração via Hydrated / State JSON de scripts internos do Mercado Livre
     if (!result.price || !result.title || !result.imageUrl) {
       try {
@@ -323,21 +217,10 @@ export async function extractMLStaticMetadata(
     if (!result.title) {
       const h1Match = html.match(/<h1[^>]*class=["'][^"']*ui-pdp-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i) ||
                       html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) ||
-                      html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+                      html.match(/<title>([\s\S]*?)<\/title>/i);
       if (h1Match) {
-        let t = decodeHTMLEntities(h1Match[1].replace(/<[^>]*>/g, '').trim());
-        t = t.replace(/\s*\|.*$/, '').replace(/\s*-.*$/, '').replace(/Mercado Livre Brasil/i, '').replace(/Mercado Livre/i, '').trim();
-        result.title = t;
+        result.title = decodeHTMLEntities(h1Match[1].replace(/<[^>]*>/g, '').trim());
         result.titleSource = "html_regex";
-      }
-    }
-
-    if (!result.imageUrl) {
-      const twImage = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i) ||
-                      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i);
-      if (twImage) {
-        result.imageUrl = decodeHTMLEntities(twImage[1].trim());
-        result.imageSource = "twitter_image";
       }
     }
 
@@ -350,39 +233,8 @@ export async function extractMLStaticMetadata(
       }
     }
 
-    if (!result.imageUrl) {
-      const staticImg = html.match(/https?:\/\/http2\.mlstatic\.com\/D_[A-Za-z0-9_-]+\.(jpg|jpeg|webp|png)/i);
-      if (staticImg) {
-        result.imageUrl = staticImg[0].replace(/\\u002F/g, '/');
-        result.imageSource = "html_regex_mlstatic";
-      }
-    }
-
     if (result.imageUrl && result.imageUrl.startsWith('//')) {
       result.imageUrl = 'https:' + result.imageUrl;
-    }
-    
-    if (!result.price) {
-      const andesMatch = html.match(/class=["'][^"']*andes-money-amount__fraction[^"']*["'][^>]*>([\d.,]+)<\//i);
-      if (andesMatch) {
-        const val = parseFloat(andesMatch[1].replace(/\./g, '').replace(',', '.'));
-        if (!isNaN(val) && val > 0) {
-          result.price = val;
-          result.priceSource = "html_andes";
-        }
-      }
-    }
-    
-    if (result.title) {
-      const lowerTitle = result.title.toLowerCase().trim();
-      if (lowerTitle === 'produto mercado livre' || 
-          lowerTitle === 'mercado libre' || 
-          lowerTitle === 'mercado livre' || 
-          lowerTitle === 'mercado livre brasil' || 
-          lowerTitle === 'mercadolibre') {
-        result.title = null;
-        result.titleSource = null;
-      }
     }
     
     if (result.title || result.imageUrl || result.price) {
