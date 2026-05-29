@@ -1233,6 +1233,11 @@ export async function processLinks(
         // Aplica os links afiliados aos cupons caso fornecidos via couponAffiliateMap
         const finalCoupons = (classification.coupons || []).map(c => {
           const mapEntry = couponAffiliateMap && (c.code ? couponAffiliateMap[c.code] : (c.redemptionUrl ? couponAffiliateMap[c.redemptionUrl] : undefined));
+          
+          if (c.redemptionUrl) {
+            console.log(`[SHOPEE-MIXED-OFFER] coupon_voucher_attached=true code=${c.code || 'none'} hasVoucherUrl=true`);
+          }
+
           if (mapEntry && mapEntry.affiliateRedemptionUrl) {
             console.log(`[SHOPEE-MIXED-OFFER] coupon_context_attached code=${c.code || 'none'} hasOriginalRedemptionUrl=true hasAffiliateRedemptionUrl=true`);
             console.log(`[SHOPEE-MIXED-OFFER] coupon_redemption_source=affiliate`);

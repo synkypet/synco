@@ -180,11 +180,13 @@ export function parseShopeeOfferContext(body: string): ShopeeOfferContext {
       // Se for "ou", pode ser um falso positivo de palavras se for curto e sem número
       if (!/\\d/.test(code) && code.length < 6 && ['E', 'OU', 'PARA'].includes(code)) continue;
 
+      const nearestVoucher = parsedLinks.find(l => l.role === 'voucher');
+
       coupons.push({
         type: 'codigo',
         code,
         couponLabel: null,
-        redemptionUrl: null,
+        redemptionUrl: nearestVoucher ? nearestVoucher.url : null,
         confidence: pattern.conf,
         confidenceLevel: pattern.level as any,
         source: pattern.source as any
@@ -198,11 +200,13 @@ export function parseShopeeOfferContext(body: string): ShopeeOfferContext {
   while ((ouMatch = ouPattern.exec(normalizedText)) !== null) {
     const c1 = ouMatch[1].toUpperCase();
     const c2 = ouMatch[2].toUpperCase();
+    const nearestVoucher = parsedLinks.find(l => l.role === 'voucher');
+    const redemptionUrl = nearestVoucher ? nearestVoucher.url : null;
     if (!BLACKLISTED_CODES.includes(c1)) {
-      coupons.push({ type: 'codigo', code: c1, couponLabel: null, redemptionUrl: null, confidence: 0.8, confidenceLevel: 'medium', source: 'contextual' });
+      coupons.push({ type: 'codigo', code: c1, couponLabel: null, redemptionUrl, confidence: 0.8, confidenceLevel: 'medium', source: 'contextual' });
     }
     if (!BLACKLISTED_CODES.includes(c2)) {
-      coupons.push({ type: 'codigo', code: c2, couponLabel: null, redemptionUrl: null, confidence: 0.8, confidenceLevel: 'medium', source: 'contextual' });
+      coupons.push({ type: 'codigo', code: c2, couponLabel: null, redemptionUrl, confidence: 0.8, confidenceLevel: 'medium', source: 'contextual' });
     }
   }
 
