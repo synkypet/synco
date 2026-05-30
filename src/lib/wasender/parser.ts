@@ -37,6 +37,29 @@ function collectStringCandidates(obj: any, maxDepth = 6, currentDepth = 0, curre
     const path = `${currentPath}.${k}`;
 
     if (typeof v === 'string') {
+      // Ignorar URLs e metadados de mídia do WhatsApp
+      const isMediaMetadata = path.endsWith('.url') && (
+        path.includes('imageMessage') || 
+        path.includes('videoMessage') || 
+        path.includes('documentMessage') || 
+        path.includes('audioMessage')
+      );
+      
+      const isInternalPath = path.includes('directPath') || 
+        path.includes('jpegThumbnail') || 
+        path.includes('mediaKey') || 
+        path.includes('fileSha') || 
+        path.includes('fileEncSha') || 
+        path.includes('mimetype');
+
+      const isWhatsappUrl = v.includes('mmg.whatsapp.net') || 
+        v.includes('whatsapp.net/o1/') || 
+        v.match(/^https?:\/\/[a-zA-Z0-9-]+\.whatsapp\.net/i);
+
+      if (isMediaMetadata || isInternalPath || isWhatsappUrl) {
+        continue;
+      }
+
       const trimmed = v.trim();
       if (trimmed.length > 0) {
         let preview = trimmed.substring(0, 120).replace(/\r?\n|\r/g, ' ');
@@ -68,17 +91,28 @@ export function extractWasenderText(payloadBody: any, logPrefix: string = '[WASE
 
     const msgObj = m.message || {};
     const nestedMsgObj = msgObj.message || {};
+    const ephemeralMsgObj = msgObj.ephemeralMessage?.message || {};
 
     const candidates = {
-      dataBody: data.body,
-      dataText: data.text,
-      dataMessageBody: data.message?.body,
-      dataMessageText: data.message?.text,
+      // 1 a 5: ephemeralMessage
+      ephemeralConversation: ephemeralMsgObj.conversation,
+      ephemeralExtendedText: ephemeralMsgObj.extendedTextMessage?.text,
+      ephemeralImageCaption: ephemeralMsgObj.imageMessage?.caption,
+      ephemeralVideoCaption: ephemeralMsgObj.videoMessage?.caption,
+      ephemeralDocumentCaption: ephemeralMsgObj.documentMessage?.caption,
+      
+      // 6 a 10: message
       messageConversation: msgObj.conversation,
       extendedText: msgObj.extendedTextMessage?.text,
       imageCaption: msgObj.imageMessage?.caption,
       videoCaption: msgObj.videoMessage?.caption,
       documentCaption: msgObj.documentMessage?.caption,
+
+      // Outros existentes
+      dataBody: data.body,
+      dataText: data.text,
+      dataMessageBody: data.message?.body,
+      dataMessageText: data.message?.text,
       messageBody: m.body,
       messageText: m.text,
       nestedConversation: nestedMsgObj.conversation,
@@ -103,8 +137,9 @@ export function extractWasenderText(payloadBody: any, logPrefix: string = '[WASE
     );
 
     const orderedKeys = [
+      'ephemeralImageCaption', 'ephemeralVideoCaption', 'ephemeralDocumentCaption', 'ephemeralExtendedText', 'ephemeralConversation',
+      'imageCaption', 'videoCaption', 'documentCaption', 'extendedText', 'messageConversation',
       'dataBody', 'dataText', 'dataMessageBody', 'dataMessageText',
-      'messageConversation', 'extendedText', 'imageCaption', 'videoCaption', 'documentCaption',
       'messageBody', 'messageText',
       'nestedConversation', 'nestedExtendedText', 'nestedImageCaption', 'nestedVideoCaption', 'nestedDocumentCaption',
       'nestedButtonsSelectedText', 'nestedTemplateSelectedText', 'nestedListTitle', 'nestedListDesc',
@@ -150,10 +185,25 @@ export function extractWasenderText(payloadBody: any, logPrefix: string = '[WASE
       stringCandidates: stringCands.map(c => ({ path: c.path, length: c.length, hasUrl: c.hasUrl, preview: c.preview }))
     }, null, 2)}`);
 
-    const urlCandidate = stringCands.find(c => c.hasUrl);
-    if (urlCandidate) {
-      console.log(`${logPrefix} Auto-recovered from path: ${urlCandidate.path}`);
-      return urlCandidate._rawValue.trim();
+    // Prioridade do Auto-Recovery
+    const isTextPath = (p: string) => /(caption|conversation|textMessage\.text|extendedTextMessage\.text|body|text)$/i.test(p);
+    
+    // 1. Path de texto + URL marketplace
+    let recoveryCandidate = stringCands.find(c => isTextPath(c.path) && c.hasUrl);
+    
+    // 2. Qualquer Path com URL marketplace
+    if (!recoveryCandidate) {
+      recoveryCandidate = stringCands.find(c => c.hasUrl);
+    }
+    
+    // 3. Path de texto sem URL (fallback genérico)
+    if (!recoveryCandidate) {
+      recoveryCandidate = stringCands.find(c => isTextPath(c.path));
+    }
+
+    if (recoveryCandidate) {
+      console.log(`${logPrefix} Auto-recovered from text path: ${recoveryCandidate.path}`);
+      return recoveryCandidate._rawValue.trim();
     }
 
     return "";
@@ -180,6 +230,12 @@ export function extractWebhookMessageContext(payloadBody: any): WebhookMessageCo
   // Fallback: se o objeto for string (raro), tratamos como corpo
   if (typeof m === 'string') {
     return { externalGroupId: "", messageId: "", body: m, isFromMe: false };
+  }
+
+  // Ignorar reações (não contém texto promocional)
+  if (m.message?.reactionMessage) {
+    console.log('[WASENDER-IGNORED] reason=reaction_message');
+    return { externalGroupId: "", messageId: "", body: "", isFromMe: false };
   }
 
   // 2. Extração do Identificador do Chat (Apenas Grupos @g.us)
