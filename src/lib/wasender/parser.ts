@@ -12,6 +12,52 @@ export interface WebhookMessageContext {
   participant?: string;
 }
 
+interface StringCandidate {
+  path: string;
+  length: number;
+  hasUrl: boolean;
+  preview: string;
+  _rawValue: string;
+}
+
+function collectStringCandidates(obj: any, maxDepth = 6, currentDepth = 0, currentPath = 'root', candidates: StringCandidate[] = []): StringCandidate[] {
+  if (currentDepth > maxDepth || !obj || typeof obj !== 'object') {
+    return candidates;
+  }
+
+  const sensitiveKeys = ['signature', 'token', 'authorization', 'secret', 'cookie', 'credential', 'headers'];
+
+  for (const [k, v] of Object.entries(obj)) {
+    const keyLower = k.toLowerCase();
+    
+    if (sensitiveKeys.includes(keyLower)) {
+      continue;
+    }
+
+    const path = `${currentPath}.${k}`;
+
+    if (typeof v === 'string') {
+      const trimmed = v.trim();
+      if (trimmed.length > 0) {
+        let preview = trimmed.substring(0, 120).replace(/\r?\n|\r/g, ' ');
+        preview = preview.replace(/\d{5,}/g, '***'); // Reduz números longos
+
+        candidates.push({
+          path,
+          length: trimmed.length,
+          hasUrl: /(https?:\/\/|meli\.la|s\.shopee|mercadolivre|shopee)/i.test(trimmed),
+          preview,
+          _rawValue: trimmed
+        });
+      }
+    } else if (typeof v === 'object' && v !== null) {
+      collectStringCandidates(v, maxDepth, currentDepth + 1, path, candidates);
+    }
+  }
+
+  return candidates.slice(0, 25);
+}
+
 export function extractWasenderText(payloadBody: any, logPrefix: string = '[WASENDER-BODY-EXTRACT-DIAG]'): string {
   try {
     const data = payloadBody?.data || payloadBody || {};
@@ -37,6 +83,17 @@ export function extractWasenderText(payloadBody: any, logPrefix: string = '[WASE
       messageText: m.text,
       nestedConversation: nestedMsgObj.conversation,
       nestedExtendedText: nestedMsgObj.extendedTextMessage?.text,
+      nestedImageCaption: nestedMsgObj.imageMessage?.caption,
+      nestedVideoCaption: nestedMsgObj.videoMessage?.caption,
+      nestedDocumentCaption: nestedMsgObj.documentMessage?.caption,
+      nestedButtonsSelectedText: nestedMsgObj.buttonsResponseMessage?.selectedDisplayText,
+      nestedTemplateSelectedText: nestedMsgObj.templateButtonReplyMessage?.selectedDisplayText,
+      nestedListTitle: nestedMsgObj.listResponseMessage?.title,
+      nestedListDesc: nestedMsgObj.listResponseMessage?.description,
+      payloadMessageConversation: payloadBody?.payload?.message?.conversation,
+      payloadMessageExtendedText: payloadBody?.payload?.message?.extendedTextMessage?.text,
+      dataMessageTextMessage: data.message?.textMessage?.text,
+      nestedTextMessage: nestedMsgObj.textMessage?.text,
       payloadBody: payloadBody?.body,
       payloadText: payloadBody?.text
     };
@@ -49,7 +106,9 @@ export function extractWasenderText(payloadBody: any, logPrefix: string = '[WASE
       'dataBody', 'dataText', 'dataMessageBody', 'dataMessageText',
       'messageConversation', 'extendedText', 'imageCaption', 'videoCaption', 'documentCaption',
       'messageBody', 'messageText',
-      'nestedConversation', 'nestedExtendedText',
+      'nestedConversation', 'nestedExtendedText', 'nestedImageCaption', 'nestedVideoCaption', 'nestedDocumentCaption',
+      'nestedButtonsSelectedText', 'nestedTemplateSelectedText', 'nestedListTitle', 'nestedListDesc',
+      'payloadMessageConversation', 'payloadMessageExtendedText', 'dataMessageTextMessage', 'nestedTextMessage',
       'payloadBody', 'payloadText'
     ];
 
@@ -65,14 +124,39 @@ export function extractWasenderText(payloadBody: any, logPrefix: string = '[WASE
       }
     }
 
-    console.log(`${logPrefix} ${JSON.stringify({
-      hasData: !!payloadBody?.data,
-      hasMessage: !!m.message,
-      candidateLengths,
-      selectedPath
+    if (selectedPath) {
+      console.log(`${logPrefix} ${JSON.stringify({
+        hasData: !!payloadBody?.data,
+        hasMessage: !!m.message,
+        candidateLengths,
+        selectedPath
+      }, null, 2)}`);
+      return selectedText.trim();
+    }
+
+    // Diagnóstico Seguro e Auto-Recovery
+    const stringCands = collectStringCandidates(payloadBody);
+    console.log(`[WASENDER-PAYLOAD-SHAPE-DIAG] ${JSON.stringify({
+      event: payloadBody?.event || payloadBody?.type,
+      payloadKeys: Object.keys(payloadBody || {}),
+      dataKeys: Object.keys(data || {}),
+      messageKeys: Object.keys(m || {}),
+      nestedMessageKeys: Object.keys(msgObj || {}),
+      dataType: typeof data,
+      messageType: typeof m,
+      pushNameExists: !!m.pushName,
+      remoteJid: m.key?.remoteJid ? m.key.remoteJid.replace(/\d{5,}/g, '***') : null,
+      fromMe: m.key?.fromMe,
+      stringCandidates: stringCands.map(c => ({ path: c.path, length: c.length, hasUrl: c.hasUrl, preview: c.preview }))
     }, null, 2)}`);
 
-    return selectedText.trim();
+    const urlCandidate = stringCands.find(c => c.hasUrl);
+    if (urlCandidate) {
+      console.log(`${logPrefix} Auto-recovered from path: ${urlCandidate.path}`);
+      return urlCandidate._rawValue.trim();
+    }
+
+    return "";
   } catch (error) {
     console.error(`${logPrefix} Error extracting text:`, error);
     return "";
