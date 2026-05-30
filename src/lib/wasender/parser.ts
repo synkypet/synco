@@ -12,6 +12,73 @@ export interface WebhookMessageContext {
   participant?: string;
 }
 
+export function extractWasenderText(payloadBody: any, logPrefix: string = '[WASENDER-BODY-EXTRACT-DIAG]'): string {
+  try {
+    const data = payloadBody?.data || payloadBody || {};
+    let m = data.messages || data;
+    if (Array.isArray(m)) {
+      m = m[0] || {};
+    }
+
+    const msgObj = m.message || {};
+    const nestedMsgObj = msgObj.message || {};
+
+    const candidates = {
+      dataBody: data.body,
+      dataText: data.text,
+      dataMessageBody: data.message?.body,
+      dataMessageText: data.message?.text,
+      messageConversation: msgObj.conversation,
+      extendedText: msgObj.extendedTextMessage?.text,
+      imageCaption: msgObj.imageMessage?.caption,
+      videoCaption: msgObj.videoMessage?.caption,
+      documentCaption: msgObj.documentMessage?.caption,
+      messageBody: m.body,
+      messageText: m.text,
+      nestedConversation: nestedMsgObj.conversation,
+      nestedExtendedText: nestedMsgObj.extendedTextMessage?.text,
+      payloadBody: payloadBody?.body,
+      payloadText: payloadBody?.text
+    };
+
+    const candidateLengths = Object.fromEntries(
+      Object.entries(candidates).map(([key, val]) => [key, typeof val === 'string' ? val.length : 0])
+    );
+
+    const orderedKeys = [
+      'dataBody', 'dataText', 'dataMessageBody', 'dataMessageText',
+      'messageConversation', 'extendedText', 'imageCaption', 'videoCaption', 'documentCaption',
+      'messageBody', 'messageText',
+      'nestedConversation', 'nestedExtendedText',
+      'payloadBody', 'payloadText'
+    ];
+
+    let selectedPath: string | null = null;
+    let selectedText: string = "";
+
+    for (const key of orderedKeys) {
+      const val = (candidates as any)[key];
+      if (typeof val === 'string' && val.trim().length > 0) {
+        selectedPath = key;
+        selectedText = val;
+        break;
+      }
+    }
+
+    console.log(`${logPrefix} ${JSON.stringify({
+      hasData: !!payloadBody?.data,
+      hasMessage: !!m.message,
+      candidateLengths,
+      selectedPath
+    }, null, 2)}`);
+
+    return selectedText.trim();
+  } catch (error) {
+    console.error(`${logPrefix} Error extracting text:`, error);
+    return "";
+  }
+}
+
 /**
  * Extrai o contexto de uma mensagem de forma defensiva e resiliente.
  * Tenta progressivamente localizar o ID do chat, o conteúdo e o ID da mensagem.
@@ -58,21 +125,8 @@ export function extractWebhookMessageContext(payloadBody: any): WebhookMessageCo
     m.isFromMe ?? 
     false;
 
-  // 5. Extração do Conteúdo (Texto/Legenda) - Prioridade total para o objeto 'message' aninhado
-  const msgObj = m.message || {};
-  
-  const bodyCandidates = [
-    msgObj.extendedTextMessage?.text,
-    data.messageBody,
-    msgObj.conversation,
-    msgObj.imageMessage?.caption,
-    msgObj.videoMessage?.caption,
-    m.body,
-    m.content,
-    m.text
-  ];
-
-  const body = bodyCandidates.find(b => typeof b === 'string' && b.length > 0) || "";
+  // 5. Extração do Conteúdo (Texto/Legenda) - Função robusta com logs
+  const body = extractWasenderText(payloadBody);
 
   return {
     externalGroupId: typeof externalGroupId === 'string' ? externalGroupId : "",
