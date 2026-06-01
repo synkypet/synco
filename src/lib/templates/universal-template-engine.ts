@@ -142,7 +142,8 @@ export function buildSmartContext(data: FactualData, sourceName?: string): Smart
       const couponUrl = data.extraCouponLink || ((data.coupons && data.coupons.length > 0) 
         ? data.coupons[0].redemptionUrl 
         : data.finalLinkToSend);
-      couponBlock = `Para chegar nesse valor, resgate aqui e aplique o cupom de R$ ${insight.couponAmount.value} OFF:\n${couponUrl}`;
+      const formattedAmount = insight.couponAmount.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,00$/, '');
+      couponBlock = `Para chegar nesse valor, resgate aqui o cupom de R$ ${formattedAmount} OFF:\n${couponUrl}`;
     } else if (data.coupons && data.coupons.length > 0) {
       const c = data.coupons[0];
       if (c.code) {

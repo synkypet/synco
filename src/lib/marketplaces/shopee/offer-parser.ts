@@ -210,11 +210,15 @@ export function parseShopeeOfferContext(body: string): ShopeeOfferContext {
     }
   }
 
-  // Extração Monetária (R$ 20 OFF)
-  const monetaryPattern = /((?:R\$\s?\d+|(?:\d+)\s?%)\s?OFF(?:[^\n|]*))/gi;
+  // Extração Monetária (R$ 20 OFF ou R$ 30,20 OFF)
+  const monetaryPattern = /((?:R\$\s?[\d.,]+|(?:[\d.,]+)\s?%)\s?OFF(?:[^\n|]*))/gi;
   let monMatch;
   while ((monMatch = monetaryPattern.exec(normalizedText)) !== null) {
-    const rawLabel = monMatch[1].trim();
+    let rawLabel = monMatch[1].trim();
+    
+    // Remove URL do label para não poluir
+    rawLabel = rawLabel.replace(/https?:\/\/[^\s]+/gi, '').replace(/:\s*$/, '').trim();
+    
     // formatDiscountLabel expects rawLabel but we can just use simple formatting for now to not break test
     // We will use formatDiscountLabel from coupon-extractor since it's already there
     const formatted = formatDiscountLabel(rawLabel);

@@ -71,10 +71,12 @@ export function formatShopeeProductMessage(factual: FactualData, rawText?: strin
       : null);
       
     if (couponUrl) {
-      lines.push(`Para chegar nesse valor, resgate aqui e aplique o cupom de R$ ${insight.couponAmount.value} OFF:`);
+      const formattedAmount = insight.couponAmount.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,00$/, '');
+      lines.push(`Para chegar nesse valor, resgate aqui o cupom de R$ ${formattedAmount} OFF:`);
       lines.push(couponUrl);
     } else {
-      lines.push(`🎟️ Cupom: R$ ${insight.couponAmount.value} OFF`);
+      const formattedAmount = insight.couponAmount.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,00$/, '');
+      lines.push(`🎟️ Cupom: R$ ${formattedAmount} OFF`);
     }
   }
 

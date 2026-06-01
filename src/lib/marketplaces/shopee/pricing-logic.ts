@@ -131,20 +131,22 @@ export function generatePricingInsight(
     const bestCoupon = factual.coupons[0];
     const label = (bestCoupon.couponLabel || '').toLowerCase();
     
-    const amountMatch = label.match(/(?:r\$\s*)?(\d+)\s*(?:off|%)/i);
-    const minSpendMatch = text.match(/(?:acima de|mínimo|min|compra\s+de|a partir de)\s*(?:r\$\s*)?(\d+)/i);
+    const amountMatch = label.match(/(?:r\$\s*)?([\d.,]+)\s*(?:off|%)/i);
+    const minSpendMatch = text.match(/(?:acima de|mínimo|min|compra\s+de|a partir de)\s*(?:r\$\s*)?([\d.,]+)/i);
     
     if (amountMatch) {
       const isPercentage = label.includes('%');
       if (!isPercentage) {
-        couponAmount.value = parseInt(amountMatch[1]);
+        const valStr = amountMatch[1].replace(/\./g, '').replace(',', '.');
+        couponAmount.value = parseFloat(valStr);
         couponAmount.source = 'factual_text';
         couponAmount.confidence = 0.90;
       }
     }
 
     if (minSpendMatch) {
-      couponMinSpend.value = parseInt(minSpendMatch[1]);
+      const valStr = minSpendMatch[1].replace(/\./g, '').replace(',', '.');
+      couponMinSpend.value = parseFloat(valStr);
       couponMinSpend.source = 'factual_text';
       couponMinSpend.confidence = 0.90;
     }
