@@ -309,7 +309,7 @@ export default function ConfiguracoesPage() {
                     </TabsContent>
 
                     <TabsContent value="metrics" className="animate-in fade-in-50 duration-300">
-                        <div className="grid md:grid-cols-2 gap-6 max-w-4xl">
+                        <div className="max-w-4xl space-y-6">
                             <MetaAdsSettings />
                         </div>
                     </TabsContent>

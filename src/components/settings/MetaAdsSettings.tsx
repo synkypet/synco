@@ -102,34 +102,38 @@ export function MetaAdsSettings() {
         Integração com a Meta para cruzar gastos em anúncios com o crescimento real dos seus grupos no SyncoMetrics.
       </p>
 
-      <div className="p-6 rounded-[24px] bg-black/20 border border-white/5 shadow-skeuo-pressed">
+      <div className="p-6 md:p-8 rounded-[24px] bg-black/20 border border-white/5 shadow-skeuo-pressed">
         {metaConnection ? (
-          <div className="space-y-4 animate-fade-in">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <h3 className="text-zinc-200 font-semibold flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                  Conectado
-                </h3>
-                <ul className="text-sm text-zinc-400 mt-2 space-y-1">
-                  <li><strong>Conta:</strong> {metaConnection.name} ({metaConnection.adAccountId})</li>
-                  <li><strong>Moeda:</strong> {metaConnection.currency}</li>
-                  {metaConnection.pixelName && (
-                    <li><strong>Pixel:</strong> {metaConnection.pixelName}</li>
-                  )}
-                  <li><strong>Último Teste:</strong> {new Date(metaConnection.lastTestedAt).toLocaleString('pt-BR')}</li>
-                </ul>
-              </div>
-              <div className="flex flex-col gap-2 w-full sm:w-auto">
+          <div className="space-y-6 animate-fade-in w-full">
+            <h3 className="text-zinc-200 font-headline italic font-bold flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 shadow-glow"></span>
+              </span>
+              Conectado
+            </h3>
+            
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
+              <ul className="text-sm text-zinc-400 space-y-3 flex-1 break-words">
+                <li className="flex items-center gap-2"><strong className="text-white/60 min-w-[100px]">Conta:</strong> <span className="text-white font-medium">{metaConnection.name}</span></li>
+                <li className="flex items-center gap-2"><strong className="text-white/60 min-w-[100px]">ID da conta:</strong> <span className="font-mono text-xs">{metaConnection.adAccountId}</span></li>
+                <li className="flex items-center gap-2"><strong className="text-white/60 min-w-[100px]">Moeda:</strong> {metaConnection.currency}</li>
+                {metaConnection.pixelName && (
+                  <li className="flex items-center gap-2"><strong className="text-white/60 min-w-[100px]">Pixel:</strong> {metaConnection.pixelName}</li>
+                )}
+                <li className="flex items-center gap-2"><strong className="text-white/60 min-w-[100px]">Último teste:</strong> {new Date(metaConnection.lastTestedAt).toLocaleString('pt-BR')}</li>
+              </ul>
+              
+              <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto shrink-0">
                 <KineticButton 
                   onClick={() => setMetaConnection(null)} 
-                  className="bg-zinc-800 text-zinc-300 w-full text-xs"
+                  className="bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white border border-white/10 shadow-skeuo-flat h-11 px-6 text-xs uppercase tracking-widest font-black w-full sm:w-auto justify-center"
                 >
                   Trocar Conta/Token
                 </KineticButton>
                 <KineticButton 
                   onClick={handleDisconnectMeta} 
-                  className="bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-900/50 w-full text-xs"
+                  className="bg-red-900/20 text-red-400 hover:bg-red-500 hover:text-white border border-red-900/50 hover:border-red-500 shadow-skeuo-flat h-11 px-6 text-xs uppercase tracking-widest font-black transition-colors w-full sm:w-auto justify-center"
                 >
                   Desconectar
                 </KineticButton>
