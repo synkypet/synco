@@ -69,6 +69,7 @@ export default function SyncoMetricsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState('last_7d');
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState('all');
+  const [selectedGroupId, setSelectedGroupId] = useState('all');
 
   const loadMetrics = async (isRefresh = false) => {
     try {
@@ -82,7 +83,7 @@ export default function SyncoMetricsPage() {
       const [groupsRes, summaryRes, overviewRes, campaignsRes] = await Promise.all([
         fetch('/api/synco-metrics/groups'),
         fetch('/api/synco-metrics/summary'),
-        fetch(`/api/synco-metrics/overview?period=${selectedPeriod}&campaign_id=${selectedCampaignId}`),
+        fetch(`/api/synco-metrics/overview?period=${selectedPeriod}&campaign_id=${selectedCampaignId}&group_id=${selectedGroupId}`),
         fetch('/api/synco-metrics/meta/campaigns')
       ]);
 
@@ -120,7 +121,7 @@ export default function SyncoMetricsPage() {
 
   useEffect(() => {
     loadMetrics();
-  }, [selectedPeriod, selectedCampaignId]);
+  }, [selectedPeriod, selectedCampaignId, selectedGroupId]);
 
   const handleToggleMonitor = async (groupId: string, channelId: string, isCurrentlyMonitored: boolean, monitorId?: string | null) => {
     try {
@@ -200,6 +201,14 @@ export default function SyncoMetricsPage() {
   const monitoredGroups = summary?.monitoredGroups || [];
   const availableGroups = groups.filter(g => !g.is_monitored);
 
+  const selectedCampaignName = selectedCampaignId === 'all' 
+    ? 'Todas as campanhas' 
+    : campaigns.find(c => c.id === selectedCampaignId)?.name || selectedCampaignId;
+
+  const selectedGroupName = selectedGroupId === 'all'
+    ? 'Todos os grupos monitorados'
+    : monitoredGroups.find((g: any) => g.group_id === selectedGroupId)?.groupName || selectedGroupId;
+
   // Overview calculations
   const metaConnected = overview?.meta?.connected || false;
   const metaError = overview?.meta?.error;
@@ -255,6 +264,17 @@ export default function SyncoMetricsPage() {
               <option value="all">Todas as campanhas</option>
               {campaigns.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+
+            <select 
+              value={selectedGroupId}
+              onChange={(e) => setSelectedGroupId(e.target.value)}
+              className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange h-[38px] max-w-[200px] truncate"
+            >
+              <option value="all">Todos os grupos monitorados</option>
+              {monitoredGroups.map((g: any) => (
+                <option key={g.group_id} value={g.group_id}>{g.groupName || 'Grupo sem nome'}</option>
               ))}
             </select>
 
@@ -362,18 +382,21 @@ export default function SyncoMetricsPage() {
           <div className="flex-1">
             <h2 className="text-xl font-semibold text-zinc-200 flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-kinetic-orange" />
-              Meta Ads x Grupo Real
+              Comparação: Meta Ads × Grupo Real
             </h2>
-            <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
-              A Meta mostra o resultado do anúncio. O SyncoMetrics compara isso com a entrada real nos grupos monitorados no mesmo período.
+            <p className="text-sm text-zinc-400 max-w-sm mt-2">
+              Veja o cruzamento direto entre o que a plataforma cobrou e informou versus os membros que realmente entraram.
             </p>
-            {metaConnected && (
-              <p className="text-xs text-zinc-300 mt-3 p-2 bg-zinc-950/50 rounded border border-zinc-800/50 inline-block">
-                {selectedCampaignId === 'all' 
-                  ? "Analisando todas as campanhas da conta no período." 
-                  : `Campanha analisada: ${campaigns.find(c => c.id === selectedCampaignId)?.name || selectedCampaignId}`}
+            <div className="mt-4 space-y-2 text-xs text-zinc-500">
+              <p>
+                <strong className="text-zinc-400">Campanha analisada:</strong><br/>
+                {selectedCampaignName}
               </p>
-            )}
+              <p>
+                <strong className="text-zinc-400">Grupo comparado:</strong><br/>
+                {selectedGroupName}
+              </p>
+            </div>
             {!metaConnected && (
               <p className="text-xs text-kinetic-orange mt-4">
                 Conecte a Meta Ads em Configurações → SyncoMetrics.

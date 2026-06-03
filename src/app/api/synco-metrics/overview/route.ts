@@ -200,14 +200,25 @@ export async function GET(request: NextRequest) {
     }
 
     // 5. Consulta Grupos (America/Sao_Paulo timezone rule)
-    const { data: monitoredGroups } = await supabase
+    const groupIdParam = searchParams.get('group_id');
+    const isSpecificGroup = groupIdParam && groupIdParam !== 'all';
+
+    let query = supabase
       .from('sm_monitored_groups')
       .select('group_id')
       .eq('user_id', user.id)
       .eq('enabled', true)
       .eq('is_deleted', false);
 
-    if (monitoredGroups && monitoredGroups.length > 0) {
+    if (isSpecificGroup) {
+      query = query.eq('group_id', groupIdParam);
+    }
+
+    const { data: monitoredGroups } = await query;
+
+    if (isSpecificGroup && (!monitoredGroups || monitoredGroups.length === 0)) {
+      responseData.meta.error = 'Grupo não encontrado ou não monitorado.';
+    } else if (monitoredGroups && monitoredGroups.length > 0) {
       responseData.groups.hasMonitoredGroups = true;
       responseData.groups.monitoredCount = monitoredGroups.length;
       
