@@ -27,7 +27,6 @@ export async function GET(request: Request) {
       .from('groups')
       .select(`
         id,
-        title,
         name,
         remote_id,
         members_count,
@@ -61,7 +60,7 @@ export async function GET(request: Request) {
 
       return {
         id: g.id,
-        name: g.title || g.name || 'Grupo sem nome',
+        name: g.name || 'Grupo sem nome',
         members_count: g.members_count || 0,
         channel_id: g.channel_id,
         remote_id: g.remote_id,
