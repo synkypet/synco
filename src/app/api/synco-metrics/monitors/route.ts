@@ -1,0 +1,297 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
+
+const VALID_PERIODS = ['today', 'last_7d', 'last_30d'];
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const searchParams = request.nextUrl.searchParams;
+    const period = searchParams.get('period') || 'last_7d';
+    
+    if (!VALID_PERIODS.includes(period)) {
+      return NextResponse.json({ error: 'Período inválido' }, { status: 400 });
+    }
+
+    // 1. Buscar monitores ativos
+    const { data: monitors, error: monitorsError } = await supabase
+      .from('sm_metric_monitors')
+      .select(`
+        id,
+        group_id,
+        campaign_id,
+        campaign_name,
+        monitor_name,
+        ad_account_id,
+        groups ( name )
+      `)
+      .eq('user_id', user.id)
+      .eq('status', 'active');
+
+    if (monitorsError) throw monitorsError;
+
+    if (!monitors || monitors.length === 0) {
+      return NextResponse.json({ monitors: [] });
+    }
+
+    // Preparar as métricas default
+    const resultMonitors = monitors.map((m: any) => ({
+      id: m.id,
+      groupId: m.group_id,
+      groupName: m.groups?.name || 'Grupo sem nome',
+      campaignId: m.campaign_id,
+      campaignName: m.campaign_name,
+      monitorName: m.monitor_name || `${m.campaign_name} → ${m.groups?.name || 'Grupo'}`,
+      meta: { spend: 0, leads: 0, clicks: 0, impressions: 0, cpc: null as number | null, ctr: null as number | null, cpm: null as number | null, costPerLead: null as number | null, error: null as string | null },
+      group: { currentMembers: 0, estimatedJoined: 0, estimatedLeft: 0, netGrowth: 0 },
+      comparison: { realCostPerMember: null as number | null, difference: 0, leadToMemberRate: null as number | null }
+    }));
+
+    // 2. Conexão Meta e Insights em lote (level=campaign)
+    const { data: connection } = await supabase
+      .from('sm_meta_connections')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    if (connection) {
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (serviceRoleKey) {
+        const supabaseService = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceRoleKey);
+        const { data: secret } = await supabaseService
+          .from('sm_meta_secrets')
+          .select('access_token')
+          .eq('connection_id', connection.id)
+          .single();
+
+        if (secret && secret.access_token) {
+          try {
+            const datePreset = period === 'today' ? 'today' : period === 'last_30d' ? 'last_30d' : 'last_7d';
+            const fields = 'campaign_id,spend,impressions,clicks,actions';
+            // level=campaign permite trazer dados de todas as campanhas da conta em 1 request
+            const metaUrl = `https://graph.facebook.com/v19.0/${connection.ad_account_id}/insights?level=campaign&date_preset=${datePreset}&fields=${fields}&action_breakdowns=action_type&access_token=${secret.access_token}`;
+            
+            const metaRes = await fetch(metaUrl);
+            const metaData = await metaRes.json();
+
+            if (!metaData.error && metaData.data) {
+              const metaByCampaign: Record<string, any> = {};
+
+              metaData.data.forEach((row: any) => {
+                const cid = row.campaign_id;
+                if (!metaByCampaign[cid]) {
+                  metaByCampaign[cid] = { spend: 0, impressions: 0, clicks: 0, leads: 0 };
+                }
+
+                metaByCampaign[cid].spend += parseFloat(row.spend || 0);
+                metaByCampaign[cid].impressions += parseInt(row.impressions || 0, 10);
+                metaByCampaign[cid].clicks += parseInt(row.clicks || 0, 10);
+
+                let finalLeads = 0;
+                if (row.actions) {
+                  let onfbLead = 0;
+                  let onsiteLead = 0;
+                  const detected: any = {};
+                  
+                  row.actions.forEach((act: any) => {
+                    const type = act.action_type;
+                    const val = parseInt(act.value || 0, 10);
+                    detected[type] = (detected[type] || 0) + val;
+                  });
+
+                  if (detected['lead']) onfbLead = detected['lead'];
+                  if (detected['onsite_web_lead']) onsiteLead = detected['onsite_web_lead'];
+
+                  if (onfbLead > 0) finalLeads = onfbLead;
+                  else if (onsiteLead > 0) finalLeads = onsiteLead;
+                  else {
+                    const keys = Object.keys(detected);
+                    if (keys.length > 0) {
+                      finalLeads = keys.reduce((acc, k) => acc + detected[k], 0);
+                    }
+                  }
+                }
+                metaByCampaign[cid].leads += finalLeads;
+              });
+
+              // Preencher resultado
+              resultMonitors.forEach(m => {
+                const metaRow = metaByCampaign[m.campaignId];
+                if (metaRow) {
+                  m.meta.spend = parseFloat(metaRow.spend.toFixed(2));
+                  m.meta.impressions = metaRow.impressions;
+                  m.meta.clicks = metaRow.clicks;
+                  m.meta.leads = metaRow.leads;
+                  
+                  if (m.meta.clicks > 0 && m.meta.impressions > 0) {
+                    m.meta.ctr = parseFloat(((m.meta.clicks / m.meta.impressions) * 100).toFixed(2));
+                  }
+                  if (m.meta.clicks > 0) {
+                    m.meta.cpc = parseFloat((m.meta.spend / m.meta.clicks).toFixed(2));
+                  }
+                  if (m.meta.impressions > 0) {
+                    m.meta.cpm = parseFloat(((m.meta.spend / m.meta.impressions) * 1000).toFixed(2));
+                  }
+                  if (m.meta.leads > 0) {
+                    m.meta.costPerLead = parseFloat((m.meta.spend / m.meta.leads).toFixed(2));
+                  }
+                }
+              });
+            } else if (metaData.error) {
+               resultMonitors.forEach(m => {
+                 m.meta.error = metaData.error.code === 190 ? 'Token expirado' : 'Erro Meta API';
+               });
+            }
+          } catch (e) {
+            console.error('Meta API falhou', e);
+          }
+        }
+      }
+    }
+
+    // 3. Buscar dados de Grupo (Deltas e Snapshots)
+    const groupIds = Array.from(new Set(monitors.map(m => m.group_id)));
+
+    // Current members
+    const { data: snapshots } = await supabase
+      .from('sm_group_snapshots')
+      .select('group_id, member_count')
+      .in('group_id', groupIds)
+      .order('captured_at', { ascending: false });
+
+    const currentByGroup: Record<string, number> = {};
+    if (snapshots) {
+      for (const snap of snapshots) {
+        if (currentByGroup[snap.group_id] === undefined) {
+          currentByGroup[snap.group_id] = snap.member_count;
+        }
+      }
+    }
+
+    // Date range para deltas
+    let startDate = new Date();
+    startDate.setUTCHours(3, 0, 0, 0); // ~meia noite BRT
+    if (period === 'last_7d') startDate.setDate(startDate.getDate() - 7);
+    if (period === 'last_30d') startDate.setDate(startDate.getDate() - 30);
+    const startDateStr = startDate.toISOString();
+
+    const { data: deltas } = await supabase
+      .from('sm_group_deltas')
+      .select('group_id, delta, estimated_joined, estimated_left')
+      .in('group_id', groupIds)
+      .gte('captured_at', startDateStr);
+
+    const deltasByGroup: Record<string, any> = {};
+    if (deltas) {
+      deltas.forEach(d => {
+        if (!deltasByGroup[d.group_id]) deltasByGroup[d.group_id] = { joined: 0, left: 0, delta: 0 };
+        deltasByGroup[d.group_id].joined += (d.estimated_joined || 0);
+        deltasByGroup[d.group_id].left += (d.estimated_left || 0);
+        deltasByGroup[d.group_id].delta += (d.delta || 0);
+      });
+    }
+
+    // Preencher resultado do grupo e comparar
+    resultMonitors.forEach(m => {
+      const gId = m.groupId;
+      m.group.currentMembers = currentByGroup[gId] || 0;
+      
+      const d = deltasByGroup[gId];
+      if (d) {
+        m.group.estimatedJoined = d.joined;
+        m.group.estimatedLeft = d.left;
+        m.group.netGrowth = d.delta;
+      }
+
+      // Comparison
+      const realEntries = m.group.estimatedJoined;
+      m.comparison.difference = realEntries - m.meta.leads;
+      
+      if (realEntries > 0) {
+        m.comparison.realCostPerMember = parseFloat((m.meta.spend / realEntries).toFixed(2));
+      }
+      
+      if (m.meta.leads > 0) {
+        m.comparison.leadToMemberRate = parseFloat(((realEntries / m.meta.leads) * 100).toFixed(2));
+      }
+    });
+
+    return NextResponse.json({ monitors: resultMonitors });
+  } catch (error: any) {
+    console.error('[GET /monitors]', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+    const payload = await request.json();
+    const { groupId, campaignId, campaignName, monitorName } = payload;
+
+    if (!groupId || !campaignId || !campaignName) {
+      return NextResponse.json({ error: 'Parâmetros obrigatórios ausentes' }, { status: 400 });
+    }
+
+    // 1. Validar grupo em sm_monitored_groups
+    const { data: mg } = await supabase
+      .from('sm_monitored_groups')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('group_id', groupId)
+      .eq('enabled', true)
+      .eq('is_deleted', false)
+      .single();
+
+    if (!mg) {
+      return NextResponse.json({ error: 'Grupo inválido ou não monitorado pelo SyncoMetrics' }, { status: 400 });
+    }
+
+    // 2. Buscar ad_account_id
+    const { data: connection } = await supabase
+      .from('sm_meta_connections')
+      .select('ad_account_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (!connection || !connection.ad_account_id) {
+      return NextResponse.json({ error: 'Conta Meta não conectada' }, { status: 400 });
+    }
+
+    // 3. Inserir monitor
+    const { error: insertError } = await supabase
+      .from('sm_metric_monitors')
+      .insert({
+        user_id: user.id,
+        group_id: groupId,
+        campaign_id: campaignId,
+        campaign_name: campaignName,
+        ad_account_id: connection.ad_account_id,
+        monitor_name: monitorName || null
+      });
+
+    if (insertError) {
+      if (insertError.code === '23505') { // unique violation
+        return NextResponse.json({ error: 'Este monitoramento já existe' }, { status: 409 });
+      }
+      throw insertError;
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('[POST /monitors]', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
