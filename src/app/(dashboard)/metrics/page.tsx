@@ -120,6 +120,32 @@ export default function SyncoMetricsPage() {
     }
   };
 
+  const handleRemoveGroup = async (monitorId: string, groupId: string) => {
+    if (!confirm('Parar de monitorar este grupo? Os monitoramentos ligados a ele podem deixar de comparar entradas reais.')) {
+      return;
+    }
+    setIsActivatingGroup(true);
+    try {
+      const response = await fetch(`/api/synco-metrics/monitored-groups/${monitorId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao remover grupo');
+      }
+      
+      if (newMonitorGroupId === groupId) {
+        setNewMonitorGroupId('');
+      }
+
+      await loadMetrics(true);
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`);
+    } finally {
+      setIsActivatingGroup(false);
+    }
+  };
+
 
   const handleCreateMonitor = async () => {
     if (!newMonitorGroupId || !newMonitorCampaignId) {
@@ -276,6 +302,29 @@ export default function SyncoMetricsPage() {
                     <p className="text-xs text-amber-500 mt-2">
                       Você ainda não tem grupos monitorados. Ative um grupo primeiro para comparar com campanhas Meta.
                     </p>
+                  )}
+
+                  {monitoredGroups.length > 0 && (
+                    <div className="mt-3 p-3 bg-zinc-950/50 border border-zinc-800/50 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-zinc-400 font-medium">Gerenciar grupos monitorados</span>
+                        <span className="text-[10px] bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full">{activeCount} de {limit} usados</span>
+                      </div>
+                      <div className="space-y-2">
+                        {monitoredGroups.map(g => (
+                          <div key={g.groupId} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded p-2">
+                            <span className="text-xs text-zinc-300 truncate pr-2" title={g.groupName}>{g.groupName}</span>
+                            <button 
+                              onClick={() => handleRemoveGroup(g.monitorId, g.groupId)}
+                              disabled={isActivatingGroup}
+                              className="text-[10px] text-zinc-500 hover:text-red-400 transition-colors px-2 py-1"
+                            >
+                              Parar de monitorar
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
 
                   {!showActivateGroup ? (
