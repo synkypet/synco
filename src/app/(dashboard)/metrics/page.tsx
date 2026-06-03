@@ -222,6 +222,8 @@ export default function SyncoMetricsPage() {
     return val;
   };
 
+  const isLoading = loading || isRefreshing;
+
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8 animate-fade-in">
       {/* Header */}
@@ -269,11 +271,11 @@ export default function SyncoMetricsPage() {
             
             <KineticButton 
               onClick={() => loadMetrics(true)} 
-              disabled={isRefreshing}
+              disabled={isLoading}
               className="flex items-center gap-2 bg-zinc-800 text-zinc-200 hover:text-white px-3 py-2 h-[38px]"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-kinetic-orange' : ''}`} />
-              <span className="hidden sm:inline">{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-kinetic-orange' : ''}`} />
+              <span className="hidden sm:inline">{isLoading ? 'Atualizando...' : 'Atualizar'}</span>
             </KineticButton>
 
             <KineticButton 
@@ -303,32 +305,54 @@ export default function SyncoMetricsPage() {
         <TactileCard className="p-4">
           <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Gasto Meta</p>
           <div className="mt-2 flex items-baseline gap-1">
-            <span className={`text-xl font-bold ${metaConnected ? 'text-zinc-100' : 'text-zinc-500'}`}>
-              {metaConnected ? formatCurrency(metaSpend) : 'Sem conexão'}
-            </span>
+            {isLoading ? (
+              <div className="h-7 w-24 bg-zinc-800/80 rounded animate-pulse"></div>
+            ) : (
+              <span className={`text-xl font-bold ${metaConnected ? 'text-zinc-100' : 'text-zinc-500'}`}>
+                {metaConnected ? formatCurrency(metaSpend) : 'Sem conexão'}
+              </span>
+            )}
           </div>
         </TactileCard>
 
         <TactileCard className="p-4">
           <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Leads informados (Meta)</p>
-          <p className={`mt-2 text-xl font-bold ${metaConnected ? 'text-zinc-100' : 'text-zinc-500'}`}>
-            {metaConnected ? formatNumber(metaLeads) : 'Sem conexão'}
-          </p>
+          <div className="mt-2">
+            {isLoading ? (
+              <div className="h-7 w-16 bg-zinc-800/80 rounded animate-pulse"></div>
+            ) : (
+              <p className={`text-xl font-bold ${metaConnected ? 'text-zinc-100' : 'text-zinc-500'}`}>
+                {metaConnected ? formatNumber(metaLeads) : 'Sem conexão'}
+              </p>
+            )}
+          </div>
         </TactileCard>
 
         <TactileCard className="p-4">
           <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Entradas reais no grupo</p>
-          <p className={`mt-2 text-2xl font-bold ${estimatedJoined > 0 ? 'text-emerald-400' : 'text-zinc-100'}`}>
-            {estimatedJoined > 0 ? `+${estimatedJoined}` : estimatedJoined}
-          </p>
+          <div className="mt-2">
+            {isLoading ? (
+              <div className="h-8 w-16 bg-zinc-800/80 rounded animate-pulse"></div>
+            ) : (
+              <p className={`text-2xl font-bold ${estimatedJoined > 0 ? 'text-emerald-400' : 'text-zinc-100'}`}>
+                {estimatedJoined > 0 ? `+${estimatedJoined}` : estimatedJoined}
+              </p>
+            )}
+          </div>
           <p className="text-[9px] text-zinc-500 mt-1 leading-tight">Estimado pela variação real de membros capturada pelo SyncoMetrics.</p>
         </TactileCard>
 
         <TactileCard className="p-4 border-kinetic-orange/20 bg-kinetic-orange/5">
           <p className="text-[10px] text-kinetic-orange uppercase tracking-wider font-semibold">Custo real por membro</p>
-          <p className="mt-2 text-xl font-bold text-zinc-100">
-            {estimatedJoined === 0 ? '--' : formatCurrency(realCostPerMember)}
-          </p>
+          <div className="mt-2">
+            {isLoading ? (
+              <div className="h-7 w-20 bg-kinetic-orange/20 rounded animate-pulse"></div>
+            ) : (
+              <p className="text-xl font-bold text-zinc-100">
+                {estimatedJoined === 0 ? '--' : formatCurrency(realCostPerMember)}
+              </p>
+            )}
+          </div>
         </TactileCard>
       </div>
 
@@ -363,28 +387,37 @@ export default function SyncoMetricsPage() {
           </div>
           
           <div className="flex-1 grid grid-cols-2 gap-4 w-full">
-            <div className="bg-zinc-950/50 p-4 rounded-lg border border-zinc-800/50">
-              <span className="text-xs text-zinc-500 block mb-1">A Meta informou:</span>
-              <span className="text-lg font-semibold text-zinc-300">{formatNumber(metaLeads)} leads</span>
-              <span className="text-xs text-zinc-600 block mt-2">Custo/Lead Meta: {formatCurrency(metaCostPerLead)}</span>
-            </div>
-            <div className="bg-zinc-950/50 p-4 rounded-lg border border-kinetic-orange/20">
-              <span className="text-xs text-zinc-500 block mb-1">O Grupo teve:</span>
-              <span className="text-lg font-semibold text-emerald-400">
-                {estimatedJoined > 0 ? `+${estimatedJoined}` : estimatedJoined} entradas reais/estimadas
-              </span>
-              <span className="text-xs text-zinc-600 block mt-2">Custo real/membro: {estimatedJoined === 0 ? '--' : formatCurrency(realCostPerMember)}</span>
-            </div>
-            <div className="col-span-2 bg-zinc-950/50 p-4 rounded-lg border border-zinc-800/50 flex justify-between items-center">
-              <div>
-                <span className="text-xs text-zinc-500 block mb-1">Diferença:</span>
-                <span className="text-sm font-medium text-zinc-300">{formatNumber(difference)}</span>
+            {isLoading ? (
+              <div className="col-span-2 p-6 rounded-lg border border-zinc-800/50 bg-zinc-950/50 flex flex-col items-center justify-center space-y-3">
+                <RefreshCw className="w-6 h-6 text-zinc-600 animate-spin" />
+                <p className="text-sm text-zinc-500">Recalculando comparação...</p>
               </div>
-              <div className="text-right">
-                <span className="text-xs text-zinc-500 block mb-1">Taxa Lead → Membro:</span>
-                <span className="text-sm font-medium text-zinc-300">{formatNumber(leadToMemberRate)}%</span>
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="bg-zinc-950/50 p-4 rounded-lg border border-zinc-800/50">
+                  <span className="text-xs text-zinc-500 block mb-1">A Meta informou:</span>
+                  <span className="text-lg font-semibold text-zinc-300">{formatNumber(metaLeads)} leads</span>
+                  <span className="text-xs text-zinc-600 block mt-2">Custo/Lead Meta: {formatCurrency(metaCostPerLead)}</span>
+                </div>
+                <div className="bg-zinc-950/50 p-4 rounded-lg border border-kinetic-orange/20">
+                  <span className="text-xs text-zinc-500 block mb-1">O Grupo teve:</span>
+                  <span className="text-lg font-semibold text-emerald-400">
+                    {estimatedJoined > 0 ? `+${estimatedJoined}` : estimatedJoined} entradas reais/estimadas
+                  </span>
+                  <span className="text-xs text-zinc-600 block mt-2">Custo real/membro: {estimatedJoined === 0 ? '--' : formatCurrency(realCostPerMember)}</span>
+                </div>
+                <div className="col-span-2 bg-zinc-950/50 p-4 rounded-lg border border-zinc-800/50 flex justify-between items-center">
+                  <div>
+                    <span className="text-xs text-zinc-500 block mb-1">Diferença:</span>
+                    <span className="text-sm font-medium text-zinc-300">{formatNumber(difference)}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs text-zinc-500 block mb-1">Taxa Lead → Membro:</span>
+                    <span className="text-sm font-medium text-zinc-300">{formatNumber(leadToMemberRate)}%</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </TactileCard>
