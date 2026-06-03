@@ -39,6 +39,18 @@ export default function SyncoMetricsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isActivatingGroup, setIsActivatingGroup] = useState(false);
 
+  // UX Feedback and Dialog states
+  const [feedbackToast, setFeedbackToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  const [groupToRemove, setGroupToRemove] = useState<{ monitorId: string, groupId: string, groupName: string } | null>(null);
+  const [isRemovingGroup, setIsRemovingGroup] = useState(false);
+  const [monitorToRemove, setMonitorToRemove] = useState<string | null>(null);
+  const [isRemovingMonitor, setIsRemovingMonitor] = useState(false);
+
+  const showFeedback = (message: string, type: 'success' | 'error') => {
+    setFeedbackToast({ message, type });
+    setTimeout(() => setFeedbackToast(null), 4000);
+  };
+
   const loadMetrics = async (isRefresh = false) => {
     try {
       if (isRefresh) setIsRefreshing(true);
@@ -103,53 +115,56 @@ export default function SyncoMetricsPage() {
         body: JSON.stringify({ group_id: group.id, channel_id: group.channel_id })
       });
 
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao ativar');
+        throw new Error(data?.error || 'Erro ao ativar');
       }
       
       // Recarregar em background para não fechar modal
       await loadMetrics(true);
       setShowActivateGroup(false);
       setNewMonitorGroupId(group.id);
-      alert('Grupo ativado com sucesso!');
+      showFeedback('Grupo ativado com sucesso!', 'success');
     } catch (err: any) {
-      alert(`Erro: ${err.message}`);
+      showFeedback(`Não foi possível ativar grupo: ${err.message}`, 'error');
     } finally {
       setIsActivatingGroup(false);
     }
   };
 
-  const handleRemoveGroup = async (monitorId: string, groupId: string) => {
-    if (!confirm('Parar de monitorar este grupo? Os monitoramentos ligados a ele podem deixar de comparar entradas reais.')) {
-      return;
-    }
-    setIsActivatingGroup(true);
+  const executeRemoveGroup = async () => {
+    if (!groupToRemove) return;
+    setIsRemovingGroup(true);
     try {
-      const response = await fetch(`/api/synco-metrics/monitored-groups/${monitorId}`, {
-        method: 'DELETE',
+      const response = await fetch(`/api/synco-metrics/monitored-groups/${groupToRemove.monitorId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false, is_deleted: true })
       });
+      
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao remover grupo');
+        throw new Error(data?.error || 'Erro ao remover grupo');
       }
       
-      if (newMonitorGroupId === groupId) {
+      if (newMonitorGroupId === groupToRemove.groupId) {
         setNewMonitorGroupId('');
       }
 
       await loadMetrics(true);
+      setGroupToRemove(null);
+      showFeedback('Grupo deixou de ser monitorado.', 'success');
     } catch (err: any) {
-      alert(`Erro: ${err.message}`);
+      showFeedback(`Não foi possível parar de monitorar este grupo. ${err.message}`, 'error');
     } finally {
-      setIsActivatingGroup(false);
+      setIsRemovingGroup(false);
     }
   };
 
 
   const handleCreateMonitor = async () => {
     if (!newMonitorGroupId || !newMonitorCampaignId) {
-      alert('Selecione o grupo e a campanha.');
+      showFeedback('Selecione o grupo e a campanha.', 'error');
       return;
     }
     
@@ -168,9 +183,9 @@ export default function SyncoMetricsPage() {
         })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(data.error || 'Erro ao criar monitoramento');
+        throw new Error(data?.error || 'Erro ao criar monitoramento');
       }
 
       setIsCreateModalOpen(false);
@@ -178,29 +193,35 @@ export default function SyncoMetricsPage() {
       setNewMonitorCampaignId('');
       setNewMonitorName('');
       loadMetrics(true);
+      showFeedback('Monitoramento criado com sucesso!', 'success');
     } catch (err: any) {
-      alert(`Erro: ${err.message}`);
+      showFeedback(`Erro ao criar monitoramento: ${err.message}`, 'error');
     } finally {
       setIsCreating(false);
     }
   };
 
-  const handleDeleteMonitor = async (id: string) => {
-    if (!confirm('Deseja realmente remover este monitoramento?')) return;
+  const executeDeleteMonitor = async () => {
+    if (!monitorToRemove) return;
+    setIsRemovingMonitor(true);
     try {
-      const res = await fetch(`/api/synco-metrics/monitors/${id}`, {
+      const res = await fetch(`/api/synco-metrics/monitors/${monitorToRemove}`, {
         method: 'DELETE'
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erro ao remover');
+        throw new Error(data?.error || 'Erro ao remover');
       }
       loadMetrics(true);
-      if (selectedMonitor?.id === id) {
+      if (selectedMonitor?.id === monitorToRemove) {
         setSelectedMonitor(null);
       }
+      showFeedback('Monitoramento removido com sucesso.', 'success');
+      setMonitorToRemove(null);
     } catch (err: any) {
-      alert(`Erro: ${err.message}`);
+      showFeedback(`Não foi possível remover: ${err.message}`, 'error');
+    } finally {
+      setIsRemovingMonitor(false);
     }
   };
 
@@ -315,8 +336,8 @@ export default function SyncoMetricsPage() {
                           <div key={g.groupId} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded p-2">
                             <span className="text-xs text-zinc-300 truncate pr-2" title={g.groupName}>{g.groupName}</span>
                             <button 
-                              onClick={() => handleRemoveGroup(g.monitorId, g.groupId)}
-                              disabled={isActivatingGroup}
+                              onClick={() => setGroupToRemove({ monitorId: g.monitorId, groupId: g.groupId, groupName: g.groupName })}
+                              disabled={isRemovingGroup || isActivatingGroup}
                               className="text-[10px] text-zinc-500 hover:text-red-400 transition-colors px-2 py-1"
                             >
                               Parar de monitorar
@@ -452,7 +473,7 @@ export default function SyncoMetricsPage() {
 
                 <div className="mt-4 pt-3 border-t border-zinc-800/50 flex items-center justify-between">
                   <button 
-                    onClick={() => handleDeleteMonitor(monitor.id)}
+                    onClick={() => setMonitorToRemove(monitor.id)}
                     className="text-zinc-600 hover:text-red-400 transition-colors p-1"
                     title="Remover monitoramento"
                   >
@@ -539,6 +560,58 @@ export default function SyncoMetricsPage() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Toast de Feedback */}
+      {feedbackToast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
+          <TactileCard className={`p-4 flex items-center gap-3 border ${
+            feedbackToast.type === 'error' ? 'border-amber-500/50 bg-amber-500/10 text-amber-500' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+          }`}>
+            <span className="text-sm font-medium">{feedbackToast.message}</span>
+            <button onClick={() => setFeedbackToast(null)} className="text-zinc-500 hover:text-zinc-300 ml-2">✕</button>
+          </TactileCard>
+        </div>
+      )}
+
+      {/* Modal de Remoção de Grupo */}
+      <Dialog open={!!groupToRemove} onOpenChange={(open) => !open && setGroupToRemove(null)}>
+        <DialogContent className="bg-deep-void border-zinc-800 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100">Parar de monitorar grupo?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-zinc-400 mt-2">
+            Este grupo deixará de ter coletas de membros. Monitoramentos ligados a ele podem parar de comparar entradas reais.
+          </p>
+          <div className="flex justify-end gap-2 mt-6">
+            <button onClick={() => setGroupToRemove(null)} className="text-zinc-400 text-sm px-4 py-2 hover:text-zinc-200" disabled={isRemovingGroup}>
+              Cancelar
+            </button>
+            <KineticButton onClick={executeRemoveGroup} disabled={isRemovingGroup} className="px-6 bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 hover:text-red-300">
+              {isRemovingGroup ? 'Parando...' : 'Parar de monitorar'}
+            </KineticButton>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Remoção de Monitoramento */}
+      <Dialog open={!!monitorToRemove} onOpenChange={(open) => !open && setMonitorToRemove(null)}>
+        <DialogContent className="bg-deep-void border-zinc-800 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100">Remover monitoramento?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-zinc-400 mt-2">
+            Tem certeza que deseja remover este monitoramento? (Isso não afeta o grupo nem a campanha Meta).
+          </p>
+          <div className="flex justify-end gap-2 mt-6">
+            <button onClick={() => setMonitorToRemove(null)} className="text-zinc-400 text-sm px-4 py-2 hover:text-zinc-200" disabled={isRemovingMonitor}>
+              Cancelar
+            </button>
+            <KineticButton onClick={executeDeleteMonitor} disabled={isRemovingMonitor} className="px-6 bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 hover:text-red-300">
+              {isRemovingMonitor ? 'Removendo...' : 'Remover'}
+            </KineticButton>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
