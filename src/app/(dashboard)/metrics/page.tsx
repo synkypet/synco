@@ -16,6 +16,9 @@ import { useRouter } from 'next/navigation';
 export default function SyncoMetricsPage() {
   const router = useRouter();
   const [monitoredGroups, setMonitoredGroups] = useState<any[]>([]);
+  const [availableGroups, setAvailableGroups] = useState<any[]>([]);
+  const [activeCount, setActiveCount] = useState(0);
+  const [limit, setLimit] = useState(3);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [monitors, setMonitors] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -26,6 +29,7 @@ export default function SyncoMetricsPage() {
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [showActivateGroup, setShowActivateGroup] = useState(false);
   const [selectedMonitor, setSelectedMonitor] = useState<any | null>(null);
 
   // Form states for Create Monitor
@@ -33,6 +37,7 @@ export default function SyncoMetricsPage() {
   const [newMonitorCampaignId, setNewMonitorCampaignId] = useState('');
   const [newMonitorName, setNewMonitorName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isActivatingGroup, setIsActivatingGroup] = useState(false);
 
   const loadMetrics = async (isRefresh = false) => {
     try {
@@ -40,10 +45,11 @@ export default function SyncoMetricsPage() {
       else setLoading(true);
       setError(null);
 
-      const [summaryRes, campaignsRes, monitorsRes] = await Promise.all([
+      const [summaryRes, campaignsRes, monitorsRes, groupsRes] = await Promise.all([
         fetch('/api/synco-metrics/summary'),
         fetch('/api/synco-metrics/meta/campaigns'),
-        fetch(`/api/synco-metrics/monitors?period=${selectedPeriod}`)
+        fetch(`/api/synco-metrics/monitors?period=${selectedPeriod}`),
+        fetch('/api/synco-metrics/groups')
       ]);
 
       if (!summaryRes.ok || !monitorsRes.ok) {
@@ -52,12 +58,16 @@ export default function SyncoMetricsPage() {
 
       const summaryData = await summaryRes.json();
       const monitorsData = await monitorsRes.json();
+      const groupsData = await groupsRes.json();
       let campaignsData: any = { campaigns: [] };
       if (campaignsRes.ok) {
         campaignsData = await campaignsRes.json();
       }
       
       setMonitoredGroups(summaryData.monitoredGroups || []);
+      setActiveCount(summaryData.activeCount || 0);
+      setLimit(summaryData.limit || 3);
+      setAvailableGroups(groupsData.groups?.filter((g: any) => !g.is_monitored) || []);
       setCampaigns(campaignsData.campaigns || []);
       setMonitors(monitorsData.monitors || []);
     } catch (err: any) {
@@ -72,6 +82,44 @@ export default function SyncoMetricsPage() {
   useEffect(() => {
     loadMetrics();
   }, [selectedPeriod]);
+
+  // Handle UX Reset when closing create modal
+  useEffect(() => {
+    if (!isCreateModalOpen) {
+      setShowActivateGroup(false);
+    }
+  }, [isCreateModalOpen]);
+
+  const handleActivateGroup = async (group: any) => {
+    if (activeCount >= limit) {
+      alert(`Você já atingiu o limite máximo de ${limit} grupos monitorados.`);
+      return;
+    }
+    setIsActivatingGroup(true);
+    try {
+      const response = await fetch('/api/synco-metrics/monitored-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_id: group.id, channel_id: group.channel_id })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao ativar');
+      }
+      
+      // Recarregar em background para não fechar modal
+      await loadMetrics(true);
+      setShowActivateGroup(false);
+      setNewMonitorGroupId(group.id);
+      alert('Grupo ativado com sucesso!');
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`);
+    } finally {
+      setIsActivatingGroup(false);
+    }
+  };
+
 
   const handleCreateMonitor = async () => {
     if (!newMonitorGroupId || !newMonitorCampaignId) {
@@ -223,8 +271,48 @@ export default function SyncoMetricsPage() {
                       <option key={g.groupId} value={g.groupId}>{g.groupName}</option>
                     ))}
                   </select>
-                  {monitoredGroups.length === 0 && (
-                    <p className="text-[10px] text-amber-500 mt-1">Nenhum grupo ativo no SyncoMetrics. Vá em Monitoramento primeiro.</p>
+                  
+                  {monitoredGroups.length === 0 && !showActivateGroup && (
+                    <p className="text-xs text-amber-500 mt-2">
+                      Você ainda não tem grupos monitorados. Ative um grupo primeiro para comparar com campanhas Meta.
+                    </p>
+                  )}
+
+                  {!showActivateGroup ? (
+                    <button 
+                      onClick={() => setShowActivateGroup(true)}
+                      className="text-xs text-kinetic-orange hover:text-white font-medium mt-2 flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" /> {monitoredGroups.length === 0 ? 'Ativar grupo' : 'Ativar outro grupo'}
+                    </button>
+                  ) : (
+                    <div className="mt-3 p-3 bg-zinc-950 border border-zinc-800 rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-xs font-semibold text-zinc-300">Adicionar grupo ao SyncoMetrics</h4>
+                        <button onClick={() => setShowActivateGroup(false)} className="text-zinc-500 hover:text-zinc-300 text-xs">✕</button>
+                      </div>
+                      
+                      {activeCount >= limit ? (
+                        <p className="text-xs text-amber-500 bg-amber-500/10 p-2 rounded">Limite de grupos monitorados atingido. Desative um grupo para adicionar outro.</p>
+                      ) : availableGroups.length === 0 ? (
+                        <p className="text-xs text-zinc-500">Não há novos grupos elegíveis para monitoramento.</p>
+                      ) : (
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                          {availableGroups.map(group => (
+                            <div key={group.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded p-2">
+                              <span className="text-xs text-zinc-300 truncate pr-2" title={group.name}>{group.name}</span>
+                              <KineticButton 
+                                onClick={() => handleActivateGroup(group)}
+                                disabled={isActivatingGroup}
+                                className="text-[10px] py-1 px-3 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white h-auto"
+                              >
+                                {isActivatingGroup ? '...' : 'Ativar'}
+                              </KineticButton>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
