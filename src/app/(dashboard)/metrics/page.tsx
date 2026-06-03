@@ -56,6 +56,7 @@ export default function SyncoMetricsPage() {
   const router = useRouter();
   const [groups, setGroups] = useState<GroupData[]>([]);
   const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [overview, setOverview] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
@@ -65,8 +66,7 @@ export default function SyncoMetricsPage() {
   const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
 
   // Meta Ads states
-  const [metaConnection, setMetaConnection] = useState<any>(null);
-  const [selectedPeriod, setSelectedPeriod] = useState('7d');
+  const [selectedPeriod, setSelectedPeriod] = useState('last_7d');
 
   const loadMetrics = async (isRefresh = false) => {
     try {
@@ -77,36 +77,23 @@ export default function SyncoMetricsPage() {
       }
       setError(null);
 
-      const [groupsRes, summaryRes, metaRes] = await Promise.all([
+      const [groupsRes, summaryRes, overviewRes] = await Promise.all([
         fetch('/api/synco-metrics/groups'),
         fetch('/api/synco-metrics/summary'),
-        fetch('/api/synco-metrics/meta/connection')
+        fetch(`/api/synco-metrics/overview?period=${selectedPeriod}`)
       ]);
 
-      if (!groupsRes.ok) {
-        const errorData = await groupsRes.json();
-        throw new Error(errorData.error || 'Erro ao carregar grupos');
-      }
-
-      if (!summaryRes.ok) {
-        const errorData = await summaryRes.json();
-        throw new Error(errorData.error || 'Erro ao carregar sumário');
+      if (!groupsRes.ok || !summaryRes.ok || !overviewRes.ok) {
+        throw new Error('Erro ao carregar dados do SyncoMetrics');
       }
 
       const groupsData = await groupsRes.json();
       const summaryData = await summaryRes.json();
+      const overviewData = await overviewRes.json();
       
-      if (metaRes.ok) {
-        const metaData = await metaRes.json();
-        if (metaData.connected) {
-          setMetaConnection(metaData.account);
-        } else {
-          setMetaConnection(null);
-        }
-      }
-
       setGroups(groupsData.groups);
       setSummary(summaryData);
+      setOverview(overviewData);
       setLastRefreshedAt(new Date());
     } catch (err: any) {
       setError(err.message);
@@ -124,7 +111,7 @@ export default function SyncoMetricsPage() {
 
   useEffect(() => {
     loadMetrics();
-  }, []);
+  }, [selectedPeriod]);
 
   const handleToggleMonitor = async (groupId: string, channelId: string, isCurrentlyMonitored: boolean, monitorId?: string | null) => {
     try {
@@ -159,10 +146,10 @@ export default function SyncoMetricsPage() {
       }
       
       setIsAddGroupModalOpen(false);
-      loadMetrics();
+      loadMetrics(true);
     } catch (err: any) {
       alert(`Erro interno: ${err.message}`);
-      loadMetrics();
+      loadMetrics(true);
     }
   };
 
@@ -188,7 +175,7 @@ export default function SyncoMetricsPage() {
     );
   }
 
-  if (error) {
+  if (error && !overview) {
     return (
       <div className="p-8">
         <TactileCard className="p-6 border-red-900/30 bg-red-900/10">
@@ -202,13 +189,32 @@ export default function SyncoMetricsPage() {
   const activeCount = summary?.activeCount || 0;
   const limit = summary?.limit || 3;
   const monitoredGroups = summary?.monitoredGroups || [];
-  
-  // Grupos disponíveis
   const availableGroups = groups.filter(g => !g.is_monitored);
+
+  // Overview calculations
+  const metaConnected = overview?.meta?.connected || false;
+  const metaError = overview?.meta?.error;
+  const metaSpend = overview?.meta?.spend || 0;
+  const metaLeads = overview?.meta?.leads || 0;
+  
+  const estimatedJoined = overview?.groups?.estimatedJoined || 0;
+  const difference = overview?.comparison?.difference || 0;
+  const metaCostPerLead = overview?.comparison?.metaCostPerLead;
+  const realCostPerMember = overview?.comparison?.realCostPerMember;
+  const leadToMemberRate = overview?.comparison?.leadToMemberRate;
+
+  const formatCurrency = (val: number | null | undefined) => {
+    if (val === null || val === undefined) return '--';
+    return `R$ ${val.toFixed(2).replace('.', ',')}`;
+  };
+
+  const formatNumber = (val: number | null | undefined) => {
+    if (val === null || val === undefined) return '--';
+    return val;
+  };
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8 animate-fade-in">
-      
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
         <div>
@@ -216,10 +222,10 @@ export default function SyncoMetricsPage() {
           <p className="text-zinc-400 mt-2 text-sm max-w-xl">
             A Meta mede leads/cliques. O SyncoMetrics mede membros reais. Compare os resultados da Meta Ads com entradas reais nos seus grupos.
           </p>
-          <div className="flex items-center gap-3 mt-4 text-xs">
+          <div className="flex flex-wrap items-center gap-3 mt-4 text-xs">
             <span className="flex items-center gap-1 text-zinc-500">
-              <span className={`w-2 h-2 rounded-full ${metaConnection ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-              Meta Ads: {metaConnection ? 'Conectado' : 'Não conectado'}
+              <span className={`w-2 h-2 rounded-full ${metaConnected ? (metaError ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-red-500'}`}></span>
+              Meta Ads: {metaConnected ? (metaError ? 'Atenção' : 'Conectado') : 'Não conectado'}
             </span>
             <span className="text-zinc-700">•</span>
             <span className="text-zinc-500">
@@ -229,16 +235,16 @@ export default function SyncoMetricsPage() {
         </div>
         
         <div className="flex flex-col items-end gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
             <select 
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange"
+              className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange h-[38px]"
             >
               <option value="today">Hoje</option>
-              <option value="7d">Últimos 7 dias</option>
-              <option value="30d">Últimos 30 dias</option>
-              <option value="custom" disabled>Personalizado</option>
+              <option value="last_7d">Últimos 7 dias</option>
+              <option value="last_30d">Últimos 30 dias</option>
+              <option value="custom" disabled>Personalizado (em breve)</option>
             </select>
             
             <KineticButton 
@@ -260,42 +266,48 @@ export default function SyncoMetricsPage() {
           </div>
           {lastRefreshedAt && (
             <span className="text-xs text-zinc-500 font-medium">
-              Última atualização da tela: {lastRefreshedAt.toLocaleTimeString('pt-BR')}
+              Última atualização: {lastRefreshedAt.toLocaleTimeString('pt-BR')}
             </span>
           )}
         </div>
       </div>
+
+      {metaError && (
+        <div className="p-4 bg-amber-900/20 border border-amber-900/50 text-amber-500 text-sm rounded-xl">
+          {metaError}
+        </div>
+      )}
 
       {/* Cards Principais */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <TactileCard className="p-4">
           <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Gasto Meta</p>
           <div className="mt-2 flex items-baseline gap-1">
-            <span className="text-xl font-bold text-zinc-500">
-              {metaConnection ? 'Aguardando métricas' : 'Em breve'}
+            <span className={`text-xl font-bold ${metaConnected ? 'text-zinc-100' : 'text-zinc-500'}`}>
+              {metaConnected ? formatCurrency(metaSpend) : 'Sem conexão'}
             </span>
           </div>
         </TactileCard>
 
         <TactileCard className="p-4">
           <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Leads informados (Meta)</p>
-          <p className="mt-2 text-xl font-bold text-zinc-500">
-            {metaConnection ? 'Aguardando métricas' : 'Em breve'}
+          <p className={`mt-2 text-xl font-bold ${metaConnected ? 'text-zinc-100' : 'text-zinc-500'}`}>
+            {metaConnected ? formatNumber(metaLeads) : 'Sem conexão'}
           </p>
         </TactileCard>
 
         <TactileCard className="p-4">
           <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Entradas reais no grupo</p>
-          <p className={`mt-2 text-2xl font-bold ${summary?.growth24h && summary.growth24h > 0 ? 'text-emerald-400' : 'text-zinc-100'}`}>
-            {summary?.growth24h !== undefined ? (summary.growth24h > 0 ? `+${summary.growth24h}` : summary.growth24h) : 0}
+          <p className={`mt-2 text-2xl font-bold ${estimatedJoined > 0 ? 'text-emerald-400' : 'text-zinc-100'}`}>
+            {estimatedJoined > 0 ? `+${estimatedJoined}` : estimatedJoined}
           </p>
-          <p className="text-xs text-zinc-500 mt-1">Neste período</p>
+          <p className="text-[9px] text-zinc-500 mt-1 leading-tight">Estimado pela variação real de membros capturada pelo SyncoMetrics.</p>
         </TactileCard>
 
         <TactileCard className="p-4 border-kinetic-orange/20 bg-kinetic-orange/5">
           <p className="text-[10px] text-kinetic-orange uppercase tracking-wider font-semibold">Custo real por membro</p>
-          <p className="mt-2 text-xl font-bold text-zinc-500">
-            Em breve
+          <p className="mt-2 text-xl font-bold text-zinc-100">
+            {estimatedJoined === 0 ? '--' : formatCurrency(realCostPerMember)}
           </p>
         </TactileCard>
       </div>
@@ -309,22 +321,42 @@ export default function SyncoMetricsPage() {
               Meta Ads x Grupo Real
             </h2>
             <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
-              A Meta mostra o resultado do anúncio. O SyncoMetrics compara isso com a entrada real nos grupos monitorados.
+              A Meta mostra o resultado do anúncio. O SyncoMetrics compara isso com a entrada real nos grupos monitorados no mesmo período.
             </p>
+            {!metaConnected && (
+              <p className="text-xs text-kinetic-orange mt-4">
+                Conecte a Meta Ads em Configurações → SyncoMetrics.
+              </p>
+            )}
+            {metaConnected && activeCount === 0 && (
+              <p className="text-xs text-kinetic-orange mt-4">
+                Adicione um grupo para comparar.
+              </p>
+            )}
           </div>
           
           <div className="flex-1 grid grid-cols-2 gap-4 w-full">
             <div className="bg-zinc-950/50 p-4 rounded-lg border border-zinc-800/50">
               <span className="text-xs text-zinc-500 block mb-1">A Meta informou:</span>
-              <span className="text-lg font-semibold text-zinc-300">-- leads</span>
-              <span className="text-xs text-zinc-600 block mt-2">Custo/Lead: --</span>
+              <span className="text-lg font-semibold text-zinc-300">{formatNumber(metaLeads)} leads</span>
+              <span className="text-xs text-zinc-600 block mt-2">Custo/Lead Meta: {formatCurrency(metaCostPerLead)}</span>
             </div>
             <div className="bg-zinc-950/50 p-4 rounded-lg border border-kinetic-orange/20">
-              <span className="text-xs text-zinc-500 block mb-1">O Grupo ganhou:</span>
+              <span className="text-xs text-zinc-500 block mb-1">O Grupo teve:</span>
               <span className="text-lg font-semibold text-emerald-400">
-                {summary?.growth24h !== undefined ? (summary.growth24h > 0 ? `+${summary.growth24h}` : summary.growth24h) : 0} membros
+                {estimatedJoined > 0 ? `+${estimatedJoined}` : estimatedJoined} entradas reais/estimadas
               </span>
-              <span className="text-xs text-zinc-600 block mt-2">Custo real: --</span>
+              <span className="text-xs text-zinc-600 block mt-2">Custo real/membro: {estimatedJoined === 0 ? '--' : formatCurrency(realCostPerMember)}</span>
+            </div>
+            <div className="col-span-2 bg-zinc-950/50 p-4 rounded-lg border border-zinc-800/50 flex justify-between items-center">
+              <div>
+                <span className="text-xs text-zinc-500 block mb-1">Diferença:</span>
+                <span className="text-sm font-medium text-zinc-300">{formatNumber(difference)}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-zinc-500 block mb-1">Taxa Lead → Membro:</span>
+                <span className="text-sm font-medium text-zinc-300">{formatNumber(leadToMemberRate)}%</span>
+              </div>
             </div>
           </div>
         </div>
@@ -390,7 +422,7 @@ export default function SyncoMetricsPage() {
                       <span className="text-sm font-medium text-zinc-300">{monitor.hasSnapshot ? monitor.memberCount : '---'}</span>
                     </div>
                     <div>
-                      <span className="block text-[10px] text-zinc-500">Variação</span>
+                      <span className="block text-[10px] text-zinc-500">Variação (24h)</span>
                       <span className={`text-sm font-medium ${renderDeltaColor(monitor.growth24h)}`}>
                         {renderDeltaText(monitor.hasSnapshot, monitor.hasDeltas, monitor.growth24h)}
                       </span>
