@@ -52,6 +52,52 @@ export default function SyncoMetricsPage() {
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Meta Ads states
+  const [metaToken, setMetaToken] = useState('');
+  const [metaAccountId, setMetaAccountId] = useState('');
+  const [metaPixelId, setMetaPixelId] = useState('');
+  const [isTestingMeta, setIsTestingMeta] = useState(false);
+  const [metaTestResult, setMetaTestResult] = useState<any>(null);
+  const [metaTestError, setMetaTestError] = useState<string | null>(null);
+
+  const handleTestMeta = async () => {
+    if (!metaToken || !metaAccountId) {
+      setMetaTestError("Preencha o Token e o Ad Account ID.");
+      return;
+    }
+    
+    setIsTestingMeta(true);
+    setMetaTestError(null);
+    setMetaTestResult(null);
+
+    try {
+      const res = await fetch('/api/synco-metrics/meta/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken: metaToken,
+          adAccountId: metaAccountId,
+          pixelId: metaPixelId
+        })
+      });
+
+      const data = await res.json();
+      
+      // Limpa token da memória obrigatoriamente
+      setMetaToken('');
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Erro desconhecido na conexão Meta');
+      }
+
+      setMetaTestResult(data);
+    } catch (err: any) {
+      setMetaTestError(err.message);
+    } finally {
+      setIsTestingMeta(false);
+    }
+  };
+
   const loadMetrics = async (isRefresh = false) => {
     try {
       if (isRefresh) {
@@ -327,28 +373,97 @@ export default function SyncoMetricsPage() {
         )}
       </div>
 
-      {/* Placeholder Meta Ads */}
+      {/* Teste de Conexão Meta Ads */}
       <div className="mt-16 pt-8 border-t border-zinc-800/50">
         <TactileCard className="p-8 relative overflow-hidden bg-zinc-900/30 border-zinc-800/50">
           <div className="absolute top-0 right-0 p-4 opacity-10">
-            {/* Simple SVG icon for Meta/Ads */}
             <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12c0-5.523-4.477-10-10-10z"/>
             </svg>
           </div>
           
-          <div className="relative z-10 max-w-xl">
+          <div className="relative z-10 max-w-2xl">
             <h2 className="text-2xl font-bold text-zinc-300 flex items-center gap-2">
-              Meta Ads <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded-sm uppercase tracking-wider font-semibold">Em breve</span>
+              Meta Ads <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded-sm uppercase tracking-wider font-semibold">Modo Teste (MVP)</span>
             </h2>
-            <p className="text-zinc-500 mt-4 text-sm leading-relaxed">
-              Na próxima etapa, você poderá conectar sua conta Meta Ads para comparar campanhas, anúncios e pixel com o crescimento real dos seus grupos.
+            <p className="text-zinc-500 mt-2 text-sm leading-relaxed mb-6">
+              Valide sua conexão em modo read-only. Para este teste, use um token Meta com permissão <strong>ads_read</strong> e acesso à conta de anúncios informada.
             </p>
-            <div className="mt-6">
-              <KineticButton disabled className="opacity-50 cursor-not-allowed bg-zinc-800 text-zinc-400 shadow-none">
-                Conectar Meta Ads
-              </KineticButton>
-            </div>
+
+            {metaTestResult ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-emerald-900/20 border border-emerald-900/50 rounded-lg">
+                  <h3 className="text-emerald-400 font-semibold mb-2">Conexão Estabelecida com Sucesso</h3>
+                  <ul className="text-sm text-zinc-300 space-y-1">
+                    <li><strong className="text-zinc-500">Conta:</strong> {metaTestResult.account?.name} ({metaTestResult.account?.id})</li>
+                    <li><strong className="text-zinc-500">Status da Conta:</strong> {metaTestResult.account?.accountStatus === 1 ? 'Ativa' : 'Inativa'}</li>
+                    <li><strong className="text-zinc-500">Moeda:</strong> {metaTestResult.account?.currency}</li>
+                    <li><strong className="text-zinc-500">Campanhas Retornadas:</strong> {metaTestResult.campaignsSample?.length}</li>
+                    <li><strong className="text-zinc-500">Anúncios Retornados:</strong> {metaTestResult.adsSample?.length}</li>
+                    <li><strong className="text-zinc-500">Gasto 7d:</strong> {metaTestResult.insights?.spend}</li>
+                    <li><strong className="text-zinc-500">Ações (Raw Types):</strong> {metaTestResult.insights?.actionsRawTypes?.join(', ') || 'Nenhuma'}</li>
+                    <li><strong className="text-zinc-500">Possíveis Leads detectados:</strong> {metaTestResult.insights?.leadActionsDetected?.length}</li>
+                    {metaTestResult.pixel?.checked && (
+                      <li><strong className="text-zinc-500">Pixel Status:</strong> {metaTestResult.pixel.ok ? `OK (${metaTestResult.pixel.name})` : 'Erro/Inválido'}</li>
+                    )}
+                  </ul>
+                </div>
+                <KineticButton onClick={() => setMetaTestResult(null)} className="bg-zinc-800 text-zinc-300">
+                  Limpar Teste
+                </KineticButton>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {metaTestError && (
+                  <div className="p-3 bg-red-900/20 border border-red-900/50 text-red-400 text-sm rounded-lg">
+                    {metaTestError}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-zinc-500 mb-1">ID da Conta de Anúncios</label>
+                    <input 
+                      type="text" 
+                      placeholder="act_123456789" 
+                      value={metaAccountId}
+                      onChange={(e) => setMetaAccountId(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-kinetic-orange transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-500 mb-1">Pixel ID (Opcional)</label>
+                    <input 
+                      type="text" 
+                      placeholder="987654321" 
+                      value={metaPixelId}
+                      onChange={(e) => setMetaPixelId(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-kinetic-orange transition-colors"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Access Token (User ou System Token)</label>
+                  <input 
+                    type="password" 
+                    placeholder="EAAB..." 
+                    value={metaToken}
+                    onChange={(e) => setMetaToken(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-kinetic-orange transition-colors font-mono"
+                  />
+                </div>
+                <div className="pt-2">
+                  <KineticButton 
+                    onClick={handleTestMeta} 
+                    disabled={isTestingMeta || !metaToken || !metaAccountId}
+                    className="flex items-center gap-2"
+                  >
+                    {isTestingMeta && <RefreshCw className="w-4 h-4 animate-spin" />}
+                    {isTestingMeta ? 'Testando Conexão...' : 'Testar Conexão'}
+                  </KineticButton>
+                </div>
+              </div>
+            )}
+
           </div>
         </TactileCard>
       </div>
