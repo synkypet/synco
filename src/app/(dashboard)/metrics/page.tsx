@@ -67,6 +67,8 @@ export default function SyncoMetricsPage() {
 
   // Meta Ads states
   const [selectedPeriod, setSelectedPeriod] = useState('last_7d');
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState('all');
 
   const loadMetrics = async (isRefresh = false) => {
     try {
@@ -77,10 +79,11 @@ export default function SyncoMetricsPage() {
       }
       setError(null);
 
-      const [groupsRes, summaryRes, overviewRes] = await Promise.all([
+      const [groupsRes, summaryRes, overviewRes, campaignsRes] = await Promise.all([
         fetch('/api/synco-metrics/groups'),
         fetch('/api/synco-metrics/summary'),
-        fetch(`/api/synco-metrics/overview?period=${selectedPeriod}`)
+        fetch(`/api/synco-metrics/overview?period=${selectedPeriod}&campaign_id=${selectedCampaignId}`),
+        fetch('/api/synco-metrics/meta/campaigns')
       ]);
 
       if (!groupsRes.ok || !summaryRes.ok || !overviewRes.ok) {
@@ -91,9 +94,15 @@ export default function SyncoMetricsPage() {
       const summaryData = await summaryRes.json();
       const overviewData = await overviewRes.json();
       
+      let campaignsData: any = { campaigns: [] };
+      if (campaignsRes.ok) {
+        campaignsData = await campaignsRes.json();
+      }
+      
       setGroups(groupsData.groups);
       setSummary(summaryData);
       setOverview(overviewData);
+      setCampaigns(campaignsData.campaigns || []);
       setLastRefreshedAt(new Date());
     } catch (err: any) {
       setError(err.message);
@@ -111,7 +120,7 @@ export default function SyncoMetricsPage() {
 
   useEffect(() => {
     loadMetrics();
-  }, [selectedPeriod]);
+  }, [selectedPeriod, selectedCampaignId]);
 
   const handleToggleMonitor = async (groupId: string, channelId: string, isCurrentlyMonitored: boolean, monitorId?: string | null) => {
     try {
@@ -237,6 +246,17 @@ export default function SyncoMetricsPage() {
         <div className="flex flex-col items-end gap-3">
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
             <select 
+              value={selectedCampaignId}
+              onChange={(e) => setSelectedCampaignId(e.target.value)}
+              className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange h-[38px] max-w-[200px] truncate"
+            >
+              <option value="all">Todas as campanhas</option>
+              {campaigns.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+
+            <select 
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
               className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange h-[38px]"
@@ -323,6 +343,13 @@ export default function SyncoMetricsPage() {
             <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
               A Meta mostra o resultado do anúncio. O SyncoMetrics compara isso com a entrada real nos grupos monitorados no mesmo período.
             </p>
+            {metaConnected && (
+              <p className="text-xs text-zinc-300 mt-3 p-2 bg-zinc-950/50 rounded border border-zinc-800/50 inline-block">
+                {selectedCampaignId === 'all' 
+                  ? "Analisando todas as campanhas da conta no período." 
+                  : `Campanha analisada: ${campaigns.find(c => c.id === selectedCampaignId)?.name || selectedCampaignId}`}
+              </p>
+            )}
             {!metaConnected && (
               <p className="text-xs text-kinetic-orange mt-4">
                 Conecte a Meta Ads em Configurações → SyncoMetrics.

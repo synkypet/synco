@@ -102,7 +102,10 @@ export async function GET(request: NextRequest) {
             const datePreset = period === 'today' ? 'today' : period === 'last_30d' ? 'last_30d' : 'last_7d';
             
             const fields = 'spend,impressions,reach,clicks,ctr,cpc,cpm,actions';
-            const metaUrl = `https://graph.facebook.com/v19.0/${connection.ad_account_id}/insights?date_preset=${datePreset}&fields=${fields}&action_breakdowns=action_type&access_token=${secret.access_token}`;
+            const campaignId = searchParams.get('campaign_id');
+            const targetId = (campaignId && campaignId !== 'all') ? campaignId : connection.ad_account_id;
+            
+            const metaUrl = `https://graph.facebook.com/v19.0/${targetId}/insights?date_preset=${datePreset}&fields=${fields}&action_breakdowns=action_type&access_token=${secret.access_token}`;
             
             const metaRes = await fetch(metaUrl);
             const metaData = await metaRes.json();
