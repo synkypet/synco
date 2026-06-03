@@ -53,11 +53,11 @@ export default function SyncoMetricsPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Meta Ads states
+  const [metaConnection, setMetaConnection] = useState<any>(null);
   const [metaToken, setMetaToken] = useState('');
   const [metaAccountId, setMetaAccountId] = useState('');
   const [metaPixelId, setMetaPixelId] = useState('');
   const [isTestingMeta, setIsTestingMeta] = useState(false);
-  const [metaTestResult, setMetaTestResult] = useState<any>(null);
   const [metaTestError, setMetaTestError] = useState<string | null>(null);
 
   const handleTestMeta = async () => {
@@ -68,10 +68,9 @@ export default function SyncoMetricsPage() {
     
     setIsTestingMeta(true);
     setMetaTestError(null);
-    setMetaTestResult(null);
 
     try {
-      const res = await fetch('/api/synco-metrics/meta/test-connection', {
+      const res = await fetch('/api/synco-metrics/meta/connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,19 +81,33 @@ export default function SyncoMetricsPage() {
       });
 
       const data = await res.json();
-      
-      // Limpa token da memória obrigatoriamente
-      setMetaToken('');
+      setMetaToken(''); // Limpa token
 
       if (!res.ok || !data.ok) {
         throw new Error(data.error || 'Erro desconhecido na conexão Meta');
       }
 
-      setMetaTestResult(data);
+      setMetaConnection(data.account);
     } catch (err: any) {
       setMetaTestError(err.message);
     } finally {
       setIsTestingMeta(false);
+    }
+  };
+
+  const handleDisconnectMeta = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/synco-metrics/meta/connection', {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setMetaConnection(null);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -107,9 +120,10 @@ export default function SyncoMetricsPage() {
       }
       setError(null);
 
-      const [groupsRes, summaryRes] = await Promise.all([
+      const [groupsRes, summaryRes, metaRes] = await Promise.all([
         fetch('/api/synco-metrics/groups'),
-        fetch('/api/synco-metrics/summary')
+        fetch('/api/synco-metrics/summary'),
+        fetch('/api/synco-metrics/meta/connection')
       ]);
 
       if (!groupsRes.ok) {
@@ -124,6 +138,15 @@ export default function SyncoMetricsPage() {
 
       const groupsData = await groupsRes.json();
       const summaryData = await summaryRes.json();
+      
+      if (metaRes.ok) {
+        const metaData = await metaRes.json();
+        if (metaData.connected) {
+          setMetaConnection(metaData.account);
+        } else {
+          setMetaConnection(null);
+        }
+      }
 
       setGroups(groupsData.groups);
       setSummary(summaryData);
@@ -390,30 +413,41 @@ export default function SyncoMetricsPage() {
               Valide sua conexão em modo read-only. Para este teste, use um token Meta com permissão <strong>ads_read</strong> e acesso à conta de anúncios informada.
             </p>
 
-            {metaTestResult ? (
-              <div className="space-y-4">
-                <div className="p-4 bg-emerald-900/20 border border-emerald-900/50 rounded-lg">
-                  <h3 className="text-emerald-400 font-semibold mb-2">Conexão Estabelecida com Sucesso</h3>
-                  <ul className="text-sm text-zinc-300 space-y-1">
-                    <li><strong className="text-zinc-500">Conta:</strong> {metaTestResult.account?.name} ({metaTestResult.account?.id})</li>
-                    <li><strong className="text-zinc-500">Status da Conta:</strong> {metaTestResult.account?.accountStatus === 1 ? 'Ativa' : 'Inativa'}</li>
-                    <li><strong className="text-zinc-500">Moeda:</strong> {metaTestResult.account?.currency}</li>
-                    <li><strong className="text-zinc-500">Campanhas Retornadas:</strong> {metaTestResult.campaignsSample?.length}</li>
-                    <li><strong className="text-zinc-500">Anúncios Retornados:</strong> {metaTestResult.adsSample?.length}</li>
-                    <li><strong className="text-zinc-500">Gasto 7d:</strong> {metaTestResult.insights?.spend}</li>
-                    <li><strong className="text-zinc-500">Ações (Raw Types):</strong> {metaTestResult.insights?.actionsRawTypes?.join(', ') || 'Nenhuma'}</li>
-                    <li><strong className="text-zinc-500">Possíveis Leads detectados:</strong> {metaTestResult.insights?.leadActionsDetected?.length}</li>
-                    {metaTestResult.pixel?.checked && (
-                      <li><strong className="text-zinc-500">Pixel Status:</strong> {metaTestResult.pixel.ok ? `OK (${metaTestResult.pixel.name})` : 'Erro/Inválido'}</li>
-                    )}
-                  </ul>
+            {metaConnection ? (
+              <div className="space-y-4 animate-fade-in">
+                <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="text-zinc-200 font-semibold flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                      Conectado
+                    </h3>
+                    <ul className="text-sm text-zinc-400 mt-2 space-y-1">
+                      <li><strong>Conta:</strong> {metaConnection.name} ({metaConnection.adAccountId})</li>
+                      <li><strong>Moeda:</strong> {metaConnection.currency}</li>
+                      {metaConnection.pixelName && (
+                        <li><strong>Pixel:</strong> {metaConnection.pixelName}</li>
+                      )}
+                      <li><strong>Último Teste:</strong> {new Date(metaConnection.lastTestedAt).toLocaleString('pt-BR')}</li>
+                    </ul>
+                  </div>
+                  <div className="flex flex-col gap-2 w-full sm:w-auto">
+                    <KineticButton 
+                      onClick={() => setMetaConnection(null)} 
+                      className="bg-zinc-800 text-zinc-300 w-full"
+                    >
+                      Trocar Conta/Token
+                    </KineticButton>
+                    <KineticButton 
+                      onClick={handleDisconnectMeta} 
+                      className="bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-900/50 w-full"
+                    >
+                      Desconectar
+                    </KineticButton>
+                  </div>
                 </div>
-                <KineticButton onClick={() => setMetaTestResult(null)} className="bg-zinc-800 text-zinc-300">
-                  Limpar Teste
-                </KineticButton>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 animate-fade-in">
                 {metaTestError && (
                   <div className="p-3 bg-red-900/20 border border-red-900/50 text-red-400 text-sm rounded-lg">
                     {metaTestError}
@@ -458,7 +492,7 @@ export default function SyncoMetricsPage() {
                     className="flex items-center gap-2"
                   >
                     {isTestingMeta && <RefreshCw className="w-4 h-4 animate-spin" />}
-                    {isTestingMeta ? 'Testando Conexão...' : 'Testar Conexão'}
+                    {isTestingMeta ? 'Conectando...' : 'Conectar Conta Meta Ads'}
                   </KineticButton>
                 </div>
               </div>
