@@ -54,7 +54,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { path: '/envio-rapido', label: 'Envio Rápido', icon: SendHorizonal, highlight: true },
       { path: '/carrinho-ofertas', label: 'Carrinho de Ofertas', icon: ShoppingCart },
-      { path: '/monitoramento', label: 'Monitoramento', icon: Eye },
+      // { path: '/monitoramento', label: 'Monitoramento', icon: Eye },
     ],
   },
   {
@@ -82,8 +82,9 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Resultados',
     items: [
-      { path: '/ganhos', label: 'Ganhos', icon: DollarSign },
-      { path: '/relatorios', label: 'Relatórios', icon: BarChart3 },
+      { path: '/metrics', label: 'Meta Metrics', icon: BarChart3 },
+      // { path: '/ganhos', label: 'Ganhos', icon: DollarSign },
+      // { path: '/relatorios', label: 'Relatórios', icon: BarChart3 },
     ],
   },
   {

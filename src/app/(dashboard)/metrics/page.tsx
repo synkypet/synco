@@ -3,7 +3,15 @@
 import React, { useEffect, useState } from 'react';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { KineticButton } from '@/components/ui/KineticButton';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Plus, Settings, TrendingUp } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { useRouter } from 'next/navigation';
 
 interface GroupData {
   id: string;
@@ -45,71 +53,20 @@ interface SummaryData {
 }
 
 export default function SyncoMetricsPage() {
+  const router = useRouter();
   const [groups, setGroups] = useState<GroupData[]>([]);
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Modal states
+  const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
 
   // Meta Ads states
   const [metaConnection, setMetaConnection] = useState<any>(null);
-  const [metaToken, setMetaToken] = useState('');
-  const [metaAccountId, setMetaAccountId] = useState('');
-  const [metaPixelId, setMetaPixelId] = useState('');
-  const [isTestingMeta, setIsTestingMeta] = useState(false);
-  const [metaTestError, setMetaTestError] = useState<string | null>(null);
-
-  const handleTestMeta = async () => {
-    if (!metaToken || !metaAccountId) {
-      setMetaTestError("Preencha o Token e o Ad Account ID.");
-      return;
-    }
-    
-    setIsTestingMeta(true);
-    setMetaTestError(null);
-
-    try {
-      const res = await fetch('/api/synco-metrics/meta/connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accessToken: metaToken,
-          adAccountId: metaAccountId,
-          pixelId: metaPixelId
-        })
-      });
-
-      const data = await res.json();
-      setMetaToken(''); // Limpa token
-
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'Erro desconhecido na conexão Meta');
-      }
-
-      setMetaConnection(data.account);
-    } catch (err: any) {
-      setMetaTestError(err.message);
-    } finally {
-      setIsTestingMeta(false);
-    }
-  };
-
-  const handleDisconnectMeta = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/synco-metrics/meta/connection', {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        setMetaConnection(null);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [selectedPeriod, setSelectedPeriod] = useState('7d');
 
   const loadMetrics = async (isRefresh = false) => {
     try {
@@ -200,7 +157,8 @@ export default function SyncoMetricsPage() {
         alert(`Erro: ${errorData.error}`);
         return;
       }
-
+      
+      setIsAddGroupModalOpen(false);
       loadMetrics();
     } catch (err: any) {
       alert(`Erro interno: ${err.message}`);
@@ -209,11 +167,11 @@ export default function SyncoMetricsPage() {
   };
 
   const renderDeltaText = (hasSnapshot: boolean, hasDeltas: boolean, growth24h: number) => {
-    if (!hasSnapshot) return "Aguardando primeira coleta";
+    if (!hasSnapshot) return "Aguardando";
     if (!hasDeltas) return "Sem dados suficientes";
     if (growth24h === 0) return "Sem variação";
-    if (growth24h > 0) return `+${growth24h} membros`;
-    return `${growth24h} membros`;
+    if (growth24h > 0) return `+${growth24h}`;
+    return `${growth24h}`;
   };
 
   const renderDeltaColor = (growth24h: number) => {
@@ -245,263 +203,216 @@ export default function SyncoMetricsPage() {
   const limit = summary?.limit || 3;
   const monitoredGroups = summary?.monitoredGroups || [];
   
-  // Grupos que ainda não estão sendo monitorados
+  // Grupos disponíveis
   const availableGroups = groups.filter(g => !g.is_monitored);
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-12 animate-fade-in">
+    <div className="p-8 max-w-6xl mx-auto space-y-8 animate-fade-in">
       
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
         <div>
           <h1 className="text-3xl font-bold text-zinc-100 tracking-tight">SyncoMetrics</h1>
-          <p className="text-zinc-400 mt-2">Monitore o crescimento dos seus grupos e compare com suas campanhas.</p>
+          <p className="text-zinc-400 mt-2 text-sm max-w-xl">
+            A Meta mede leads/cliques. O SyncoMetrics mede membros reais. Compare os resultados da Meta Ads com entradas reais nos seus grupos.
+          </p>
+          <div className="flex items-center gap-3 mt-4 text-xs">
+            <span className="flex items-center gap-1 text-zinc-500">
+              <span className={`w-2 h-2 rounded-full ${metaConnection ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+              Meta Ads: {metaConnection ? 'Conectado' : 'Não conectado'}
+            </span>
+            <span className="text-zinc-700">•</span>
+            <span className="text-zinc-500">
+              Worker: {summary?.lastUpdatedAt ? `Última coleta às ${new Date(summary.lastUpdatedAt).toLocaleTimeString('pt-BR')}` : 'Aguardando coleta'}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-4">
+        
+        <div className="flex flex-col items-end gap-3">
+          <div className="flex items-center gap-2">
+            <select 
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+              className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange"
+            >
+              <option value="today">Hoje</option>
+              <option value="7d">Últimos 7 dias</option>
+              <option value="30d">Últimos 30 dias</option>
+              <option value="custom" disabled>Personalizado</option>
+            </select>
+            
+            <KineticButton 
+              onClick={() => loadMetrics(true)} 
+              disabled={isRefreshing}
+              className="flex items-center gap-2 bg-zinc-800 text-zinc-200 hover:text-white px-3 py-2 h-[38px]"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-kinetic-orange' : ''}`} />
+              <span className="hidden sm:inline">{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
+            </KineticButton>
+
+            <KineticButton 
+              onClick={() => router.push('/configuracoes?tab=metrics')} 
+              className="flex items-center gap-2 bg-zinc-800 text-zinc-200 hover:text-white px-3 py-2 h-[38px]"
+              title="Configurar SyncoMetrics"
+            >
+              <Settings className="w-4 h-4" />
+            </KineticButton>
+          </div>
           {lastRefreshedAt && (
             <span className="text-xs text-zinc-500 font-medium">
-              Atualizado: {lastRefreshedAt.toLocaleTimeString('pt-BR')}
+              Última atualização da tela: {lastRefreshedAt.toLocaleTimeString('pt-BR')}
             </span>
           )}
-          <KineticButton 
-            onClick={() => loadMetrics(true)} 
-            disabled={isRefreshing}
-            className="flex items-center gap-2 bg-zinc-800 text-zinc-200 hover:text-white"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-kinetic-orange' : ''}`} />
-            {isRefreshing ? 'Atualizando...' : 'Atualizar'}
-          </KineticButton>
         </div>
       </div>
 
-      {/* Bloco 2: Resumo Geral */}
+      {/* Cards Principais */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <TactileCard className="p-4">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Grupos Ativos</p>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Gasto Meta</p>
           <div className="mt-2 flex items-baseline gap-1">
-            <span className={`text-2xl font-bold ${activeCount >= limit ? 'text-kinetic-orange' : 'text-zinc-100'}`}>
-              {activeCount}
+            <span className="text-xl font-bold text-zinc-500">
+              {metaConnection ? 'Aguardando métricas' : 'Em breve'}
             </span>
-            <span className="text-zinc-500 text-sm">/ {limit}</span>
           </div>
         </TactileCard>
 
         <TactileCard className="p-4">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Membros Monitorados</p>
-          <p className="mt-2 text-2xl font-bold text-zinc-100">
-            {summary?.monitoredMembersTotal || 0}
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Leads informados (Meta)</p>
+          <p className="mt-2 text-xl font-bold text-zinc-500">
+            {metaConnection ? 'Aguardando métricas' : 'Em breve'}
           </p>
         </TactileCard>
 
         <TactileCard className="p-4">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Crescimento 24h</p>
-          <p className={`mt-2 text-2xl font-bold ${renderDeltaColor(summary?.growth24h || 0)}`}>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Entradas reais no grupo</p>
+          <p className={`mt-2 text-2xl font-bold ${summary?.growth24h && summary.growth24h > 0 ? 'text-emerald-400' : 'text-zinc-100'}`}>
             {summary?.growth24h !== undefined ? (summary.growth24h > 0 ? `+${summary.growth24h}` : summary.growth24h) : 0}
           </p>
+          <p className="text-xs text-zinc-500 mt-1">Neste período</p>
         </TactileCard>
 
-        <TactileCard className="p-4">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Última Coleta</p>
-          <p className="mt-2 text-sm font-medium text-zinc-300">
-            {summary?.lastUpdatedAt ? new Date(summary.lastUpdatedAt).toLocaleString('pt-BR') : 'Aguardando dados'}
+        <TactileCard className="p-4 border-kinetic-orange/20 bg-kinetic-orange/5">
+          <p className="text-[10px] text-kinetic-orange uppercase tracking-wider font-semibold">Custo real por membro</p>
+          <p className="mt-2 text-xl font-bold text-zinc-500">
+            Em breve
           </p>
         </TactileCard>
       </div>
 
-      {/* Bloco 1: Grupos Monitorados */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-zinc-200">Grupos Monitorados</h2>
-        {monitoredGroups.length === 0 ? (
-          <TactileCard className="p-8 text-center bg-zinc-900/50">
-            <p className="text-zinc-500">Nenhum grupo sendo monitorado no momento.</p>
-          </TactileCard>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {monitoredGroups.map(monitor => (
-              <TactileCard key={monitor.monitorId} className="p-5 ring-1 ring-kinetic-orange/30 shadow-glow-orange/10 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start mb-4 gap-2">
-                    <h3 className="font-semibold text-zinc-100 text-base line-clamp-2">{monitor.groupName}</h3>
-                    <span className="text-[10px] uppercase font-bold text-kinetic-orange bg-kinetic-orange/10 px-2 py-1 rounded-sm shrink-0">
-                      Monitorando
-                    </span>
-                  </div>
-
-                  <div className="space-y-3 mt-4">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-zinc-500">Membros:</span>
-                      <span className="text-zinc-200 font-medium">{monitor.hasSnapshot ? monitor.memberCount : '---'}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-zinc-500">Variação 24h:</span>
-                      <span className={`font-medium ${renderDeltaColor(monitor.growth24h)}`}>
-                        {renderDeltaText(monitor.hasSnapshot, monitor.hasDeltas, monitor.growth24h)}
-                      </span>
-                    </div>
-                    {monitor.hasDeltas && (
-                      <div className="flex justify-between items-center text-xs text-zinc-500">
-                        <span>Entraram: <span className="text-emerald-400">+{monitor.joined24h}</span></span>
-                        <span>Saíram: <span className="text-red-400">-{monitor.left24h}</span></span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-zinc-500">Status Worker:</span>
-                      <span className={monitor.lastPollStatus === 'failed' ? 'text-red-400' : 'text-zinc-400'}>
-                        {monitor.lastPollStatus || 'Pendente'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-zinc-800">
-                  <KineticButton 
-                    onClick={() => handleToggleMonitor(monitor.groupId, '', true, monitor.monitorId)}
-                    className="w-full bg-zinc-800 text-zinc-300 hover:text-white text-sm py-2"
-                  >
-                    Desativar Monitoramento
-                  </KineticButton>
-                </div>
-              </TactileCard>
-            ))}
+      {/* Bloco de Comparação */}
+      <TactileCard className="p-6 border-zinc-800 bg-gradient-to-br from-zinc-900/80 to-zinc-900/30">
+        <div className="flex flex-col md:flex-row gap-8 items-center justify-between">
+          <div className="flex-1">
+            <h2 className="text-xl font-semibold text-zinc-200 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-kinetic-orange" />
+              Meta Ads x Grupo Real
+            </h2>
+            <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
+              A Meta mostra o resultado do anúncio. O SyncoMetrics compara isso com a entrada real nos grupos monitorados.
+            </p>
           </div>
-        )}
-      </div>
+          
+          <div className="flex-1 grid grid-cols-2 gap-4 w-full">
+            <div className="bg-zinc-950/50 p-4 rounded-lg border border-zinc-800/50">
+              <span className="text-xs text-zinc-500 block mb-1">A Meta informou:</span>
+              <span className="text-lg font-semibold text-zinc-300">-- leads</span>
+              <span className="text-xs text-zinc-600 block mt-2">Custo/Lead: --</span>
+            </div>
+            <div className="bg-zinc-950/50 p-4 rounded-lg border border-kinetic-orange/20">
+              <span className="text-xs text-zinc-500 block mb-1">O Grupo ganhou:</span>
+              <span className="text-lg font-semibold text-emerald-400">
+                {summary?.growth24h !== undefined ? (summary.growth24h > 0 ? `+${summary.growth24h}` : summary.growth24h) : 0} membros
+              </span>
+              <span className="text-xs text-zinc-600 block mt-2">Custo real: --</span>
+            </div>
+          </div>
+        </div>
+      </TactileCard>
 
-      {/* Bloco 3: Grupos Disponíveis */}
+      {/* Grupos Monitorados Compactos */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-zinc-200">Adicionar grupos ao monitoramento</h2>
-        {availableGroups.length === 0 ? (
-          <TactileCard className="p-8 text-center bg-zinc-900/50">
-            <p className="text-zinc-500">Todos os seus grupos elegíveis já estão sendo monitorados ou não há grupos disponíveis.</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-200">Grupos Monitorados</h2>
+            <p className="text-xs text-zinc-500 mt-1">{activeCount} de {limit} grupos permitidos no seu plano</p>
+          </div>
+          
+          <Dialog open={isAddGroupModalOpen} onOpenChange={setIsAddGroupModalOpen}>
+            <DialogTrigger asChild>
+              <KineticButton disabled={activeCount >= limit} className="flex items-center gap-2 text-sm py-2 px-3">
+                <Plus className="w-4 h-4" />
+                Adicionar grupo
+              </KineticButton>
+            </DialogTrigger>
+            <DialogContent className="bg-deep-void border-zinc-800 max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="text-zinc-100">Adicionar grupo ao monitoramento</DialogTitle>
+              </DialogHeader>
+              <div className="mt-4 space-y-3">
+                {availableGroups.length === 0 ? (
+                  <p className="text-zinc-500 text-sm text-center py-8">Não há grupos elegíveis disponíveis para monitoramento.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {availableGroups.map(group => (
+                      <div key={group.id} className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg flex flex-col justify-between">
+                        <span className="text-sm text-zinc-200 font-medium truncate mb-3" title={group.name}>{group.name}</span>
+                        <KineticButton 
+                          onClick={() => handleToggleMonitor(group.id, group.channel_id, false)}
+                          className="w-full text-xs py-1.5 bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700"
+                        >
+                          Ativar
+                        </KineticButton>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {monitoredGroups.length === 0 ? (
+          <TactileCard className="p-6 text-center bg-zinc-900/30 border-dashed border-zinc-800">
+            <p className="text-zinc-500 text-sm">Nenhum grupo sendo monitorado. Adicione um grupo para começar a medir as entradas reais.</p>
           </TactileCard>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {availableGroups.map(group => (
-              <TactileCard key={group.id} className="p-4 flex flex-col justify-between">
-                <div className="mb-4">
-                  <h3 className="font-medium text-zinc-200 text-sm truncate">{group.name}</h3>
-                  <span className="text-xs text-zinc-500 mt-1 block">Inativo</span>
+            {monitoredGroups.map(monitor => (
+              <TactileCard key={monitor.monitorId} className="p-4 ring-1 ring-kinetic-orange/20 hover:ring-kinetic-orange/40 transition-all flex flex-col justify-between group">
+                <div>
+                  <div className="flex justify-between items-start gap-2 mb-2">
+                    <h3 className="font-medium text-zinc-200 text-sm line-clamp-1" title={monitor.groupName}>{monitor.groupName}</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    <div>
+                      <span className="block text-[10px] text-zinc-500">Membros</span>
+                      <span className="text-sm font-medium text-zinc-300">{monitor.hasSnapshot ? monitor.memberCount : '---'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] text-zinc-500">Variação</span>
+                      <span className={`text-sm font-medium ${renderDeltaColor(monitor.growth24h)}`}>
+                        {renderDeltaText(monitor.hasSnapshot, monitor.hasDeltas, monitor.growth24h)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                
-                <KineticButton 
-                  onClick={() => handleToggleMonitor(group.id, group.channel_id, false)}
-                  disabled={activeCount >= limit}
-                  className={`w-full text-sm py-2 ${activeCount >= limit ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  Ativar Monitoramento
-                </KineticButton>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-[10px] text-zinc-600 truncate">
+                    Última coleta: {monitor.lastSnapshotAt ? new Date(monitor.lastSnapshotAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '---'}
+                  </span>
+                  <button 
+                    onClick={() => handleToggleMonitor(monitor.groupId, '', true, monitor.monitorId)}
+                    className="text-[10px] text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity uppercase font-semibold"
+                  >
+                    Desativar
+                  </button>
+                </div>
               </TactileCard>
             ))}
           </div>
         )}
       </div>
-
-      {/* Teste de Conexão Meta Ads */}
-      <div className="mt-16 pt-8 border-t border-zinc-800/50">
-        <TactileCard className="p-8 relative overflow-hidden bg-zinc-900/30 border-zinc-800/50">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12c0-5.523-4.477-10-10-10z"/>
-            </svg>
-          </div>
-          
-          <div className="relative z-10 max-w-2xl">
-            <h2 className="text-2xl font-bold text-zinc-300 flex items-center gap-2">
-              Meta Ads <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded-sm uppercase tracking-wider font-semibold">Modo Teste (MVP)</span>
-            </h2>
-            <p className="text-zinc-500 mt-2 text-sm leading-relaxed mb-6">
-              Valide sua conexão em modo read-only. Para este teste, use um token Meta com permissão <strong>ads_read</strong> e acesso à conta de anúncios informada.
-            </p>
-
-            {metaConnection ? (
-              <div className="space-y-4 animate-fade-in">
-                <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h3 className="text-zinc-200 font-semibold flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                      Conectado
-                    </h3>
-                    <ul className="text-sm text-zinc-400 mt-2 space-y-1">
-                      <li><strong>Conta:</strong> {metaConnection.name} ({metaConnection.adAccountId})</li>
-                      <li><strong>Moeda:</strong> {metaConnection.currency}</li>
-                      {metaConnection.pixelName && (
-                        <li><strong>Pixel:</strong> {metaConnection.pixelName}</li>
-                      )}
-                      <li><strong>Último Teste:</strong> {new Date(metaConnection.lastTestedAt).toLocaleString('pt-BR')}</li>
-                    </ul>
-                  </div>
-                  <div className="flex flex-col gap-2 w-full sm:w-auto">
-                    <KineticButton 
-                      onClick={() => setMetaConnection(null)} 
-                      className="bg-zinc-800 text-zinc-300 w-full"
-                    >
-                      Trocar Conta/Token
-                    </KineticButton>
-                    <KineticButton 
-                      onClick={handleDisconnectMeta} 
-                      className="bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-900/50 w-full"
-                    >
-                      Desconectar
-                    </KineticButton>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4 animate-fade-in">
-                {metaTestError && (
-                  <div className="p-3 bg-red-900/20 border border-red-900/50 text-red-400 text-sm rounded-lg">
-                    {metaTestError}
-                  </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-1">ID da Conta de Anúncios</label>
-                    <input 
-                      type="text" 
-                      placeholder="act_123456789" 
-                      value={metaAccountId}
-                      onChange={(e) => setMetaAccountId(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-kinetic-orange transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Pixel ID (Opcional)</label>
-                    <input 
-                      type="text" 
-                      placeholder="987654321" 
-                      value={metaPixelId}
-                      onChange={(e) => setMetaPixelId(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-kinetic-orange transition-colors"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-zinc-500 mb-1">Access Token (User ou System Token)</label>
-                  <input 
-                    type="password" 
-                    placeholder="EAAB..." 
-                    value={metaToken}
-                    onChange={(e) => setMetaToken(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-kinetic-orange transition-colors font-mono"
-                  />
-                </div>
-                <div className="pt-2">
-                  <KineticButton 
-                    onClick={handleTestMeta} 
-                    disabled={isTestingMeta || !metaToken || !metaAccountId}
-                    className="flex items-center gap-2"
-                  >
-                    {isTestingMeta && <RefreshCw className="w-4 h-4 animate-spin" />}
-                    {isTestingMeta ? 'Conectando...' : 'Conectar Conta Meta Ads'}
-                  </KineticButton>
-                </div>
-              </div>
-            )}
-
-          </div>
-        </TactileCard>
-      </div>
-
     </div>
   );
 }

@@ -15,7 +15,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import {
     User as UserIcon, Building2, Clock, Users, Palette, Save, Plus,
     CheckCircle2, AlertCircle, TestTube, HelpCircle, Sparkles,
-    Shield, Send, BookOpen, Loader2, ChevronRight, Zap, RefreshCw
+    Shield, Send, BookOpen, Loader2, ChevronRight, Zap, RefreshCw, TrendingUp
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,6 +29,7 @@ import {
 } from '@/hooks/use-marketplaces';
 import { AffiliateSettingsCard } from '@/components/settings/AffiliateSettingsCard';
 import { PlanDetailsCard } from '@/components/billing/PlanDetailsCard';
+import { MetaAdsSettings } from '@/components/settings/MetaAdsSettings';
 import { useProfile } from '@/hooks/use-profile';
 import { useSendPreferences } from '@/hooks/use-send-preferences';
 import { useEffect } from 'react';
@@ -114,6 +115,7 @@ export default function ConfiguracoesPage() {
                         <TabsTrigger value="automation" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg"><Zap className="w-3.5 h-3.5" /> Automação</TabsTrigger>
                         <TabsTrigger value="billing" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg"><Shield className="w-3.5 h-3.5" /> Assinatura</TabsTrigger>
                         <TabsTrigger value="affiliates" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg">🛍️ Afiliados</TabsTrigger>
+                        <TabsTrigger value="metrics" className="text-[10px] uppercase font-black tracking-widest gap-2 rounded-lg"><TrendingUp className="w-3.5 h-3.5" /> SyncoMetrics</TabsTrigger>
                     </TabsList>
     
                     <TabsContent value="profile" className="space-y-6 animate-in fade-in-50 duration-300">
@@ -303,6 +305,12 @@ export default function ConfiguracoesPage() {
                                     </p>
                                 </div>
                             </Card>
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="metrics" className="animate-in fade-in-50 duration-300">
+                        <div className="grid md:grid-cols-2 gap-6 max-w-4xl">
+                            <MetaAdsSettings />
                         </div>
                     </TabsContent>
 
