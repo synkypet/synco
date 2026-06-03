@@ -29,7 +29,6 @@ export async function GET(request: Request) {
         id,
         name,
         remote_id,
-        members_count,
         channel_id,
         sm_monitored_groups (
           id,
@@ -61,7 +60,6 @@ export async function GET(request: Request) {
       return {
         id: g.id,
         name: g.name || 'Grupo sem nome',
-        members_count: g.members_count || 0,
         channel_id: g.channel_id,
         remote_id: g.remote_id,
         monitor_id: activeMonitor?.id || null,

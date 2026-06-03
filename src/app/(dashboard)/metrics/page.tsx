@@ -7,7 +7,6 @@ import { KineticButton } from '@/components/ui/KineticButton';
 interface GroupData {
   id: string;
   name: string;
-  members_count: number;
   channel_id: string;
   remote_id: string;
   monitor_id: string | null;
@@ -193,21 +192,22 @@ export default function SyncoMetricsPage() {
               <TactileCard key={group.id} className={`p-5 transition-all duration-300 ${group.is_monitored ? 'ring-1 ring-kinetic-orange/30 shadow-glow-orange/20' : ''}`}>
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="font-semibold text-zinc-100 text-lg truncate max-w-[200px]">{group.name}</h3>
+                    <h3 className="font-semibold text-zinc-100 text-lg truncate max-w-[250px]">{group.name}</h3>
                     <p className="text-xs text-zinc-500 mt-1">ID: {group.remote_id || 'N/A'}</p>
                   </div>
-                  <div className="bg-deep-void px-3 py-1 rounded-full shadow-skeuo-pressed">
-                    <span className="text-sm font-medium text-zinc-300">{group.members_count} <span className="text-zinc-600 text-xs">membros</span></span>
-                  </div>
+                  {/* Badge de membros removido para otimização e limpeza visual conforme regras. */}
                 </div>
 
                 <div className="flex justify-between items-center mt-6">
                   <div>
                     {group.is_monitored ? (
-                      <span className="text-xs font-medium text-kinetic-orange flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-kinetic-orange shadow-glow-orange" />
-                        Monitorando
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-kinetic-orange flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-kinetic-orange shadow-glow-orange" />
+                          Monitorando
+                        </span>
+                        <span className="text-[10px] text-zinc-500">Membros: aguardando worker</span>
+                      </div>
                     ) : (
                       <span className="text-xs font-medium text-zinc-500">Inativo</span>
                     )}
