@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { KineticButton } from '@/components/ui/KineticButton';
+import { RefreshCw } from 'lucide-react';
 
 interface GroupData {
   id: string;
@@ -47,11 +48,17 @@ export default function SyncoMetricsPage() {
   const [groups, setGroups] = useState<GroupData[]>([]);
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const loadMetrics = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setIsRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
 
       const [groupsRes, summaryRes] = await Promise.all([
@@ -74,15 +81,23 @@ export default function SyncoMetricsPage() {
 
       setGroups(groupsData.groups);
       setSummary(summaryData);
+      setLastRefreshedAt(new Date());
     } catch (err: any) {
       setError(err.message);
+      if (isRefresh) {
+        alert("Não foi possível atualizar as métricas agora.");
+      }
     } finally {
-      setLoading(false);
+      if (isRefresh) {
+        setIsRefreshing(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchData();
+    loadMetrics();
   }, []);
 
   const handleToggleMonitor = async (groupId: string, channelId: string, isCurrentlyMonitored: boolean, monitorId?: string | null) => {
@@ -117,10 +132,10 @@ export default function SyncoMetricsPage() {
         return;
       }
 
-      fetchData();
+      loadMetrics();
     } catch (err: any) {
       alert(`Erro interno: ${err.message}`);
-      fetchData();
+      loadMetrics();
     }
   };
 
@@ -172,6 +187,21 @@ export default function SyncoMetricsPage() {
         <div>
           <h1 className="text-3xl font-bold text-zinc-100 tracking-tight">SyncoMetrics</h1>
           <p className="text-zinc-400 mt-2">Monitore o crescimento dos seus grupos e compare com suas campanhas.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          {lastRefreshedAt && (
+            <span className="text-xs text-zinc-500 font-medium">
+              Atualizado: {lastRefreshedAt.toLocaleTimeString('pt-BR')}
+            </span>
+          )}
+          <KineticButton 
+            onClick={() => loadMetrics(true)} 
+            disabled={isRefreshing}
+            className="flex items-center gap-2 bg-zinc-800 text-zinc-200 hover:text-white"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-kinetic-orange' : ''}`} />
+            {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+          </KineticButton>
         </div>
       </div>
 
