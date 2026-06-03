@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     if (metaData.error) {
       console.error('Meta API Error:', metaData.error);
       if (metaData.error.code === 190) {
-        return NextResponse.json({ error: 'Sua conexão Meta expirou. Vá em Configurações → SyncoMetrics e conecte novamente.' }, { status: 401 });
+        return NextResponse.json({ error: 'Sua conexão Meta expirou. Gere um novo token estendido e reconecte em Configurações → SyncoMetrics.' }, { status: 401 });
       }
       return NextResponse.json({ error: 'Erro ao consultar campanhas da Meta' }, { status: 500 });
     }

@@ -98,9 +98,18 @@ export function MetaAdsSettings() {
         <TrendingUp className="w-5 h-5 text-kinetic-orange" />
         <h3 className="font-bold text-lg font-headline italic">Conexão Meta Ads</h3>
       </div>
-      <p className="text-[11px] text-white/30 uppercase tracking-widest mb-8 italic leading-relaxed">
+      <p className="text-[11px] text-white/30 uppercase tracking-widest mb-4 italic leading-relaxed">
         Integração com a Meta para cruzar gastos em anúncios com o crescimento real dos seus grupos no SyncoMetrics.
       </p>
+
+      <div className="p-4 bg-zinc-900/40 border border-zinc-800/60 rounded-xl mb-8 max-w-3xl">
+        <p className="text-sm text-zinc-400 leading-relaxed">
+          Para maior estabilidade, gere um token com permissão <strong className="text-zinc-300">ads_read</strong> e use a opção <strong>Estender token de acesso</strong> no Meta Developers. Tokens curtos podem expirar rapidamente.
+        </p>
+        <p className="text-xs text-zinc-600 mt-2">
+          Futuro: conexão oficial via OAuth para usuários SaaS externos.
+        </p>
+      </div>
 
       <div className="p-6 md:p-8 rounded-[24px] bg-black/20 border border-white/5 shadow-skeuo-pressed">
         {metaConnection ? (

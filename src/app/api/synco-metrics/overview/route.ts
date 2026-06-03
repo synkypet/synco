@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
             if (metaData.error) {
               console.error('Meta API Error:', metaData.error);
               if (metaData.error.code === 190) {
-                 responseData.meta.error = 'Sua conexão Meta expirou. Vá em Configurações → SyncoMetrics e reconecte.';
+                 responseData.meta.error = 'Sua conexão Meta expirou. Gere um novo token estendido e reconecte em Configurações → SyncoMetrics.';
               } else {
                  responseData.meta.error = 'Erro ao consultar Meta: ' + metaData.error.message;
               }
