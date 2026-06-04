@@ -465,13 +465,13 @@ export default function SyncoMetricsPage() {
                       <span className="font-semibold text-zinc-300">{formatNumber(monitor.meta.leads)}</span>
                     </div>
                     <div className="bg-zinc-950/50 p-2 rounded border border-kinetic-orange/20">
-                      <span className="block text-zinc-500 mb-1">Entradas Reais</span>
-                      <span className={`font-semibold ${monitor.group.estimatedJoined > 0 ? 'text-emerald-400' : 'text-zinc-300'}`}>
-                        {monitor.group.estimatedJoined > 0 ? `+${monitor.group.estimatedJoined}` : monitor.group.estimatedJoined}
+                      <span className="block text-zinc-500 mb-1">Crescimento Líquido</span>
+                      <span className={`font-semibold ${monitor.group.netGrowth > 0 ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                        {monitor.group.netGrowth > 0 ? `+${monitor.group.netGrowth}` : monitor.group.netGrowth}
                       </span>
                     </div>
                     <div className="bg-zinc-950/50 p-2 rounded border border-kinetic-orange/20">
-                      <span className="block text-zinc-500 mb-1">Custo/Membro</span>
+                      <span className="block text-zinc-500 mb-1">Custo por Membro Líq.</span>
                       <span className="font-semibold text-zinc-300">{formatCurrency(monitor.comparison.realCostPerMember)}</span>
                     </div>
                   </div>
@@ -588,11 +588,13 @@ export default function SyncoMetricsPage() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between"><span className="text-zinc-500">Grupo</span><span className="text-zinc-300 truncate max-w-[150px] text-right" title={selectedMonitor.groupName}>{selectedMonitor.groupName}</span></div>
                       <div className="flex justify-between"><span className="text-zinc-500">Membros Atuais</span><span className="text-zinc-300">{formatNumber(selectedMonitor.group.currentMembers)}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">Entradas Estimadas</span><span className="text-emerald-400 font-medium">{selectedMonitor.group.estimatedJoined > 0 ? `+${selectedMonitor.group.estimatedJoined}` : selectedMonitor.group.estimatedJoined}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">Saídas Estimadas</span><span className="text-red-400">-{selectedMonitor.group.estimatedLeft}</span></div>
-                      <div className="flex justify-between pt-2 mt-2 border-t border-zinc-800"><span className="text-zinc-500">Crescimento Líquido</span><span className="font-semibold text-zinc-200">{formatNumber(selectedMonitor.group.netGrowth)}</span></div>
+                      <div className="flex justify-between"><span className="text-zinc-500">Entradas Líquidas Estimadas</span><span className="text-emerald-400 font-medium">{selectedMonitor.group.estimatedJoined > 0 ? `+${selectedMonitor.group.estimatedJoined}` : selectedMonitor.group.estimatedJoined}</span></div>
+                      <div className="flex justify-between"><span className="text-zinc-500">Saídas Líquidas Estimadas</span><span className="text-red-400">-{selectedMonitor.group.estimatedLeft}</span></div>
+                      <div className="flex justify-between pt-2 mt-2 border-t border-zinc-800"><span className="text-zinc-500">Saldo do Período</span><span className="font-semibold text-zinc-200">{formatNumber(selectedMonitor.group.netGrowth)}</span></div>
                     </div>
-                    <p className="text-[10px] text-zinc-600 mt-4 text-center">Entradas e saídas são estimativas baseadas na variação capturada pelos snapshots regulares.</p>
+                    <p className="text-[10px] text-zinc-600 mt-4 text-center">
+                      Os valores representam a variação líquida de membros entre coletas. Se entradas e saídas ocorrerem simultaneamente no mesmo intervalo, apenas o saldo final é detectado.
+                    </p>
                   </div>
                 </div>
 
@@ -603,6 +605,11 @@ export default function SyncoMetricsPage() {
                     <div className="text-sm text-zinc-500">Carregando histórico...</div>
                   ) : selectedMonitor.timeline?.length > 0 ? (
                     <div className="space-y-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                      <div className="bg-kinetic-orange/10 p-3 rounded-lg border border-kinetic-orange/20 mb-4">
+                        <p className="text-[10px] text-kinetic-orange">
+                          Os valores representam a variação líquida de membros entre coletas. Se entradas e saídas ocorrerem simultaneamente no mesmo intervalo, apenas o saldo final é detectado.
+                        </p>
+                      </div>
                       {Object.entries(
                         selectedMonitor.timeline.reduce((acc: any, t: any) => {
                           const d = new Date(t.to);
@@ -624,9 +631,9 @@ export default function SyncoMetricsPage() {
                               const isMixed = isEntry && isExit;
                               
                               let desc = '';
-                              if (isMixed) desc = `+${ev.estimatedJoined} ent. / -${ev.estimatedLeft} saí.`;
-                              else if (isEntry) desc = `+${ev.estimatedJoined} entradas estimadas`;
-                              else if (isExit) desc = `-${ev.estimatedLeft} saídas estimadas`;
+                              if (isMixed) desc = `saldo +${ev.estimatedJoined} / saldo -${ev.estimatedLeft}`;
+                              else if (isEntry) desc = `saldo +${ev.estimatedJoined} membro(s)`;
+                              else if (isExit) desc = `saldo -${ev.estimatedLeft} membro(s)`;
 
                               return (
                                 <div key={idx} className="flex items-center gap-3 text-xs bg-zinc-900/50 p-2 rounded border border-zinc-800">
