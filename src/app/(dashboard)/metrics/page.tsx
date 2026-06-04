@@ -14,6 +14,11 @@ import {
 } from "@/components/ui/dialog";
 import { useRouter } from 'next/navigation';
 
+function LoadingValue({ loading, value, className = "h-5 w-16" }: { loading: boolean, value: React.ReactNode, className?: string }) {
+  if (loading) return <div className={`bg-zinc-800/60 animate-pulse rounded ${className}`} />;
+  return <>{value}</>;
+}
+
 export default function SyncoMetricsPage() {
   const router = useRouter();
   const [monitoredGroups, setMonitoredGroups] = useState<any[]>([]);
@@ -633,15 +638,15 @@ export default function SyncoMetricsPage() {
                   <TactileCard className="p-4 border-kinetic-orange/30 bg-kinetic-orange/5 flex justify-between items-center">
                     <div>
                       <span className="text-xs text-kinetic-orange block mb-1 uppercase font-semibold">Custo Real por Membro</span>
-                      <span className="text-2xl font-bold text-zinc-100">{formatCurrency(selectedMonitor.comparison?.realCostPerMember)}</span>
+                      <span className="text-2xl font-bold text-zinc-100"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.comparison?.realCostPerMember)} className="h-8 w-32" /></span>
                     </div>
                     <div className="text-right">
                       <span className="text-xs text-zinc-500 block mb-1">Diferença Meta x Real</span>
-                      <span className="text-lg font-semibold text-zinc-300">{formatNumber(selectedMonitor.comparison?.difference)}</span>
+                      <span className="text-lg font-semibold text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.comparison?.difference)} className="h-7 w-20 inline-block" /></span>
                     </div>
                     <div className="text-right">
                       <span className="text-xs text-zinc-500 block mb-1">Taxa Lead → Membro</span>
-                      <span className="text-lg font-semibold text-emerald-400">{formatNumber(selectedMonitor.comparison?.leadToMemberRate)}%</span>
+                      <span className="text-lg font-semibold text-emerald-400"><LoadingValue loading={detailsLoading} value={`${formatNumber(selectedMonitor.comparison?.leadToMemberRate)}%`} className="h-7 w-16 inline-block" /></span>
                     </div>
                   </TactileCard>
 
@@ -651,14 +656,14 @@ export default function SyncoMetricsPage() {
                       <h4 className="text-sm font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Desempenho Meta Ads</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between"><span className="text-zinc-500">Campanha</span><span className="text-zinc-300 truncate max-w-[150px] text-right" title={selectedMonitor.campaignName}>{selectedMonitor.campaignName}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Gasto Total</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta?.spend)}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Leads Informados</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta?.leads)}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Custo por Lead</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta?.costPerLead)}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Cliques</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta?.clicks)}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Impressões</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta?.impressions)}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">CTR</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta?.ctr)}%</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">CPC</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta?.cpc)}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">CPM</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta?.cpm)}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Gasto Total</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.spend)} /></span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Leads Informados</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.meta?.leads)} /></span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Custo por Lead</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.costPerLead)} /></span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Cliques</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.meta?.clicks)} /></span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Impressões</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.meta?.impressions)} /></span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">CTR</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={`${formatNumber(selectedMonitor.meta?.ctr)}%`} /></span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">CPC</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.cpc)} /></span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">CPM</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.cpm)} /></span></div>
                       </div>
                     </div>
 
@@ -667,10 +672,10 @@ export default function SyncoMetricsPage() {
                       <h4 className="text-sm font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Crescimento Grupo</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between"><span className="text-zinc-500">Grupo</span><span className="text-zinc-300 truncate max-w-[150px] text-right" title={selectedMonitor.groupName}>{selectedMonitor.groupName}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Membros Atuais</span><span className="text-zinc-300">{formatNumber(selectedMonitor.group?.currentMembers)}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Entradas Líquidas Estimadas</span><span className="text-emerald-400 font-medium">{selectedMonitor.group?.estimatedJoined > 0 ? `+${selectedMonitor.group.estimatedJoined}` : selectedMonitor.group?.estimatedJoined}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Saídas Líquidas Estimadas</span><span className="text-red-400">-{selectedMonitor.group?.estimatedLeft}</span></div>
-                        <div className="flex justify-between pt-2 mt-2 border-t border-zinc-800"><span className="text-zinc-500">Saldo do Período</span><span className="font-semibold text-zinc-200">{formatNumber(selectedMonitor.group?.netGrowth)}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Membros Atuais</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.group?.currentMembers)} /></span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Entradas Líquidas Estimadas</span><span className="text-emerald-400 font-medium"><LoadingValue loading={detailsLoading} value={selectedMonitor.group?.estimatedJoined > 0 ? `+${selectedMonitor.group.estimatedJoined}` : selectedMonitor.group?.estimatedJoined} /></span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Saídas Líquidas Estimadas</span><span className="text-red-400"><LoadingValue loading={detailsLoading} value={`-${selectedMonitor.group?.estimatedLeft}`} /></span></div>
+                        <div className="flex justify-between pt-2 mt-2 border-t border-zinc-800"><span className="text-zinc-500">Saldo do Período</span><span className="font-semibold text-zinc-200"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.group?.netGrowth)} /></span></div>
                       </div>
                       <p className="text-[10px] text-zinc-600 mt-4 text-center">
                         Os valores representam a variação líquida de membros entre coletas. Se entradas e saídas ocorrerem simultaneamente no mesmo intervalo, apenas o saldo final é detectado.
@@ -750,13 +755,21 @@ export default function SyncoMetricsPage() {
                     <p className="text-[10px] text-zinc-500 mb-4 bg-zinc-900/50 p-2 rounded border border-zinc-800">
                       Eventos da Meta podem representar ações diferentes e podem ter duplicidade entre categorias. Use Leads informados pela Meta como métrica principal de comparação.
                     </p>
-                    {selectedMonitor.meta?.events && selectedMonitor.meta.events.length > 0 ? (
+                    {detailsLoading ? (
+                      <div className="space-y-3">
+                        <div className="h-20 bg-zinc-800/30 animate-pulse rounded-lg border border-zinc-800/50" />
+                        <div className="h-20 bg-zinc-800/30 animate-pulse rounded-lg border border-zinc-800/50" />
+                        <div className="h-20 bg-zinc-800/30 animate-pulse rounded-lg border border-zinc-800/50" />
+                      </div>
+                    ) : selectedMonitor.meta?.events && selectedMonitor.meta.events.length > 0 ? (
                       <div className="space-y-3">
                         {selectedMonitor.meta.events.map((ev: any, idx: number) => (
                           <div key={idx} className="flex flex-col p-3 bg-zinc-900 rounded-lg border border-zinc-800">
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <span className="text-sm font-medium text-zinc-200">{ev.actionType}</span>
-                              <span className="font-semibold text-zinc-300 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-800">
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                              <div className="min-w-0 flex-1">
+                                <span className="text-sm font-medium text-zinc-200 truncate block" title={ev.actionType}>{ev.actionType}</span>
+                              </div>
+                              <span className="shrink-0 font-semibold text-zinc-300 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-800">
                                 {formatNumber(ev.value)}
                               </span>
                             </div>
