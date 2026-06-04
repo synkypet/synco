@@ -26,7 +26,8 @@ export default function SyncoMetricsPage() {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
-  const [selectedPeriod, setSelectedPeriod] = useState('last_7d');
+  const [detailsPeriod, setDetailsPeriod] = useState('last_7d');
+  const [showEventsPanel, setShowEventsPanel] = useState(false);
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -63,7 +64,7 @@ export default function SyncoMetricsPage() {
       const [summaryRes, campaignsRes, monitorsRes, groupsRes] = await Promise.all([
         fetch('/api/synco-metrics/summary'),
         fetch('/api/synco-metrics/meta/campaigns'),
-        fetch(`/api/synco-metrics/monitors?period=${selectedPeriod}`),
+        fetch('/api/synco-metrics/monitors?period=last_7d'),
         fetch('/api/synco-metrics/groups')
       ]);
 
@@ -96,7 +97,21 @@ export default function SyncoMetricsPage() {
 
   useEffect(() => {
     loadMetrics();
-  }, [selectedPeriod]);
+  }, []);
+
+  const fetchMonitorDetails = async (monitorId: string, period: string) => {
+    setDetailsLoading(true);
+    try {
+      const res = await fetch(`/api/synco-metrics/monitors/${monitorId}/details?period=${period}`);
+      if (!res.ok) throw new Error('Erro ao buscar detalhes');
+      const data = await res.json();
+      setSelectedMonitor(data);
+    } catch (e: any) {
+      showFeedback(e.message, 'error');
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
 
   // Handle UX Reset when closing create modal
   useEffect(() => {
@@ -288,15 +303,7 @@ export default function SyncoMetricsPage() {
         
         <div className="flex flex-col items-end gap-3">
           <div className="flex items-center gap-2">
-            <select 
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange h-[38px]"
-            >
-              <option value="today">Hoje</option>
-              <option value="last_7d">Últimos 7 dias</option>
-              <option value="last_30d">Últimos 30 dias</option>
-            </select>
+
             
             <KineticButton 
               onClick={() => loadMetrics(true)} 
@@ -526,19 +533,9 @@ export default function SyncoMetricsPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                   <button 
-                    onClick={async () => {
+                    onClick={() => {
                       setSelectedMonitor(monitor);
-                      setDetailsLoading(true);
-                      try {
-                        const res = await fetch(`/api/synco-metrics/monitors/${monitor.id}/details?period=${selectedPeriod}`);
-                        if (!res.ok) throw new Error('Erro ao buscar detalhes');
-                        const data = await res.json();
-                        setSelectedMonitor(data);
-                      } catch (e: any) {
-                        showFeedback(e.message, 'error');
-                      } finally {
-                        setDetailsLoading(false);
-                      }
+                      fetchMonitorDetails(monitor.id, detailsPeriod);
                     }}
                     className="text-[11px] font-semibold text-kinetic-orange hover:text-white transition-colors flex items-center gap-1 uppercase tracking-wide"
                   >
@@ -553,195 +550,234 @@ export default function SyncoMetricsPage() {
 
       {/* Modal Detalhes */}
       <Dialog open={!!selectedMonitor} onOpenChange={(open) => !open && setSelectedMonitor(null)}>
-        <DialogContent className="bg-deep-void border-zinc-800 max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className={`bg-deep-void border-zinc-800 max-h-[90vh] overflow-hidden flex flex-col p-0 transition-all duration-300 w-full ${showEventsPanel ? 'max-w-5xl' : 'max-w-3xl'}`}>
           {selectedMonitor && (
             <>
-              <DialogHeader>
-                <DialogTitle className="text-zinc-100 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-kinetic-orange" />
-                  Detalhes do Monitoramento
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Exibe informações detalhadas do crescimento do grupo comparado à campanha da Meta.
-                </DialogDescription>
-                <div className="space-y-1 mt-2">
-                  <p className="text-sm font-medium text-zinc-300">
-                    {selectedMonitor.monitorName || selectedMonitor.monitor?.name}
-                  </p>
+              {/* HEADER */}
+              <div className="p-6 pb-4 border-b border-zinc-800 shrink-0">
+                <DialogHeader>
+                  <DialogTitle className="text-zinc-100 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-kinetic-orange" />
+                    Detalhes do Monitoramento
+                  </DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Exibe informações detalhadas do crescimento do grupo comparado à campanha da Meta.
+                  </DialogDescription>
+                  <div className="space-y-1 mt-2">
+                    <p className="text-sm font-medium text-zinc-300">
+                      {selectedMonitor.monitorName || selectedMonitor.monitor?.name}
+                    </p>
+                    
+                    {selectedMonitor.monitor?.baselineAt ? (
+                      <p className="text-xs text-zinc-400 bg-zinc-900 p-2 rounded border border-zinc-800 mt-2">
+                        Este monitoramento iniciou em <span className="text-zinc-200">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(selectedMonitor.monitor.baselineAt))}</span>. 
+                        Os resultados consideram apenas movimentos detectados após esse início.{' '}
+                        {selectedMonitor.monitor.baselineMemberCount !== null 
+                          ? `Grupo tinha ${selectedMonitor.monitor.baselineMemberCount} membros no início.` 
+                          : 'Aguardando primeira coleta para definir o ponto inicial.'}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-zinc-500">Carregando baseline...</p>
+                    )}
+                  </div>
                   
-                  {selectedMonitor.monitor?.baselineAt ? (
-                    <p className="text-xs text-zinc-400 bg-zinc-900 p-2 rounded border border-zinc-800 mt-2">
-                      Este monitoramento iniciou em <span className="text-zinc-200">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(selectedMonitor.monitor.baselineAt))}</span>. 
-                      Os resultados consideram apenas movimentos detectados após esse início.{' '}
-                      {selectedMonitor.monitor.baselineMemberCount !== null 
-                        ? `Grupo tinha ${selectedMonitor.monitor.baselineMemberCount} membros no início.` 
-                        : 'Aguardando primeira coleta para definir o ponto inicial.'}
-                    </p>
-                  ) : (
-                    <p className="text-[10px] text-zinc-500">Carregando baseline...</p>
-                  )}
-                </div>
-                
-                <div className="mt-4 flex justify-end">
-                  <button
-                    onClick={handleExportCSV}
-                    disabled={isExporting}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-zinc-800 text-zinc-200 hover:bg-zinc-700 transition-colors disabled:opacity-50"
-                  >
-                    {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                    {isExporting ? 'Exportando...' : 'Exportar CSV'}
-                  </button>
-                </div>
-              </DialogHeader>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-4 bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-400 font-medium">Período Meta:</span>
+                      <select 
+                        value={detailsPeriod}
+                        onChange={(e) => {
+                          setDetailsPeriod(e.target.value);
+                          fetchMonitorDetails(selectedMonitor.monitor?.id || selectedMonitor.id, e.target.value);
+                        }}
+                        className="bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs rounded px-2 py-1.5 outline-none focus:border-kinetic-orange"
+                      >
+                        <option value="today">Hoje</option>
+                        <option value="last_7d">Últimos 7 dias</option>
+                        <option value="last_30d">Últimos 30 dias</option>
+                      </select>
+                      <button 
+                        onClick={() => fetchMonitorDetails(selectedMonitor.monitor?.id || selectedMonitor.id, detailsPeriod)}
+                        disabled={detailsLoading}
+                        className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded transition-colors disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {detailsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                        Atualizar
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowEventsPanel(!showEventsPanel)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors border ${showEventsPanel ? 'bg-kinetic-orange/10 border-kinetic-orange/30 text-kinetic-orange' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`}
+                      >
+                        Eventos Meta / Pixel
+                      </button>
+                      <button
+                        onClick={handleExportCSV}
+                        disabled={isExporting}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium bg-zinc-800 border border-zinc-700 text-zinc-200 hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                      >
+                        {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                        Exportar CSV
+                      </button>
+                    </div>
+                  </div>
+                </DialogHeader>
+              </div>
 
-              <div className="mt-4 space-y-6">
-                
-                {/* Comparação */}
-                <TactileCard className="p-4 border-kinetic-orange/30 bg-kinetic-orange/5 flex justify-between items-center">
-                  <div>
-                    <span className="text-xs text-kinetic-orange block mb-1 uppercase font-semibold">Custo Real por Membro</span>
-                    <span className="text-2xl font-bold text-zinc-100">{formatCurrency(selectedMonitor.comparison.realCostPerMember)}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs text-zinc-500 block mb-1">Diferença Meta x Real</span>
-                    <span className="text-lg font-semibold text-zinc-300">{formatNumber(selectedMonitor.comparison.difference)}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs text-zinc-500 block mb-1">Taxa Lead → Membro</span>
-                    <span className="text-lg font-semibold text-emerald-400">{formatNumber(selectedMonitor.comparison.leadToMemberRate)}%</span>
-                  </div>
-                </TactileCard>
+              {/* BODY: Flex row for main and side panel */}
+              <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
+                {/* Main Body */}
+                <div className="flex-1 p-6 space-y-6 overflow-y-auto min-h-0">
+                  {/* Comparação */}
+                  <TactileCard className="p-4 border-kinetic-orange/30 bg-kinetic-orange/5 flex justify-between items-center">
+                    <div>
+                      <span className="text-xs text-kinetic-orange block mb-1 uppercase font-semibold">Custo Real por Membro</span>
+                      <span className="text-2xl font-bold text-zinc-100">{formatCurrency(selectedMonitor.comparison?.realCostPerMember)}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-zinc-500 block mb-1">Diferença Meta x Real</span>
+                      <span className="text-lg font-semibold text-zinc-300">{formatNumber(selectedMonitor.comparison?.difference)}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-zinc-500 block mb-1">Taxa Lead → Membro</span>
+                      <span className="text-lg font-semibold text-emerald-400">{formatNumber(selectedMonitor.comparison?.leadToMemberRate)}%</span>
+                    </div>
+                  </TactileCard>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Bloco Meta */}
-                  <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
-                    <h4 className="text-sm font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Desempenho Meta Ads</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span className="text-zinc-500">Campanha</span><span className="text-zinc-300 truncate max-w-[150px] text-right" title={selectedMonitor.campaignName}>{selectedMonitor.campaignName}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">Gasto Total</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta.spend)}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">Leads Informados</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta.leads)}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">Custo por Lead</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta.costPerLead)}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">Cliques</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta.clicks)}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">Impressões</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta.impressions)}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">CTR</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta.ctr)}%</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">CPC</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta.cpc)}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">CPM</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta.cpm)}</span></div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Bloco Meta */}
+                    <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
+                      <h4 className="text-sm font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Desempenho Meta Ads</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between"><span className="text-zinc-500">Campanha</span><span className="text-zinc-300 truncate max-w-[150px] text-right" title={selectedMonitor.campaignName}>{selectedMonitor.campaignName}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Gasto Total</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta?.spend)}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Leads Informados</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta?.leads)}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Custo por Lead</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta?.costPerLead)}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Cliques</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta?.clicks)}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Impressões</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta?.impressions)}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">CTR</span><span className="text-zinc-300">{formatNumber(selectedMonitor.meta?.ctr)}%</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">CPC</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta?.cpc)}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">CPM</span><span className="text-zinc-300">{formatCurrency(selectedMonitor.meta?.cpm)}</span></div>
+                      </div>
+                    </div>
+
+                    {/* Bloco Grupo */}
+                    <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
+                      <h4 className="text-sm font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Crescimento Grupo</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between"><span className="text-zinc-500">Grupo</span><span className="text-zinc-300 truncate max-w-[150px] text-right" title={selectedMonitor.groupName}>{selectedMonitor.groupName}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Membros Atuais</span><span className="text-zinc-300">{formatNumber(selectedMonitor.group?.currentMembers)}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Entradas Líquidas Estimadas</span><span className="text-emerald-400 font-medium">{selectedMonitor.group?.estimatedJoined > 0 ? `+${selectedMonitor.group.estimatedJoined}` : selectedMonitor.group?.estimatedJoined}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Saídas Líquidas Estimadas</span><span className="text-red-400">-{selectedMonitor.group?.estimatedLeft}</span></div>
+                        <div className="flex justify-between pt-2 mt-2 border-t border-zinc-800"><span className="text-zinc-500">Saldo do Período</span><span className="font-semibold text-zinc-200">{formatNumber(selectedMonitor.group?.netGrowth)}</span></div>
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-4 text-center">
+                        Os valores representam a variação líquida de membros entre coletas. Se entradas e saídas ocorrerem simultaneamente no mesmo intervalo, apenas o saldo final é detectado.
+                      </p>
                     </div>
                   </div>
 
-                  {/* Bloco Grupo */}
-                  <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
-                    <h4 className="text-sm font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Crescimento Grupo</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span className="text-zinc-500">Grupo</span><span className="text-zinc-300 truncate max-w-[150px] text-right" title={selectedMonitor.groupName}>{selectedMonitor.groupName}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">Membros Atuais</span><span className="text-zinc-300">{formatNumber(selectedMonitor.group.currentMembers)}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">Entradas Líquidas Estimadas</span><span className="text-emerald-400 font-medium">{selectedMonitor.group.estimatedJoined > 0 ? `+${selectedMonitor.group.estimatedJoined}` : selectedMonitor.group.estimatedJoined}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-500">Saídas Líquidas Estimadas</span><span className="text-red-400">-{selectedMonitor.group.estimatedLeft}</span></div>
-                      <div className="flex justify-between pt-2 mt-2 border-t border-zinc-800"><span className="text-zinc-500">Saldo do Período</span><span className="font-semibold text-zinc-200">{formatNumber(selectedMonitor.group.netGrowth)}</span></div>
-                    </div>
-                    <p className="text-[10px] text-zinc-600 mt-4 text-center">
-                      Os valores representam a variação líquida de membros entre coletas. Se entradas e saídas ocorrerem simultaneamente no mesmo intervalo, apenas o saldo final é detectado.
-                    </p>
-                  </div>
-                </div>
+                  {/* Linha do Tempo */}
+                  <div className="mt-6 pt-6 border-t border-zinc-800">
+                    <h4 className="text-sm font-semibold text-zinc-200 mb-4">Linha do Tempo de Crescimento</h4>
+                    {detailsLoading ? (
+                      <div className="text-sm text-zinc-500">Carregando histórico...</div>
+                    ) : selectedMonitor.timeline?.length > 0 ? (
+                      <div className="space-y-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="bg-kinetic-orange/10 p-3 rounded-lg border border-kinetic-orange/20 mb-4">
+                          <p className="text-[10px] text-kinetic-orange">
+                            Os valores representam a variação líquida de membros entre coletas. Se entradas e saídas ocorrerem simultaneamente no mesmo intervalo, apenas o saldo final é detectado.
+                          </p>
+                        </div>
+                        {Object.entries(
+                          selectedMonitor.timeline.reduce((acc: any, t: any) => {
+                            const d = new Date(t.to);
+                            const key = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(d);
+                            if (!acc[key]) acc[key] = [];
+                            acc[key].push(t);
+                            return acc;
+                          }, {})
+                        ).map(([date, events]: any) => (
+                          <div key={date}>
+                            <h5 className="text-xs font-semibold text-zinc-400 mb-2">{date}</h5>
+                            <div className="space-y-2">
+                              {events.map((ev: any, idx: number) => {
+                                const timeFrom = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(ev.from));
+                                const timeTo = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(ev.to));
+                                
+                                const isEntry = ev.estimatedJoined > 0;
+                                const isExit = ev.estimatedLeft > 0;
+                                const isMixed = isEntry && isExit;
+                                
+                                let desc = '';
+                                if (isMixed) desc = `saldo +${ev.estimatedJoined} / saldo -${ev.estimatedLeft}`;
+                                else if (isEntry) desc = `saldo +${ev.estimatedJoined} membro(s)`;
+                                else if (isExit) desc = `saldo -${ev.estimatedLeft} membro(s)`;
 
-                {/* Eventos Meta / Pixel */}
-                <div className="mt-6 pt-6 border-t border-zinc-800">
-                  <h4 className="text-sm font-semibold text-zinc-200 mb-2">Eventos Meta / Pixel</h4>
-                  <p className="text-[10px] text-zinc-500 mb-4 bg-zinc-900/50 p-2 rounded border border-zinc-800">
-                    Eventos da Meta podem representar ações diferentes e podem ter duplicidade entre categorias. Use Leads informados pela Meta como métrica principal de comparação.
-                  </p>
-                  {selectedMonitor.meta.events && selectedMonitor.meta.events.length > 0 ? (
-                    <div className="space-y-3">
-                      {selectedMonitor.meta.events.map((ev: any, idx: number) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-zinc-900 rounded-lg border border-zinc-800">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-zinc-200">{ev.actionType}</span>
-                              {ev.isLeadCandidate && (
-                                <span className="text-[9px] bg-kinetic-orange/20 text-kinetic-orange px-1.5 py-0.5 rounded uppercase font-semibold">Usado como Lead</span>
-                              )}
+                                return (
+                                  <div key={idx} className="flex items-center gap-3 text-xs bg-zinc-900/50 p-2 rounded border border-zinc-800">
+                                    <span className="text-zinc-500 w-24 shrink-0">Entre {timeFrom} e {timeTo}</span>
+                                    <span className={`font-medium ${isEntry ? 'text-emerald-400' : 'text-red-400'} w-36 shrink-0`}>
+                                      {desc}
+                                    </span>
+                                    <span className="text-zinc-400">
+                                      {ev.previousCount} → {ev.currentCount} membros
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-zinc-500 bg-zinc-900/30 p-3 rounded-lg border border-zinc-800/50 text-center">
+                        Nenhuma entrada ou saída detectada neste período.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end pt-4">
+                    <KineticButton onClick={() => setSelectedMonitor(null)} className="px-6">Fechar</KineticButton>
+                  </div>
+                </div>
+
+                {/* Side Panel: Eventos Meta / Pixel */}
+                {showEventsPanel && (
+                  <div className="w-full lg:w-80 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-800 bg-zinc-900/20 p-6 overflow-y-auto min-h-0 custom-scrollbar">
+                    <h4 className="text-sm font-semibold text-zinc-200 mb-2">Eventos Meta / Pixel</h4>
+                    <p className="text-[10px] text-zinc-500 mb-4 bg-zinc-900/50 p-2 rounded border border-zinc-800">
+                      Eventos da Meta podem representar ações diferentes e podem ter duplicidade entre categorias. Use Leads informados pela Meta como métrica principal de comparação.
+                    </p>
+                    {selectedMonitor.meta?.events && selectedMonitor.meta.events.length > 0 ? (
+                      <div className="space-y-3">
+                        {selectedMonitor.meta.events.map((ev: any, idx: number) => (
+                          <div key={idx} className="flex flex-col p-3 bg-zinc-900 rounded-lg border border-zinc-800">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <span className="text-sm font-medium text-zinc-200">{ev.actionType}</span>
+                              <span className="font-semibold text-zinc-300 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-800">
+                                {formatNumber(ev.value)}
+                              </span>
+                            </div>
+                            
+                            {ev.isLeadCandidate && (
+                              <span className="text-[9px] w-fit bg-kinetic-orange/20 text-kinetic-orange px-1.5 py-0.5 rounded uppercase font-semibold mb-2">Usado como Lead</span>
+                            )}
+                            
                             {ev.cost && (
-                              <span className="text-xs text-zinc-500 mt-0.5 block">Custo médio: {formatCurrency(ev.cost)}</span>
+                              <span className="text-xs text-zinc-500 mt-0.5 block border-t border-zinc-800 pt-2">Custo médio: {formatCurrency(ev.cost)}</span>
                             )}
                           </div>
-                          <span className="font-semibold text-zinc-300 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-800">
-                            {formatNumber(ev.value)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-zinc-500 bg-zinc-900/30 p-3 rounded-lg border border-zinc-800/50 text-center">
-                      Nenhum evento Meta/Pixels retornado para este período.
-                    </p>
-                  )}
-                </div>
-
-                {/* Linha do Tempo */}
-                <div className="mt-6 pt-6 border-t border-zinc-800">
-                  <h4 className="text-sm font-semibold text-zinc-200 mb-4">Linha do Tempo de Crescimento</h4>
-                  {detailsLoading ? (
-                    <div className="text-sm text-zinc-500">Carregando histórico...</div>
-                  ) : selectedMonitor.timeline?.length > 0 ? (
-                    <div className="space-y-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                      <div className="bg-kinetic-orange/10 p-3 rounded-lg border border-kinetic-orange/20 mb-4">
-                        <p className="text-[10px] text-kinetic-orange">
-                          Os valores representam a variação líquida de membros entre coletas. Se entradas e saídas ocorrerem simultaneamente no mesmo intervalo, apenas o saldo final é detectado.
-                        </p>
+                        ))}
                       </div>
-                      {Object.entries(
-                        selectedMonitor.timeline.reduce((acc: any, t: any) => {
-                          const d = new Date(t.to);
-                          const key = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(d);
-                          if (!acc[key]) acc[key] = [];
-                          acc[key].push(t);
-                          return acc;
-                        }, {})
-                      ).map(([date, events]: any) => (
-                        <div key={date}>
-                          <h5 className="text-xs font-semibold text-zinc-400 mb-2">{date}</h5>
-                          <div className="space-y-2">
-                            {events.map((ev: any, idx: number) => {
-                              const timeFrom = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(ev.from));
-                              const timeTo = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(ev.to));
-                              
-                              const isEntry = ev.estimatedJoined > 0;
-                              const isExit = ev.estimatedLeft > 0;
-                              const isMixed = isEntry && isExit;
-                              
-                              let desc = '';
-                              if (isMixed) desc = `saldo +${ev.estimatedJoined} / saldo -${ev.estimatedLeft}`;
-                              else if (isEntry) desc = `saldo +${ev.estimatedJoined} membro(s)`;
-                              else if (isExit) desc = `saldo -${ev.estimatedLeft} membro(s)`;
-
-                              return (
-                                <div key={idx} className="flex items-center gap-3 text-xs bg-zinc-900/50 p-2 rounded border border-zinc-800">
-                                  <span className="text-zinc-500 w-24 shrink-0">Entre {timeFrom} e {timeTo}</span>
-                                  <span className={`font-medium ${isEntry ? 'text-emerald-400' : 'text-red-400'} w-36 shrink-0`}>
-                                    {desc}
-                                  </span>
-                                  <span className="text-zinc-400">
-                                    {ev.previousCount} → {ev.currentCount} membros
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-zinc-500 bg-zinc-900/30 p-3 rounded-lg border border-zinc-800/50 text-center">
-                      Nenhuma entrada ou saída detectada neste período.
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex justify-end pt-4">
-                  <KineticButton onClick={() => setSelectedMonitor(null)} className="px-6">Fechar</KineticButton>
-                </div>
+                    ) : (
+                      <p className="text-sm text-zinc-500 bg-zinc-900/30 p-3 rounded-lg border border-zinc-800/50 text-center">
+                        Nenhum evento Meta/Pixels retornado para este período.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
