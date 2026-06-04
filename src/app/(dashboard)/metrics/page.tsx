@@ -247,7 +247,7 @@ export default function SyncoMetricsPage() {
     if (!selectedMonitor) return;
     setIsExporting(true);
     try {
-      const res = await fetch(`/api/synco-metrics/monitors/${selectedMonitor.monitor.id}/export?period=${selectedPeriod}&format=csv`);
+      const res = await fetch(`/api/synco-metrics/monitors/${selectedMonitor.monitor.id}/export?period=${detailsPeriod}&format=csv`);
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error || 'Erro ao exportar CSV');
@@ -255,7 +255,7 @@ export default function SyncoMetricsPage() {
       
       const blob = await res.blob();
       const contentDisposition = res.headers.get('content-disposition');
-      let filename = `syncometrics-${selectedMonitor.monitor.name}-${selectedPeriod}.csv`;
+      let filename = `syncometrics-${selectedMonitor.monitor.name}-${detailsPeriod}.csv`;
       if (contentDisposition) {
         const match = contentDisposition.match(/filename="?([^"]+)"?/);
         if (match && match[1]) filename = match[1];
