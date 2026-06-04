@@ -598,6 +598,40 @@ export default function SyncoMetricsPage() {
                   </div>
                 </div>
 
+                {/* Eventos Meta / Pixel */}
+                <div className="mt-6 pt-6 border-t border-zinc-800">
+                  <h4 className="text-sm font-semibold text-zinc-200 mb-2">Eventos Meta / Pixel</h4>
+                  <p className="text-[10px] text-zinc-500 mb-4 bg-zinc-900/50 p-2 rounded border border-zinc-800">
+                    Eventos da Meta podem representar ações diferentes e podem ter duplicidade entre categorias. Use Leads informados pela Meta como métrica principal de comparação.
+                  </p>
+                  {selectedMonitor.meta.events && selectedMonitor.meta.events.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedMonitor.meta.events.map((ev: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-zinc-900 rounded-lg border border-zinc-800">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-zinc-200">{ev.actionType}</span>
+                              {ev.isLeadCandidate && (
+                                <span className="text-[9px] bg-kinetic-orange/20 text-kinetic-orange px-1.5 py-0.5 rounded uppercase font-semibold">Usado como Lead</span>
+                              )}
+                            </div>
+                            {ev.cost && (
+                              <span className="text-xs text-zinc-500 mt-0.5 block">Custo médio: {formatCurrency(ev.cost)}</span>
+                            )}
+                          </div>
+                          <span className="font-semibold text-zinc-300 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-800">
+                            {formatNumber(ev.value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-500 bg-zinc-900/30 p-3 rounded-lg border border-zinc-800/50 text-center">
+                      Nenhum evento Meta/Pixels retornado para este período.
+                    </p>
+                  )}
+                </div>
+
                 {/* Linha do Tempo */}
                 <div className="mt-6 pt-6 border-t border-zinc-800">
                   <h4 className="text-sm font-semibold text-zinc-200 mb-4">Linha do Tempo de Crescimento</h4>

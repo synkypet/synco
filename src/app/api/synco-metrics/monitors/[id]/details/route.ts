@@ -101,7 +101,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         if (secret && secret.access_token) {
           try {
             const datePreset = period === 'today' ? 'today' : period === 'last_30d' ? 'last_30d' : 'last_7d';
-            const fields = 'campaign_id,spend,impressions,clicks,actions';
+            const fields = 'campaign_id,spend,impressions,clicks,actions,cost_per_action_type';
             const metaUrl = `https://graph.facebook.com/v19.0/${connection.ad_account_id}/insights?level=campaign&date_preset=${datePreset}&fields=${fields}&action_breakdowns=action_type&access_token=${secret.access_token}`;
             
             const metaRes = await fetch(metaUrl);
@@ -115,10 +115,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
                 payload.meta.clicks = parseInt(campaignRow.clicks || 0, 10);
 
                 let finalLeads = 0;
+                payload.meta.events = [];
+
                 if (campaignRow.actions) {
                   let onfbLead = 0;
                   let onsiteLead = 0;
                   const detected: Record<string, number> = {};
+                  const eventCosts: Record<string, number> = {};
+
+                  if (campaignRow.cost_per_action_type) {
+                    campaignRow.cost_per_action_type.forEach((c: any) => {
+                      eventCosts[c.action_type] = parseFloat(c.value || 0);
+                    });
+                  }
                   
                   campaignRow.actions.forEach((act: any) => {
                     const type = act.action_type;
@@ -137,6 +146,24 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
                       finalLeads = keys.reduce((acc, k) => acc + detected[k], 0);
                     }
                   }
+
+                  payload.meta.events = Object.entries(detected).map(([type, val]) => {
+                    let isLeadCandidate = false;
+                    if (onfbLead > 0) {
+                      if (type === 'lead') isLeadCandidate = true;
+                    } else if (onsiteLead > 0) {
+                      if (type === 'onsite_web_lead') isLeadCandidate = true;
+                    } else {
+                      isLeadCandidate = true; // Se somou tudo, tudo é candidato
+                    }
+
+                    return {
+                      actionType: type,
+                      value: val,
+                      cost: eventCosts[type] || null,
+                      isLeadCandidate
+                    };
+                  });
                 }
                 payload.meta.leads = finalLeads;
 
