@@ -584,6 +584,18 @@ export default function SyncoMetricsPage() {
                     ) : (
                       <p className="text-[10px] text-zinc-500">Carregando baseline...</p>
                     )}
+
+                    {/* Contexto do Monitoramento */}
+                    <div className="mt-4 flex flex-col gap-1.5 p-3 bg-zinc-900/40 rounded-lg border border-zinc-800/80">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-zinc-500 w-16 shrink-0">Campanha:</span>
+                        <span className="text-zinc-300 font-medium truncate" title={selectedMonitor.campaignName}>{selectedMonitor.campaignName}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-zinc-500 w-16 shrink-0">Grupo:</span>
+                        <span className="text-zinc-300 font-medium truncate" title={selectedMonitor.groupName}>{selectedMonitor.groupName}</span>
+                      </div>
+                    </div>
                   </div>
                   
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-4 bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
