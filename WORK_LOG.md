@@ -29,6 +29,8 @@ Use it to track completed blocks, known debt, active risks, and the next executi
   - I6: Implementação do Metadata Quality Gate para Mercado Livre com tolerância a falhas e auto-retry (max 2 tentativas com timeouts escalados), forçando a validação integral de título real, imagem real e preço líquido antes de liberar o link final no Envio Rápido. ✅
   - I7: Refinamento na extração de identificadores Mercado Livre (url-utils.ts) adicionando suporte a catalogProductId e offerItemId, permitindo a priorização e extração imediata da oferta de venda em URLs de catálogo (/p/ com pdp_filters/wid), garantindo metadados ricos (título, preço e imagem) de forma estável. ✅
   - I8: Implementação de Quality Gate obrigatório e auto-retry no Monitor de Grupos para Mercado Livre, prevenindo disparos de mensagens com dados incompletos ou quebrados de forma automatizada. ✅
+- BLOCO J — SyncoMetrics Meta Metrics ✅
+  - J1: Implementação de UI de falha resiliente para chamadas Graph API Meta, sanitizando logging de erro interno para evitar vazamento de tokens, além de não expor erros 500 no client. Adição de block alerts e botão de reconexão. ✅
 
 ---
 
