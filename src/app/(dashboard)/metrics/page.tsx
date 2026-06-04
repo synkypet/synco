@@ -589,11 +589,15 @@ export default function SyncoMetricsPage() {
                     <div className="mt-4 flex flex-col gap-1.5 p-3 bg-zinc-900/40 rounded-lg border border-zinc-800/80">
                       <div className="flex items-center gap-2 text-xs">
                         <span className="text-zinc-500 w-16 shrink-0">Campanha:</span>
-                        <span className="text-zinc-300 font-medium truncate" title={selectedMonitor.campaignName}>{selectedMonitor.campaignName}</span>
+                        <span className="text-zinc-300 font-medium truncate" title={selectedMonitor?.campaignName || selectedMonitor?.monitor?.campaignName || selectedMonitor?.campaign_name || "Campanha não identificada"}>
+                          {selectedMonitor?.campaignName || selectedMonitor?.monitor?.campaignName || selectedMonitor?.campaign_name || "Campanha não identificada"}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="text-zinc-500 w-16 shrink-0">Grupo:</span>
-                        <span className="text-zinc-300 font-medium truncate" title={selectedMonitor.groupName}>{selectedMonitor.groupName}</span>
+                        <span className="text-zinc-300 font-medium truncate" title={selectedMonitor?.groupName || selectedMonitor?.monitor?.groupName || selectedMonitor?.group_name || "Grupo não identificado"}>
+                          {selectedMonitor?.groupName || selectedMonitor?.monitor?.groupName || selectedMonitor?.group_name || "Grupo não identificado"}
+                        </span>
                       </div>
                     </div>
                   </div>
