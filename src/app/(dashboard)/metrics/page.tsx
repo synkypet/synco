@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { TactileCard } from '@/components/ui/TactileCard';
 import { KineticButton } from '@/components/ui/KineticButton';
-import { RefreshCw, Plus, Settings, TrendingUp, Info, Trash2 } from 'lucide-react';
+import { RefreshCw, Plus, Settings, TrendingUp, Info, Trash2, Download, Loader2, X, BarChart3 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -47,6 +47,7 @@ export default function SyncoMetricsPage() {
   const [isRemovingGroup, setIsRemovingGroup] = useState(false);
   const [monitorToRemove, setMonitorToRemove] = useState<string | null>(null);
   const [isRemovingMonitor, setIsRemovingMonitor] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const showFeedback = (message: string, type: 'success' | 'error') => {
     setFeedbackToast({ message, type });
@@ -226,6 +227,41 @@ export default function SyncoMetricsPage() {
       setIsRemovingMonitor(false);
     }
   };
+
+  const handleExportCSV = async () => {
+    if (!selectedMonitor) return;
+    setIsExporting(true);
+    try {
+      const res = await fetch(`/api/synco-metrics/monitors/${selectedMonitor.monitor.id}/export?period=${selectedPeriod}&format=csv`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Erro ao exportar CSV');
+      }
+      
+      const blob = await res.blob();
+      const contentDisposition = res.headers.get('content-disposition');
+      let filename = `syncometrics-${selectedMonitor.monitor.name}-${selectedPeriod}.csv`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err: any) {
+      showFeedback(err.message || 'Erro ao exportar arquivo', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
 
   const formatCurrency = (val: number | null | undefined) => {
     if (val === null || val === undefined) return '--';
@@ -544,6 +580,17 @@ export default function SyncoMetricsPage() {
                   ) : (
                     <p className="text-[10px] text-zinc-500">Carregando baseline...</p>
                   )}
+                </div>
+                
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={handleExportCSV}
+                    disabled={isExporting}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-zinc-800 text-zinc-200 hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                  >
+                    {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                    {isExporting ? 'Exportando...' : 'Exportar CSV'}
+                  </button>
                 </div>
               </DialogHeader>
 
