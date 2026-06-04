@@ -21,7 +21,10 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (!connection) {
-      return NextResponse.json({ campaigns: [] });
+      return NextResponse.json({ 
+        error: 'META_NOT_CONNECTED', 
+        message: 'Conecte sua conta Meta Ads em Configurações → SyncoMetrics.' 
+      }, { status: 400 });
     }
 
     // 3. Buscar secret com service role
@@ -42,7 +45,10 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (!secret || !secret.access_token) {
-      return NextResponse.json({ error: 'Credenciais Meta não encontradas ou inválidas' }, { status: 403 });
+      return NextResponse.json({ 
+        error: 'META_NOT_CONNECTED', 
+        message: 'Credenciais Meta não encontradas ou inválidas. Reconecte sua conta Meta Ads em Configurações → SyncoMetrics.' 
+      }, { status: 403 });
     }
 
     // 4. Consultar Meta Graph API para campanhas (Nível básico MVP)
@@ -52,11 +58,36 @@ export async function GET(request: NextRequest) {
     const metaData = await metaRes.json();
 
     if (metaData.error) {
-      console.error('Meta API Error:', metaData.error);
-      if (metaData.error.code === 190) {
-        return NextResponse.json({ error: 'Sua conexão Meta expirou. Gere um novo token estendido e reconecte em Configurações → SyncoMetrics.' }, { status: 401 });
+      const safeError = { ...metaData.error };
+      if (safeError.message && typeof safeError.message === 'string') {
+        safeError.message = safeError.message.replace(/access_token=[^&]+/g, 'access_token=[REDACTED_TOKEN]');
       }
-      return NextResponse.json({ error: 'Erro ao consultar campanhas da Meta' }, { status: 500 });
+      
+      console.error('[Meta Campaigns] Error', {
+        code: safeError.code,
+        message: safeError.message,
+        status: safeError.error_subcode || safeError.status,
+        userId: user.id
+      });
+
+      if (metaData.error.code === 190) {
+        return NextResponse.json({ 
+          error: 'META_TOKEN_EXPIRED', 
+          message: 'Sua conexão Meta expirou. Gere um novo token estendido e reconecte em Configurações → SyncoMetrics.' 
+        }, { status: 401 });
+      }
+      
+      if (metaData.error.code === 10 || metaData.error.code === 200) {
+        return NextResponse.json({ 
+          error: 'META_PERMISSION_DENIED', 
+          message: 'A conexão Meta não tem permissão para ler campanhas. Reconecte usando a permissão ads_read.' 
+        }, { status: 403 });
+      }
+
+      return NextResponse.json({ 
+        error: 'META_API_ERROR', 
+        message: 'Não foi possível consultar a Meta no momento. Tente novamente em instantes.' 
+      }, { status: 502 });
     }
 
     // Ordenar as campanhas ativas primeiro e depois por data de criação mais recente

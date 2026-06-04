@@ -111,11 +111,24 @@ export async function GET(request: NextRequest) {
             const metaData = await metaRes.json();
 
             if (metaData.error) {
-              console.error('Meta API Error:', metaData.error);
+              const safeError = { ...metaData.error };
+              if (safeError.message && typeof safeError.message === 'string') {
+                safeError.message = safeError.message.replace(/access_token=[^&]+/g, 'access_token=[REDACTED_TOKEN]');
+              }
+              
+              console.error('[Meta Overview] Error', {
+                code: safeError.code,
+                message: safeError.message,
+                status: safeError.error_subcode || safeError.status,
+                userId: user.id
+              });
+
               if (metaData.error.code === 190) {
-                 responseData.meta.error = 'Sua conexão Meta expirou. Gere um novo token estendido e reconecte em Configurações → SyncoMetrics.';
+                 responseData.meta.error = 'META_TOKEN_EXPIRED';
+              } else if (metaData.error.code === 10 || metaData.error.code === 200) {
+                 responseData.meta.error = 'META_PERMISSION_DENIED';
               } else {
-                 responseData.meta.error = 'Erro ao consultar Meta: ' + metaData.error.message;
+                 responseData.meta.error = 'META_API_ERROR';
               }
             } else if (metaData.data && metaData.data.length > 0) {
               responseData.meta.hasData = true;

@@ -210,10 +210,27 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
                 }
               }
             } else if (metaData.error) {
-              payload.meta.error = metaData.error.code === 190 ? 'Token expirado' : 'Erro Meta API';
+              const safeError = { ...metaData.error };
+              if (safeError.message && typeof safeError.message === 'string') {
+                safeError.message = safeError.message.replace(/access_token=[^&]+/g, 'access_token=[REDACTED_TOKEN]');
+              }
+              console.error('[Meta Export] Error', {
+                code: safeError.code,
+                message: safeError.message,
+                status: safeError.error_subcode || safeError.status,
+                userId: user.id
+              });
+
+              if (metaData.error.code === 190) {
+                payload.meta.error = 'META_TOKEN_EXPIRED';
+              } else if (metaData.error.code === 10 || metaData.error.code === 200) {
+                payload.meta.error = 'META_PERMISSION_DENIED';
+              } else {
+                payload.meta.error = 'META_API_ERROR';
+              }
             }
-          } catch (e) {
-            console.error('Meta API falhou', e);
+          } catch (e: any) {
+            console.error('[Meta Export] Fetch failed', e.message);
           }
         }
       }

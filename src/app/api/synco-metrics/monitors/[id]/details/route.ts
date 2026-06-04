@@ -181,10 +181,32 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
                 }
               }
             } else if (metaData.error) {
-              payload.meta.error = metaData.error.code === 190 ? 'Token expirado' : 'Erro Meta API';
+              const safeError = { ...metaData.error };
+              if (safeError.message && typeof safeError.message === 'string') {
+                safeError.message = safeError.message.replace(/access_token=[^&]+/g, 'access_token=[REDACTED_TOKEN]');
+              }
+              console.error('[Meta Details] Error', {
+                code: safeError.code,
+                message: safeError.message,
+                status: safeError.error_subcode || safeError.status,
+                userId: user.id
+              });
+
+              if (metaData.error.code === 190) {
+                payload.meta.error = 'META_TOKEN_EXPIRED';
+                payload.meta.errorMessage = 'Sua conexão Meta expirou. Reconecte em Configurações → SyncoMetrics.';
+              } else if (metaData.error.code === 10 || metaData.error.code === 200) {
+                payload.meta.error = 'META_PERMISSION_DENIED';
+                payload.meta.errorMessage = 'A conexão Meta não tem permissão para ler campanhas. Reconecte usando a permissão ads_read.';
+              } else {
+                payload.meta.error = 'META_API_ERROR';
+                payload.meta.errorMessage = 'Não foi possível consultar a Meta no momento. Tente novamente em instantes.';
+              }
             }
-          } catch (e) {
-            console.error('Meta API falhou', e);
+          } catch (e: any) {
+            console.error('[Meta Details] Fetch failed', e.message);
+            payload.meta.error = 'META_FETCH_ERROR';
+            payload.meta.errorMessage = 'Erro ao conectar com a Meta.';
           }
         }
       }

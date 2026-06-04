@@ -30,6 +30,7 @@ export default function SyncoMetricsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [metaConnectionError, setMetaConnectionError] = useState<{title: string, message: string} | null>(null);
   
   const [detailsPeriod, setDetailsPeriod] = useState('last_7d');
   const [showEventsPanel, setShowEventsPanel] = useState(false);
@@ -83,6 +84,15 @@ export default function SyncoMetricsPage() {
       let campaignsData: any = { campaigns: [] };
       if (campaignsRes.ok) {
         campaignsData = await campaignsRes.json();
+        setMetaConnectionError(null);
+      } else {
+        const errPayload = await campaignsRes.json().catch(() => null);
+        if (errPayload && errPayload.error) {
+           setMetaConnectionError({
+             title: errPayload.error === 'META_TOKEN_EXPIRED' ? 'Conexão Expirada' : 'Erro Meta Ads',
+             message: errPayload.message || 'Erro ao consultar Meta.'
+           });
+        }
       }
       
       setMonitoredGroups(summaryData.monitoredGroups || []);
@@ -446,16 +456,31 @@ export default function SyncoMetricsPage() {
 
                 <div>
                   <label className="text-sm text-zinc-400 block mb-1">Campanha Meta Ads</label>
-                  <select 
-                    value={newMonitorCampaignId}
-                    onChange={e => setNewMonitorCampaignId(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange text-sm"
-                  >
-                    <option value="">Selecione uma campanha...</option>
-                    {campaigns.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                  {metaConnectionError ? (
+                    <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex flex-col gap-2 items-start">
+                      <p className="text-xs text-red-400 leading-relaxed">
+                        <strong className="block mb-1">{metaConnectionError.title}</strong>
+                        {metaConnectionError.message}
+                      </p>
+                      <button 
+                        onClick={(e) => { e.preventDefault(); router.push('/configuracoes'); }}
+                        className="text-[10px] py-1.5 px-3 rounded font-medium bg-red-500/20 text-red-300 hover:bg-red-500/30 hover:text-white transition-colors"
+                      >
+                        Ir para Configurações
+                      </button>
+                    </div>
+                  ) : (
+                    <select 
+                      value={newMonitorCampaignId}
+                      onChange={e => setNewMonitorCampaignId(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange text-sm"
+                    >
+                      <option value="">Selecione uma campanha...</option>
+                      {campaigns.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div>
@@ -650,6 +675,35 @@ export default function SyncoMetricsPage() {
               <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
                 {/* Main Body */}
                 <div className="flex-1 p-6 space-y-6 overflow-y-auto min-h-0">
+                  {selectedMonitor?.meta?.error === 'META_TOKEN_EXPIRED' && (
+                    <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center justify-between">
+                      <div>
+                        <strong className="block text-xs text-red-400 mb-1">Sua conexão Meta expirou</strong>
+                        <p className="text-[10px] text-red-300">Reconecte sua conta em Configurações → SyncoMetrics para voltar a receber dados da campanha.</p>
+                      </div>
+                      <button 
+                        onClick={() => router.push('/configuracoes')}
+                        className="text-[10px] py-1.5 px-3 rounded font-medium bg-red-500/20 text-red-300 hover:bg-red-500/30 hover:text-white transition-colors whitespace-nowrap"
+                      >
+                        Ir para Configurações
+                      </button>
+                    </div>
+                  )}
+                  {selectedMonitor?.meta?.error === 'META_PERMISSION_DENIED' && (
+                    <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center justify-between">
+                      <div>
+                        <strong className="block text-xs text-red-400 mb-1">Permissão Negada</strong>
+                        <p className="text-[10px] text-red-300">Reconecte sua conta Meta autorizando a permissão ads_read.</p>
+                      </div>
+                      <button 
+                        onClick={() => router.push('/configuracoes')}
+                        className="text-[10px] py-1.5 px-3 rounded font-medium bg-red-500/20 text-red-300 hover:bg-red-500/30 hover:text-white transition-colors whitespace-nowrap"
+                      >
+                        Ir para Configurações
+                      </button>
+                    </div>
+                  )}
+
                   {/* Comparação */}
                   <TactileCard className="p-4 border-kinetic-orange/30 bg-kinetic-orange/5 flex justify-between items-center">
                     <div>
