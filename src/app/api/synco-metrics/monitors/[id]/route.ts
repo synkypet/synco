@@ -17,11 +17,10 @@ export async function DELETE(
 
     const { id } = params;
 
-    // A política RLS já garante que o usuário só deleta o próprio registro.
-    // Usaremos "soft delete" atualizando o status para 'deleted'.
+    // Deletar fisicamente o registro
     const { error } = await supabase
       .from('sm_metric_monitors')
-      .update({ status: 'deleted' })
+      .delete()
       .eq('id', id)
       .eq('user_id', user.id);
 
@@ -29,7 +28,7 @@ export async function DELETE(
       throw error;
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error('[DELETE /monitors]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

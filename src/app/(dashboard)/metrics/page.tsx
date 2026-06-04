@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { useRouter } from 'next/navigation';
 
@@ -217,7 +218,7 @@ export default function SyncoMetricsPage() {
       if (selectedMonitor?.id === monitorToRemove) {
         setSelectedMonitor(null);
       }
-      showFeedback('Monitoramento removido com sucesso.', 'success');
+      showFeedback('Monitoramento removido.', 'success');
       setMonitorToRemove(null);
     } catch (err: any) {
       showFeedback(`Não foi possível remover: ${err.message}`, 'error');
@@ -301,6 +302,9 @@ export default function SyncoMetricsPage() {
             <DialogContent className="bg-deep-void border-zinc-800 max-w-lg">
               <DialogHeader>
                 <DialogTitle className="text-zinc-100">Criar Monitoramento</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Formulário para cruzar dados de uma Campanha da Meta com um Grupo de WhatsApp.
+                </DialogDescription>
               </DialogHeader>
               <p className="text-xs text-zinc-400">
                 Use isso para comparar uma campanha específica da Meta com o grupo que ela está tentando alimentar.
@@ -521,6 +525,9 @@ export default function SyncoMetricsPage() {
                   <TrendingUp className="w-5 h-5 text-kinetic-orange" />
                   Detalhes do Monitoramento
                 </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Exibe informações detalhadas do crescimento do grupo comparado à campanha da Meta.
+                </DialogDescription>
                 <div className="space-y-1 mt-2">
                   <p className="text-sm font-medium text-zinc-300">
                     {selectedMonitor.monitorName || selectedMonitor.monitor?.name}
@@ -670,6 +677,9 @@ export default function SyncoMetricsPage() {
         <DialogContent className="bg-deep-void border-zinc-800 max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-zinc-100">Parar de monitorar grupo?</DialogTitle>
+            <DialogDescription className="sr-only">
+              Confirmação para interromper o monitoramento ativo de um grupo do WhatsApp.
+            </DialogDescription>
           </DialogHeader>
           <p className="text-sm text-zinc-400 mt-2">
             Este grupo deixará de ter coletas de membros. Monitoramentos ligados a ele podem parar de comparar entradas reais.
@@ -690,9 +700,12 @@ export default function SyncoMetricsPage() {
         <DialogContent className="bg-deep-void border-zinc-800 max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-zinc-100">Remover monitoramento?</DialogTitle>
+            <DialogDescription className="sr-only">
+              Confirmação para remover o vínculo entre a campanha e o grupo.
+            </DialogDescription>
           </DialogHeader>
           <p className="text-sm text-zinc-400 mt-2">
-            Tem certeza que deseja remover este monitoramento? (Isso não afeta o grupo nem a campanha Meta).
+            Este vínculo entre campanha e grupo será removido. Os dados da Meta e o histórico do grupo não serão apagados. Se você criar novamente, o monitoramento começará do zero.
           </p>
           <div className="flex justify-end gap-2 mt-6">
             <button onClick={() => setMonitorToRemove(null)} className="text-zinc-400 text-sm px-4 py-2 hover:text-zinc-200" disabled={isRemovingMonitor}>

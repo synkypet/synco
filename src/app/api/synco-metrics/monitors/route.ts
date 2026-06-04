@@ -277,6 +277,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Grupo inválido ou não monitorado pelo SyncoMetrics' }, { status: 400 });
     }
 
+    // 1.5 Verificar se já existe monitoramento para o mesmo grupo e campanha
+    const { data: existing } = await supabase
+      .from('sm_metric_monitors')
+      .select('id, status')
+      .eq('user_id', user.id)
+      .eq('group_id', groupId)
+      .eq('campaign_id', campaignId)
+      .maybeSingle();
+
+    if (existing) {
+      if (existing.status === 'deleted') {
+        await supabase
+          .from('sm_metric_monitors')
+          .delete()
+          .eq('id', existing.id);
+      } else {
+        return NextResponse.json({ error: 'Este monitoramento já está ativo.' }, { status: 409 });
+      }
+    }
+
     // 2. Buscar último snapshot para preencher baseline
     const { data: latestSnapshot } = await supabase
       .from('sm_group_snapshots')
