@@ -551,7 +551,9 @@ export default function SyncoMetricsPage() {
                 </div>
                 
                 {monitor.meta.error && (
-                  <p className="text-[10px] text-amber-500 mt-3">{monitor.meta.error}</p>
+                  <p className="text-[10px] text-amber-500 mt-3">
+                    {monitor.meta.error === 'META_TOKEN_EXPIRED' ? 'Conexão Meta expirada' : 'Meta precisa reconectar'}
+                  </p>
                 )}
 
                 <div className="mt-4 pt-3 border-t border-zinc-800/50 flex items-center justify-between">
@@ -675,25 +677,11 @@ export default function SyncoMetricsPage() {
               <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
                 {/* Main Body */}
                 <div className="flex-1 p-6 space-y-6 overflow-y-auto min-h-0">
-                  {selectedMonitor?.meta?.error === 'META_TOKEN_EXPIRED' && (
+                  {(selectedMonitor?.meta?.error === 'META_TOKEN_EXPIRED' || selectedMonitor?.meta?.error === 'META_PERMISSION_DENIED' || selectedMonitor?.meta?.error === 'META_API_ERROR') && (
                     <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center justify-between">
                       <div>
-                        <strong className="block text-xs text-red-400 mb-1">Sua conexão Meta expirou</strong>
-                        <p className="text-[10px] text-red-300">Reconecte sua conta em Configurações → SyncoMetrics para voltar a receber dados da campanha.</p>
-                      </div>
-                      <button 
-                        onClick={() => router.push('/configuracoes')}
-                        className="text-[10px] py-1.5 px-3 rounded font-medium bg-red-500/20 text-red-300 hover:bg-red-500/30 hover:text-white transition-colors whitespace-nowrap"
-                      >
-                        Ir para Configurações
-                      </button>
-                    </div>
-                  )}
-                  {selectedMonitor?.meta?.error === 'META_PERMISSION_DENIED' && (
-                    <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center justify-between">
-                      <div>
-                        <strong className="block text-xs text-red-400 mb-1">Permissão Negada</strong>
-                        <p className="text-[10px] text-red-300">Reconecte sua conta Meta autorizando a permissão ads_read.</p>
+                        <strong className="block text-xs text-red-400 mb-1">Meta Ads precisa de atenção</strong>
+                        <p className="text-[10px] text-red-300">Não foi possível consultar os dados da Meta. Sua conexão pode ter expirado ou estar sem a permissão ads_read.</p>
                       </div>
                       <button 
                         onClick={() => router.push('/configuracoes')}

@@ -149,12 +149,29 @@ export async function GET(request: NextRequest) {
                 }
               });
             } else if (metaData.error) {
+              const safeError = { ...metaData.error };
+              if (safeError.message && typeof safeError.message === 'string') {
+                safeError.message = safeError.message.replace(/access_token=[^&]+/g, 'access_token=[REDACTED_TOKEN]');
+              }
+              console.error('[Meta Monitors] Error', {
+                code: safeError.code,
+                message: safeError.message,
+                status: safeError.error_subcode || safeError.status,
+                userId: user.id
+              });
+
                resultMonitors.forEach(m => {
-                 m.meta.error = metaData.error.code === 190 ? 'Token expirado' : 'Erro Meta API';
+                 if (metaData.error.code === 190) {
+                   m.meta.error = 'META_TOKEN_EXPIRED';
+                 } else if (metaData.error.code === 10 || metaData.error.code === 200) {
+                   m.meta.error = 'META_PERMISSION_DENIED';
+                 } else {
+                   m.meta.error = 'META_API_ERROR';
+                 }
                });
             }
-          } catch (e) {
-            console.error('Meta API falhou', e);
+          } catch (e: any) {
+            console.error('[Meta Monitors] Fetch failed', e.message);
           }
         }
       }
