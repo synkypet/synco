@@ -31,6 +31,7 @@ export default function SyncoMetricsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [showActivateGroup, setShowActivateGroup] = useState(false);
   const [selectedMonitor, setSelectedMonitor] = useState<any | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   // Form states for Create Monitor
   const [newMonitorGroupId, setNewMonitorGroupId] = useState('');
@@ -306,6 +307,11 @@ export default function SyncoMetricsPage() {
               </p>
               
               <div className="space-y-4 mt-4">
+                <p className="text-xs text-emerald-400 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20 leading-relaxed">
+                  <strong className="block mb-1">Início a partir do zero</strong>
+                  Os resultados deste monitoramento começarão do zero a partir de agora. Dados anteriores do grupo não serão misturados.
+                </p>
+
                 <div>
                   <label className="text-sm text-zinc-400 block mb-1">Grupo Monitorado</label>
                   <select 
@@ -480,7 +486,20 @@ export default function SyncoMetricsPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                   <button 
-                    onClick={() => setSelectedMonitor(monitor)}
+                    onClick={async () => {
+                      setSelectedMonitor(monitor);
+                      setDetailsLoading(true);
+                      try {
+                        const res = await fetch(`/api/synco-metrics/monitors/${monitor.id}/details?period=${selectedPeriod}`);
+                        if (!res.ok) throw new Error('Erro ao buscar detalhes');
+                        const data = await res.json();
+                        setSelectedMonitor(data);
+                      } catch (e: any) {
+                        showFeedback(e.message, 'error');
+                      } finally {
+                        setDetailsLoading(false);
+                      }
+                    }}
                     className="text-[11px] font-semibold text-kinetic-orange hover:text-white transition-colors flex items-center gap-1 uppercase tracking-wide"
                   >
                     <Info className="w-3 h-3" /> Ver detalhes
@@ -502,7 +521,23 @@ export default function SyncoMetricsPage() {
                   <TrendingUp className="w-5 h-5 text-kinetic-orange" />
                   Detalhes do Monitoramento
                 </DialogTitle>
-                <p className="text-sm text-zinc-400">{selectedMonitor.monitorName}</p>
+                <div className="space-y-1 mt-2">
+                  <p className="text-sm font-medium text-zinc-300">
+                    {selectedMonitor.monitorName || selectedMonitor.monitor?.name}
+                  </p>
+                  
+                  {selectedMonitor.monitor?.baselineAt ? (
+                    <p className="text-xs text-zinc-400 bg-zinc-900 p-2 rounded border border-zinc-800 mt-2">
+                      Este monitoramento iniciou em <span className="text-zinc-200">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(selectedMonitor.monitor.baselineAt))}</span>. 
+                      Os resultados consideram apenas movimentos detectados após esse início.{' '}
+                      {selectedMonitor.monitor.baselineMemberCount !== null 
+                        ? `Grupo tinha ${selectedMonitor.monitor.baselineMemberCount} membros no início.` 
+                        : 'Aguardando primeira coleta para definir o ponto inicial.'}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-zinc-500">Carregando baseline...</p>
+                  )}
+                </div>
               </DialogHeader>
 
               <div className="mt-4 space-y-6">
@@ -552,6 +587,61 @@ export default function SyncoMetricsPage() {
                     </div>
                     <p className="text-[10px] text-zinc-600 mt-4 text-center">Entradas e saídas são estimativas baseadas na variação capturada pelos snapshots regulares.</p>
                   </div>
+                </div>
+
+                {/* Linha do Tempo */}
+                <div className="mt-6 pt-6 border-t border-zinc-800">
+                  <h4 className="text-sm font-semibold text-zinc-200 mb-4">Linha do Tempo de Crescimento</h4>
+                  {detailsLoading ? (
+                    <div className="text-sm text-zinc-500">Carregando histórico...</div>
+                  ) : selectedMonitor.timeline?.length > 0 ? (
+                    <div className="space-y-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                      {Object.entries(
+                        selectedMonitor.timeline.reduce((acc: any, t: any) => {
+                          const d = new Date(t.to);
+                          const key = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(d);
+                          if (!acc[key]) acc[key] = [];
+                          acc[key].push(t);
+                          return acc;
+                        }, {})
+                      ).map(([date, events]: any) => (
+                        <div key={date}>
+                          <h5 className="text-xs font-semibold text-zinc-400 mb-2">{date}</h5>
+                          <div className="space-y-2">
+                            {events.map((ev: any, idx: number) => {
+                              const timeFrom = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(ev.from));
+                              const timeTo = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(ev.to));
+                              
+                              const isEntry = ev.estimatedJoined > 0;
+                              const isExit = ev.estimatedLeft > 0;
+                              const isMixed = isEntry && isExit;
+                              
+                              let desc = '';
+                              if (isMixed) desc = `+${ev.estimatedJoined} ent. / -${ev.estimatedLeft} saí.`;
+                              else if (isEntry) desc = `+${ev.estimatedJoined} entradas estimadas`;
+                              else if (isExit) desc = `-${ev.estimatedLeft} saídas estimadas`;
+
+                              return (
+                                <div key={idx} className="flex items-center gap-3 text-xs bg-zinc-900/50 p-2 rounded border border-zinc-800">
+                                  <span className="text-zinc-500 w-24 shrink-0">Entre {timeFrom} e {timeTo}</span>
+                                  <span className={`font-medium ${isEntry ? 'text-emerald-400' : 'text-red-400'} w-36 shrink-0`}>
+                                    {desc}
+                                  </span>
+                                  <span className="text-zinc-400">
+                                    {ev.previousCount} → {ev.currentCount} membros
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-500 bg-zinc-900/30 p-3 rounded-lg border border-zinc-800/50 text-center">
+                      Nenhuma entrada ou saída detectada neste período.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex justify-end pt-4">

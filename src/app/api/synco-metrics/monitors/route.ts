@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
         campaign_name,
         monitor_name,
         ad_account_id,
+        baseline_at,
         groups ( name )
       `)
       .eq('user_id', user.id)
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
       campaignId: m.campaign_id,
       campaignName: m.campaign_name,
       monitorName: m.monitor_name || `${m.campaign_name} → ${m.groups?.name || 'Grupo'}`,
+      baselineAt: m.baseline_at,
       meta: { spend: 0, leads: 0, clicks: 0, impressions: 0, cpc: null as number | null, ctr: null as number | null, cpm: null as number | null, costPerLead: null as number | null, error: null as string | null },
       group: { currentMembers: 0, estimatedJoined: 0, estimatedLeft: 0, netGrowth: 0 },
       comparison: { realCostPerMember: null as number | null, difference: 0, leadToMemberRate: null as number | null }
@@ -186,31 +188,47 @@ export async function GET(request: NextRequest) {
 
     const { data: deltas } = await supabase
       .from('sm_group_deltas')
-      .select('group_id, delta, estimated_joined, estimated_left')
+      .select('group_id, delta, estimated_joined, estimated_left, previous_snapshot:previous_snapshot_id(captured_at)')
       .in('group_id', groupIds)
       .gte('captured_at', startDateStr);
-
-    const deltasByGroup: Record<string, any> = {};
-    if (deltas) {
-      deltas.forEach(d => {
-        if (!deltasByGroup[d.group_id]) deltasByGroup[d.group_id] = { joined: 0, left: 0, delta: 0 };
-        deltasByGroup[d.group_id].joined += (d.estimated_joined || 0);
-        deltasByGroup[d.group_id].left += (d.estimated_left || 0);
-        deltasByGroup[d.group_id].delta += (d.delta || 0);
-      });
-    }
 
     // Preencher resultado do grupo e comparar
     resultMonitors.forEach(m => {
       const gId = m.groupId;
       m.group.currentMembers = currentByGroup[gId] || 0;
       
-      const d = deltasByGroup[gId];
-      if (d) {
-        m.group.estimatedJoined = d.joined;
-        m.group.estimatedLeft = d.left;
-        m.group.netGrowth = d.delta;
+      let joined = 0;
+      let left = 0;
+      let netDelta = 0;
+
+      if (deltas) {
+        const monitorDeltas = deltas.filter(d => {
+          if (d.group_id !== gId) return false;
+          
+          // Tratamento para extrair captured_at (Supabase pode retornar array ou objeto dependendo de como 1:1 é interpretado)
+          let prevCapturedAt = null;
+          if (d.previous_snapshot) {
+             prevCapturedAt = Array.isArray(d.previous_snapshot) ? d.previous_snapshot[0]?.captured_at : (d.previous_snapshot as any).captured_at;
+          }
+          if (!prevCapturedAt) return false;
+
+          // Regra conservadora: previous_snapshot.captured_at >= baseline_at
+          if (m.baselineAt && new Date(prevCapturedAt) < new Date(m.baselineAt)) {
+            return false;
+          }
+          return true;
+        });
+
+        monitorDeltas.forEach(d => {
+          joined += (d.estimated_joined || 0);
+          left += (d.estimated_left || 0);
+          netDelta += (d.delta || 0);
+        });
       }
+
+      m.group.estimatedJoined = joined;
+      m.group.estimatedLeft = left;
+      m.group.netGrowth = netDelta;
 
       // Comparison
       const realEntries = m.group.estimatedJoined;
@@ -259,7 +277,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Grupo inválido ou não monitorado pelo SyncoMetrics' }, { status: 400 });
     }
 
-    // 2. Buscar ad_account_id
+    // 2. Buscar último snapshot para preencher baseline
+    const { data: latestSnapshot } = await supabase
+      .from('sm_group_snapshots')
+      .select('id, member_count')
+      .eq('user_id', user.id)
+      .eq('group_id', groupId)
+      .order('captured_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    // 3. Buscar ad_account_id
     const { data: connection } = await supabase
       .from('sm_meta_connections')
       .select('ad_account_id')
@@ -270,7 +298,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Conta Meta não conectada' }, { status: 400 });
     }
 
-    // 3. Inserir monitor
+    // 4. Inserir monitor com baseline
     const { error: insertError } = await supabase
       .from('sm_metric_monitors')
       .insert({
@@ -279,7 +307,10 @@ export async function POST(request: NextRequest) {
         campaign_id: campaignId,
         campaign_name: campaignName,
         ad_account_id: connection.ad_account_id,
-        monitor_name: monitorName || null
+        monitor_name: monitorName || null,
+        baseline_at: new Date().toISOString(),
+        baseline_snapshot_id: latestSnapshot ? latestSnapshot.id : null,
+        baseline_member_count: latestSnapshot ? latestSnapshot.member_count : null
       });
 
     if (insertError) {
