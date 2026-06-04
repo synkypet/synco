@@ -90,7 +90,7 @@ export default function SyncoMetricsPage() {
         if (errPayload && errPayload.error) {
            setMetaConnectionError({
              title: errPayload.error === 'META_TOKEN_EXPIRED' ? 'Conexão Expirada' : 'Erro Meta Ads',
-             message: errPayload.message || 'Erro ao consultar Meta.'
+             message: 'Confira o token, a permissão ads_read e possíveis verificações pendentes no Meta Developers.'
            });
         }
       }
@@ -681,7 +681,7 @@ export default function SyncoMetricsPage() {
                     <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center justify-between">
                       <div>
                         <strong className="block text-xs text-red-400 mb-1">Meta Ads precisa de atenção</strong>
-                        <p className="text-[10px] text-red-300">Não foi possível consultar os dados da Meta. Sua conexão pode ter expirado ou estar sem a permissão ads_read.</p>
+                        <p className="text-[10px] text-red-300">Não foi possível consultar os dados da Meta. Verifique se o token ainda está válido, se a permissão ads_read foi autorizada e se não há nenhuma verificação pendente no Meta Developers ou na sua conta Meta.</p>
                       </div>
                       <button 
                         onClick={() => router.push('/configuracoes')}
