@@ -72,12 +72,15 @@ export async function POST(request: Request) {
     // Validação na Meta API
     const fetchMeta = async (endpoint: string, params: Record<string, string> = {}) => {
       const url = new URL(`${META_BASE_URL}${endpoint}`);
-      url.searchParams.append('access_token', accessToken);
       for (const [key, value] of Object.entries(params)) {
         url.searchParams.append(key, value);
       }
 
-      const response = await fetch(url.toString());
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
       const data = await response.json();
 
       if (!response.ok) {

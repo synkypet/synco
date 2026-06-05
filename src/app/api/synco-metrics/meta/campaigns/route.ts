@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { fetchMetaWithCacheAndLimit } from '@/lib/meta-api';
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,15 +53,25 @@ export async function GET(request: NextRequest) {
     }
 
     // 4. Consultar Meta Graph API para campanhas (Nível básico MVP)
-    const metaUrl = `https://graph.facebook.com/v19.0/${connection.ad_account_id}/campaigns?fields=id,name,status,effective_status,created_time&limit=500&access_token=${secret.access_token}`;
+    const metaUrl = `https://graph.facebook.com/v19.0/${connection.ad_account_id}/campaigns?fields=id,name,status,effective_status,created_time&limit=500`;
     
-    const metaRes = await fetch(metaUrl);
-    const metaData = await metaRes.json();
+    let metaData;
+    try {
+      metaData = await fetchMetaWithCacheAndLimit(metaUrl, secret.access_token, user.id);
+    } catch (err: any) {
+      if (err.message === 'META_RATE_LIMIT_EXCEEDED') {
+        return NextResponse.json({ 
+          error: 'META_RATE_LIMIT_EXCEEDED', 
+          message: 'Muitas requisições. Aguarde um instante.' 
+        }, { status: 429 });
+      }
+      throw err;
+    }
 
     if (metaData.error) {
       const safeError = { ...metaData.error };
       if (safeError.message && typeof safeError.message === 'string') {
-        safeError.message = safeError.message.replace(/access_token=[^&]+/g, 'access_token=[REDACTED_TOKEN]');
+        safeError.message = safeError.message.replace(secret.access_token, '[REDACTED_TOKEN]');
       }
       
       console.error('[Meta Campaigns] Error', {

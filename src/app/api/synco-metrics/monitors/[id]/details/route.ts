@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { fetchMetaWithCacheAndLimit } from '@/lib/meta-api';
 
 const VALID_PERIODS = ['today', 'last_7d', 'last_30d'];
 
@@ -102,10 +103,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           try {
             const datePreset = period === 'today' ? 'today' : period === 'last_30d' ? 'last_30d' : 'last_7d';
             const fields = 'campaign_id,spend,impressions,clicks,actions,cost_per_action_type';
-            const metaUrl = `https://graph.facebook.com/v19.0/${connection.ad_account_id}/insights?level=campaign&date_preset=${datePreset}&fields=${fields}&action_breakdowns=action_type&access_token=${secret.access_token}`;
+            const metaUrl = `https://graph.facebook.com/v19.0/${connection.ad_account_id}/insights?level=campaign&date_preset=${datePreset}&fields=${fields}&action_breakdowns=action_type`;
             
-            const metaRes = await fetch(metaUrl);
-            const metaData = await metaRes.json();
+            let metaData;
+            try {
+              metaData = await fetchMetaWithCacheAndLimit(metaUrl, secret.access_token, user.id);
+            } catch (err: any) {
+              if (err.message === 'META_RATE_LIMIT_EXCEEDED') {
+                payload.meta.error = 'META_RATE_LIMIT_EXCEEDED';
+                payload.meta.errorMessage = 'Muitas requisições. Aguarde um instante.';
+                return NextResponse.json(payload);
+              }
+              throw err;
+            }
 
             if (!metaData.error && metaData.data) {
               const campaignRow = metaData.data.find((row: any) => row.campaign_id === monitor.campaign_id);
@@ -183,7 +193,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             } else if (metaData.error) {
               const safeError = { ...metaData.error };
               if (safeError.message && typeof safeError.message === 'string') {
-                safeError.message = safeError.message.replace(/access_token=[^&]+/g, 'access_token=[REDACTED_TOKEN]');
+                safeError.message = safeError.message.replace(secret.access_token, '[REDACTED_TOKEN]');
               }
               console.error('[Meta Details] Error', {
                 code: safeError.code,
