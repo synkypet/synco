@@ -278,7 +278,16 @@ export const campaignService = {
 
     await supabase.from('campaign_destinations').insert(destinationsToInsert);
 
-    // ─── 6. Geração Real dos Send Jobs ────────────────────────────────────────
+    // ─── 6. Geração Real dos Send Jobs e Agendamento (Fila Global) ──────────────
+    const CAMPAIGN_SPACING_MIN = parseInt(process.env.CAMPAIGN_SPACING_SECONDS_MIN || '180', 10);
+    const CAMPAIGN_SPACING_MAX = parseInt(process.env.CAMPAIGN_SPACING_SECONDS_MAX || '300', 10);
+    const JOB_SPACING_MIN = parseInt(process.env.SEND_JOB_SPACING_SECONDS_MIN || '6', 10);
+    const JOB_SPACING_MAX = parseInt(process.env.SEND_JOB_SPACING_SECONDS_MAX || '9', 10);
+    
+    // Fallback spacing values
+    const campaignSpacingSec = Math.floor(Math.random() * (CAMPAIGN_SPACING_MAX - CAMPAIGN_SPACING_MIN + 1)) + CAMPAIGN_SPACING_MIN;
+    const jobSpacingSec = Math.floor(Math.random() * (JOB_SPACING_MAX - JOB_SPACING_MIN + 1)) + JOB_SPACING_MIN;
+
     // Buscar canais para fallback
     const { data: userChannels } = await supabase
       .from('channels')
@@ -287,6 +296,49 @@ export const campaignService = {
       .eq('is_active', true);
 
     const jobsToInsert: any[] = [];
+    
+    // Pre-calculate queue end per channel
+    const channelQueueEnds = new Map<string, Date>();
+    const channelJobIndex = new Map<string, number>();
+
+    const activeChannelIds = Array.from(new Set(Array.from(uniqueGroups.values()).map(g => g.channel_id)));
+    
+    for (const channelId of activeChannelIds) {
+      const { data: pendingJobs } = await supabase
+        .from('send_jobs')
+        .select('scheduled_at')
+        .eq('user_id', userId)
+        .eq('channel_id', channelId)
+        .in('status', ['pending', 'scheduled', 'processing'])
+        .order('scheduled_at', { ascending: false, nullsFirst: false })
+        .limit(1);
+
+      let maxScheduledAt = new Date();
+      if (pendingJobs && pendingJobs.length > 0 && pendingJobs[0].scheduled_at) {
+        maxScheduledAt = new Date(pendingJobs[0].scheduled_at);
+      }
+
+      const now = new Date();
+      const base = maxScheduledAt > now ? maxScheduledAt : now;
+      
+      let campaignStartAt: Date;
+      
+      if (base > now) {
+        campaignStartAt = new Date(base.getTime() + campaignSpacingSec * 1000);
+      } else {
+        if (dto.scheduled_at) {
+          const dtoTime = new Date(dto.scheduled_at);
+          campaignStartAt = dtoTime > now ? dtoTime : now;
+        } else {
+          campaignStartAt = now;
+        }
+      }
+
+      channelQueueEnds.set(channelId, campaignStartAt);
+      channelJobIndex.set(channelId, 0);
+      
+      console.log(`[CAMPAIGN-SCHEDULER] userId=${userId} channelId=${channelId} base=${base.toISOString()} campaignStart=${campaignStartAt.toISOString()} campaignSpacingSec=${campaignSpacingSec} jobSpacingSec=${jobSpacingSec}`);
+    }
 
     insertedItems.forEach((item, index) => {
       const originalItem = dto.items[index];
@@ -363,6 +415,13 @@ export const campaignService = {
           return; // Skip this destination for this item
         }
 
+        const cId = group.channel_id;
+        const cIndex = channelJobIndex.get(cId) || 0;
+        const cStartAt = channelQueueEnds.get(cId) || new Date();
+        const jobScheduledAt = new Date(cStartAt.getTime() + cIndex * jobSpacingSec * 1000);
+        
+        channelJobIndex.set(cId, cIndex + 1);
+
         jobsToInsert.push({
           user_id: userId,
           campaign_id: campaign.id,
@@ -378,7 +437,7 @@ export const campaignService = {
           status: 'pending',
           try_count: 0,
           fallback_channel_id: fallbackChannel?.id || null,
-          scheduled_at: dto.scheduled_at || null,
+          scheduled_at: jobScheduledAt.toISOString(),
           origin: dto.origin || 'manual'
         });
 
@@ -402,6 +461,19 @@ export const campaignService = {
          console.error('Falha ao gerar send_jobs:', jobsError);
          throw new Error(`Failed to generate send jobs: ${jobsError.message}`);
       }
+      
+      const minScheduledAt = new Date(Math.min(...jobsToInsert.map(j => new Date(j.scheduled_at).getTime())));
+      const maxScheduledAt = new Date(Math.max(...jobsToInsert.map(j => new Date(j.scheduled_at).getTime())));
+      
+      await supabase
+        .from('campaigns')
+        .update({ scheduled_at: minScheduledAt.toISOString() })
+        .eq('id', campaign.id);
+        
+      // Update local object to reflect the truth
+      campaign.scheduled_at = minScheduledAt.toISOString();
+
+      console.log(`[CAMPAIGN-JOB-SCHEDULE] campaignId=${campaign.id} jobs=${jobsToInsert.length} first=${minScheduledAt.toISOString()} last=${maxScheduledAt.toISOString()}`);
       console.log(`[CAMPAIGN-SERVICE] ✓ ${jobsToInsert.length} jobs gerados com sucesso.`);
     } else {
       console.warn(`[CAMPAIGN-SERVICE] Nenhum job elegível gerado para a campanha #${campaign.id}. Marcando como falha operacional.`);
