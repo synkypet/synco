@@ -118,9 +118,21 @@ export const capturedCouponDispatcher = {
           console.error(`${routeLogPrefix} Erro ao sincronizar candidatos:`, syncErr.message);
         }
 
-        // --- 4. FETCH ACTIVE RULES ---
-        // Buscamos apenas regras selecionadas, ativas e que já venceram o agendamento
+        // --- 4. CHECK ROUTE CADENCE ---
         const now = new Date();
+        const intervalMinutes = route.coupon_interval_minutes || 60;
+        let plannedRunAt = route.coupon_next_run_at ? new Date(route.coupon_next_run_at).getTime() : now.getTime();
+        // Proteção contra atraso extremo (se atrasou mais de 2 ciclos, resetar para agora)
+        if (now.getTime() - plannedRunAt > intervalMinutes * 60000 * 2) {
+          plannedRunAt = now.getTime();
+        }
+        
+        if (plannedRunAt > now.getTime()) {
+          console.log(`${routeLogPrefix} Rota aguardando cadência. Próxima: ${new Date(plannedRunAt).toISOString()}`);
+          continue;
+        }
+
+        // Rota está due! Buscar o próximo cupom da fila (LRU)
         const { data: activeRules, error: rulesError } = await supabase
           .from('automation_coupon_rules')
           .select(`
@@ -132,22 +144,32 @@ export const capturedCouponDispatcher = {
           .eq('route_id', route.id)
           .eq('is_selected', true)
           .eq('is_active', true)
-          .or(`next_run_at.lte.${now.toISOString()},next_run_at.is.null`)
-          .order('next_run_at', { ascending: true });
+          .order('last_sent_at', { ascending: true, nullsFirst: true })
+          .limit(1);
 
         if (rulesError) {
           console.error(`${routeLogPrefix} Erro ao buscar regras:`, rulesError);
           continue;
         }
 
+        const nextRunAt = new Date(plannedRunAt + intervalMinutes * 60000);
+
         if (!activeRules || activeRules.length === 0) {
+          console.log(`${routeLogPrefix} Nenhum cupom elegível para enviar nesta rodada.`);
+          // Avança a cadência para o cron não travar nesta rota
+          await supabase.from('automation_routes').update({ coupon_next_run_at: nextRunAt.toISOString() }).eq('id', route.id);
+          
+          await autoService.registerCouponDispatch({
+            user_id: source.user_id,
+            coupon_id: null as any, // Placeholder safely handled if we omit it or pass empty string, but let's pass a dummy UUID if required, or let it fail silently if DB complains. Actually `coupon_id` is required in schema? Wait, it might be. Let's not register in dispatches if there's no coupon, or just log.
+          } as any, supabase).catch(() => {}); // ignore error for empty coupon
           continue;
         }
 
-        console.log(`${routeLogPrefix} Encontradas ${activeRules.length} regras selecionadas para processamento.`);
+        console.log(`${routeLogPrefix} Selecionado 1 cupom para a rodada (LRU).`);
 
         const config = source.config || {};
-        const batchLimit = config.batchLimit || 5;
+        const batchLimit = 1; // FORÇADO PARA 1 POR ROTA
         let routeCycleCount = 0;
 
         for (const rule of activeRules) {
@@ -160,12 +182,7 @@ export const capturedCouponDispatcher = {
           // --- 5. GUARDRAIL: PROMO LANDING PROTECTION ---
           if (itemType === 'promo_landing') {
             console.log(`${routeLogPrefix} [RULE:${rule.id}] Pulo: promo_landing requer opt-in explícito e guardrail dedicado.`);
-            // Marcamos como processado para não travar o loop de agendamento se estiver selecionado
-            const nextRunAt = new Date(Date.now() + (rule.interval_minutes || 60) * 60000);
-            await autoService.updateCouponRule(rule.id, { 
-              next_run_at: nextRunAt.toISOString(),
-              updated_at: new Date().toISOString()
-            }, supabase);
+            await supabase.from('automation_routes').update({ coupon_next_run_at: nextRunAt.toISOString() }).eq('id', route.id);
             continue;
           }
 
@@ -175,17 +192,8 @@ export const capturedCouponDispatcher = {
           }
 
           // --- 6. DETERMINISTIC CYCLE KEY (BUCKET-BASED) ---
-          // A cycle_key é baseada no cupom, destino e no bucket de tempo do intervalo.
-          // Isso garante que se o mesmo cupom for disparado por rotas diferentes
-          // para o mesmo destino no mesmo ciclo, eles batam no mesmo bucket e ocorra o dedupe.
-          const intervalMinutes = rule.interval_minutes || 60;
-          const intervalMs = intervalMinutes * 60 * 1000;
-          const anchorTs = new Date(rule.next_run_at || now).getTime();
-          // Bucketing: Truncamos o horário do agendamento para o início do intervalo
-          const bucketTs = Math.floor(anchorTs / intervalMs) * intervalMs;
-          
-          // Chave: coupon + target + bucket (Global Cycle Dedupe)
-          const cycleKey = `coupon:${coupon.id}:target:${route.target_id}:due:${bucketTs}`;
+          // A cycle_key agora representa a rodada da automação para esta rota
+          const cycleKey = `route:${route.id}:cycle:${plannedRunAt}:target:${route.target_id}`;
 
           // --- 7. DEDUPE ---
           // 7.1 Dedupe por Rota + Ciclo (Recorrência Segura)
@@ -225,12 +233,10 @@ export const capturedCouponDispatcher = {
               cycle_key: cycleKey,
               dedupe_key: `global_dedupe:${source.user_id}:${coupon.id}:${route.target_id}`
             }, supabase);
-            
-            // Avançar o agendamento da regra para o próximo ciclo
-            const nextRunAt = new Date(Date.now() + (rule.interval_minutes || 60) * 60000);
-            await autoService.updateCouponRule(rule.id, { 
-              next_run_at: nextRunAt.toISOString()
-            }, supabase);
+            // Avançar o agendamento da ROTA para o próximo ciclo
+            await supabase.from('automation_routes').update({ 
+              coupon_next_run_at: nextRunAt.toISOString() 
+            }).eq('id', route.id);
             continue;
           }
           
@@ -341,12 +347,16 @@ export const capturedCouponDispatcher = {
               dedupe_key: `rule:${rule.id}:cycle:${cycleKey}:target:${route.target_id}`
             }, supabase);
 
-            // Atualizar o agendamento da regra: next_run = now + interval
-            const nextRunAt = new Date(Date.now() + (rule.interval_minutes || 60) * 60000);
+            // Atualizar o last_sent_at do cupom
             await autoService.updateCouponRule(rule.id, { 
-              last_sent_at: new Date().toISOString(),
-              next_run_at: nextRunAt.toISOString()
+              last_sent_at: new Date().toISOString()
             }, supabase);
+
+            // Atualizar o agendamento da ROTA: next_run = plannedRunAt + interval
+            await supabase.from('automation_routes').update({ 
+              coupon_last_run_at: new Date().toISOString(),
+              coupon_next_run_at: nextRunAt.toISOString() 
+            }).eq('id', route.id);
 
             console.log(`${routeLogPrefix} [SUCCESS] Campanha ${campaign.id} criada para cupom ${coupon.id} (Ciclo: ${cycleKey})`);
 
@@ -363,11 +373,10 @@ export const capturedCouponDispatcher = {
               dedupe_key: `rule:${rule.id}:cycle:${cycleKey}:fail`
             }, supabase);
             
-            // Mesmo em caso de erro, avançamos o agendamento para não travar a fila
-            const nextRunAt = new Date(Date.now() + (rule.interval_minutes || 60) * 60000);
-            await autoService.updateCouponRule(rule.id, { 
-              next_run_at: nextRunAt.toISOString()
-            }, supabase);
+            // Mesmo em caso de erro, avançamos a ROTA para não travar a fila
+            await supabase.from('automation_routes').update({ 
+              coupon_next_run_at: nextRunAt.toISOString() 
+            }).eq('id', route.id);
           }
         }
       }

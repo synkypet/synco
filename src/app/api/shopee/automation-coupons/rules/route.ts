@@ -19,8 +19,17 @@ export async function GET(request: Request) {
 
     const supabaseAdmin = createAdminClient();
     const rules = await automationService.getCouponRules(sourceId, routeId, supabaseAdmin);
+    
+    const { data: routeData } = await supabaseAdmin
+      .from('automation_routes')
+      .select('coupon_interval_minutes, coupon_next_run_at, coupon_last_run_at')
+      .eq('id', routeId)
+      .single();
 
-    return NextResponse.json({ rules });
+    return NextResponse.json({ 
+      rules, 
+      route: routeData 
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -55,6 +64,28 @@ export async function POST(request: Request) {
       
       // Validação básica de ownership (poderia ser mais rigorosa checando a rule antes)
       await automationService.updateCouponRule(ruleId, updates, supabaseAdmin);
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === 'update_route') {
+      const { routeId, updates } = payload;
+      
+      if (updates && typeof updates.coupon_interval_minutes === 'number') {
+        if (updates.coupon_interval_minutes < 5) {
+          return NextResponse.json(
+            { error: 'O intervalo mínimo de envio é de 5 minutos.' },
+            { status: 400 }
+          );
+        }
+      }
+      
+      const { error } = await supabaseAdmin
+        .from('automation_routes')
+        .update(updates)
+        .eq('id', routeId);
+        
+      if (error) throw error;
+      
       return NextResponse.json({ success: true });
     }
 

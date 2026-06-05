@@ -61,6 +61,7 @@ interface CouponManagementBlockProps {
 
 export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlockProps) {
   const [rules, setRules] = useState<CouponRule[]>([]);
+  const [routeData, setRouteData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
@@ -72,6 +73,9 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Erro ao carregar regras');
       setRules(data.rules);
+      if (data.route) {
+        setRouteData(data.route);
+      }
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -128,35 +132,33 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
     }
   };
 
-  const handleIntervalChange = async (ruleId: string, minutes: number) => {
+  const handleGlobalIntervalChange = async (minutes: number) => {
     let targetMinutes = minutes;
     
-    if (targetMinutes < 1) {
-      toast.warning('O intervalo mínimo permitido é de 1 minuto.');
-      targetMinutes = 1;
-      // Atualizar o estado local imediatamente para refletir 1
-      setRules(prev => prev.map(r => r.id === ruleId ? { ...r, interval_minutes: 1 } : r));
+    if (targetMinutes < 5) {
+      toast.warning('O intervalo mínimo permitido é de 5 minutos.');
+      targetMinutes = 5;
     }
     
-    setIsUpdating(ruleId);
+    setIsUpdating('route-interval');
     try {
       const response = await fetch('/api/shopee/automation-coupons/rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'update',
+          action: 'update_route',
           payload: {
-            ruleId,
-            updates: { interval_minutes: targetMinutes }
+            routeId,
+            updates: { coupon_interval_minutes: targetMinutes }
           }
         })
       });
       
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Erro ao atualizar intervalo');
+      if (!response.ok) throw new Error(data.error || 'Erro ao atualizar cadência da automação');
       
-      setRules(prev => prev.map(r => r.id === ruleId ? { ...r, interval_minutes: targetMinutes } : r));
-      toast.success(`Intervalo atualizado para ${targetMinutes} min`);
+      setRouteData((prev: any) => ({ ...prev, coupon_interval_minutes: targetMinutes }));
+      toast.success(`Automação configurada para enviar a cada ${targetMinutes} min`);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -208,6 +210,48 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
           <AddManualCouponDialog sourceId={sourceId} routeId={routeId} onSuccess={fetchRules} />
         </div>
       </div>
+
+      {routeData && (
+        <TactileCard className="p-5 bg-anthracite-surface/40 border border-white/5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1 max-w-lg">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <Settings2 className="w-4 h-4 text-kinetic-orange" />
+                Cadência da Automação
+              </h4>
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                Os cupons selecionados abaixo serão enviados <strong>um por vez</strong>, em rotação contínua. 
+                Cada cupom processado vira uma campanha normal e respeita a sua fila global de envios.
+              </p>
+            </div>
+            
+            <div className="flex flex-col items-start md:items-end gap-1 shrink-0">
+              <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Enviar 1 cupom a cada (min)</div>
+              <div className="flex items-center gap-2">
+                <Input 
+                  type="number"
+                  min={5}
+                  className="h-9 w-24 bg-deep-void border border-white/10 text-sm text-center font-bold text-white"
+                  value={routeData.coupon_interval_minutes || 60}
+                  onChange={(e) => setRouteData((prev: any) => ({ ...prev, coupon_interval_minutes: parseInt(e.target.value) || 60 }))}
+                  onBlur={(e) => handleGlobalIntervalChange(parseInt(e.target.value) || 60)}
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-4 flex flex-wrap gap-4 pt-4 border-t border-white/5 text-[11px] font-medium">
+            <div className="flex items-center gap-1.5 text-gray-400">
+              <Clock className="w-3.5 h-3.5" />
+              <span>Última rodada: <span className="text-white">{formatTime(routeData.coupon_last_run_at)} {formatDate(routeData.coupon_last_run_at)}</span></span>
+            </div>
+            <div className="flex items-center gap-1.5 text-kinetic-orange">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Próxima rodada prevista: <span className="text-white">{formatTime(routeData.coupon_next_run_at)} {formatDate(routeData.coupon_next_run_at)}</span></span>
+            </div>
+          </div>
+        </TactileCard>
+      )}
 
       <div className="grid gap-3">
         {isLoading ? (
@@ -261,27 +305,11 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
                         <Clock className="w-3 h-3" />
                         Último: {formatTime(rule.last_sent_at)} ({formatDate(rule.last_sent_at)})
                       </div>
-                      <div className="flex items-center gap-1 text-kinetic-orange">
-                        <Calendar className="w-3 h-3" />
-                        Próximo: {formatTime(rule.next_run_at)}
-                      </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-6">
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Intervalo (min)</div>
-                      <div className="flex items-center gap-2">
-                        <Input 
-                          type="number"
-                          min={1}
-                          className="h-7 w-16 bg-deep-void border-none text-[12px] text-center p-0"
-                          value={rule.interval_minutes}
-                          onChange={(e) => setRules(prev => prev.map(r => r.id === rule.id ? { ...r, interval_minutes: parseInt(e.target.value) || 1 } : r))}
-                          onBlur={(e) => handleIntervalChange(rule.id, parseInt(e.target.value) || 30)}
-                        />
-                      </div>
-                    </div>
+
 
                     <div className="flex flex-col items-center gap-2">
                       <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Ativo</div>
