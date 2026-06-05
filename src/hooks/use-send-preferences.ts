@@ -8,6 +8,8 @@ export interface UserSendPreferences {
   send_window_start: string | null;
   send_window_end: string | null;
   send_window_timezone: string;
+  campaign_spacing_min_seconds?: number | null;
+  campaign_spacing_max_seconds?: number | null;
   updated_at?: string;
 }
 

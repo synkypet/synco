@@ -279,13 +279,34 @@ export const campaignService = {
     await supabase.from('campaign_destinations').insert(destinationsToInsert);
 
     // ─── 6. Geração Real dos Send Jobs e Agendamento (Fila Global) ──────────────
-    const CAMPAIGN_SPACING_MIN = parseInt(process.env.CAMPAIGN_SPACING_SECONDS_MIN || '180', 10);
-    const CAMPAIGN_SPACING_MAX = parseInt(process.env.CAMPAIGN_SPACING_SECONDS_MAX || '300', 10);
+    const { data: userPrefs } = await supabase
+      .from('user_send_preferences')
+      .select('campaign_spacing_min_seconds, campaign_spacing_max_seconds')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    let CAMPAIGN_SPACING_MIN = parseInt(process.env.CAMPAIGN_SPACING_SECONDS_MIN || '180', 10);
+    let CAMPAIGN_SPACING_MAX = parseInt(process.env.CAMPAIGN_SPACING_SECONDS_MAX || '300', 10);
+    let spacingSource = 'env|fallback';
+
+    if (userPrefs?.campaign_spacing_min_seconds && userPrefs?.campaign_spacing_max_seconds) {
+      const pMin = userPrefs.campaign_spacing_min_seconds;
+      const pMax = userPrefs.campaign_spacing_max_seconds;
+      if (pMin >= 60 && pMax >= pMin && pMax <= 3600) {
+        CAMPAIGN_SPACING_MIN = pMin;
+        CAMPAIGN_SPACING_MAX = pMax;
+        spacingSource = 'user_preferences';
+      }
+    }
+
     const JOB_SPACING_MIN = parseInt(process.env.SEND_JOB_SPACING_SECONDS_MIN || '6', 10);
     const JOB_SPACING_MAX = parseInt(process.env.SEND_JOB_SPACING_SECONDS_MAX || '9', 10);
     
     // Fallback spacing values
-    const campaignSpacingSec = Math.floor(Math.random() * (CAMPAIGN_SPACING_MAX - CAMPAIGN_SPACING_MIN + 1)) + CAMPAIGN_SPACING_MIN;
+    const campaignSpacingSec = CAMPAIGN_SPACING_MIN === CAMPAIGN_SPACING_MAX 
+      ? CAMPAIGN_SPACING_MIN 
+      : Math.floor(Math.random() * (CAMPAIGN_SPACING_MAX - CAMPAIGN_SPACING_MIN + 1)) + CAMPAIGN_SPACING_MIN;
+
     const jobSpacingSec = Math.floor(Math.random() * (JOB_SPACING_MAX - JOB_SPACING_MIN + 1)) + JOB_SPACING_MIN;
 
     // Buscar canais para fallback
@@ -337,6 +358,7 @@ export const campaignService = {
       }
 
       const campaignStartAt = targetStart;
+      console.log(`[CAMPAIGN-SCHEDULER] userId=${userId} channelId=${channelId} spacingSource=${spacingSource} minSec=${CAMPAIGN_SPACING_MIN} maxSec=${CAMPAIGN_SPACING_MAX} selectedSec=${campaignSpacingSec} campaignStartAt=${campaignStartAt.toISOString()}`);
 
       channelQueueEnds.set(channelId, campaignStartAt);
       channelJobIndex.set(channelId, 0);

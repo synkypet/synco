@@ -59,6 +59,9 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
   const statsTotal = stats?.total ?? 0;
   const isStatsReady = !statsLoading && stats !== null && stats !== undefined;
 
+  const scheduledAt = campaign.scheduled_at ? new Date(campaign.scheduled_at) : null;
+  const isScheduledFuture = scheduledAt ? scheduledAt.getTime() > Date.now() : false;
+
   let opStatus: string;
   if (campaign.status === 'failed') {
     opStatus = 'failed'; // Banco de dados diz explicitamente que a campanha falhou
@@ -69,12 +72,41 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
   } else if ((stats?.session_lost ?? 0) > 0) {
     opStatus = 'session_lost';
   } else if ((stats?.pending ?? 0) > 0) {
-    opStatus = queue?.position === 1 ? 'cooldown' : 'queued';
+    opStatus = queue?.position === 1 && !isScheduledFuture ? 'cooldown' : 'queued';
   } else {
     opStatus = 'completed';
   }
   
   const statusDef = OPERATIONAL_STATUS[opStatus] ?? OPERATIONAL_STATUS.completed;
+
+  let etaText = "";
+  let etaSubText = "";
+  if (opStatus === 'queued' && scheduledAt) {
+    if (isScheduledFuture) {
+      const formatter = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const timeStr = formatter.format(scheduledAt);
+      
+      const isToday = new Date().toDateString() === scheduledAt.toDateString();
+      const isTomorrow = new Date(Date.now() + 86400000).toDateString() === scheduledAt.toDateString();
+      
+      if (isToday) {
+        etaText = `Previsão: Hoje às ${timeStr}`;
+      } else if (isTomorrow) {
+        etaText = `Previsão: Amanhã às ${timeStr}`;
+      } else {
+        const dateStr = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(scheduledAt);
+        etaText = `Previsão: ${dateStr} às ${timeStr}`;
+      }
+      
+      const diffMin = Math.round((scheduledAt.getTime() - Date.now()) / 60000);
+      etaSubText = `Falta aprox. ${diffMin} min`;
+    } else {
+      etaText = "Na fila / aguardando processamento";
+    }
+  } else if (opStatus === 'queued' && !scheduledAt) {
+    etaText = "Previsão não definida";
+  }
+
 
   return (
     <TactileCard className="p-0 overflow-hidden border-none group animate-in fade-in duration-500">
@@ -114,17 +146,29 @@ export function CampaignCard({ campaign, onViewDetails }: CampaignCardProps) {
             {/* Middle Line: Metrics */}
             <div className="mt-6 flex flex-col gap-4">
               {/* Queue Position & ETA (if active) */}
-              {hasPending && queue && (
-                <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-white/5 w-fit">
-                  <Timer size={10} className="text-white/30 flex-shrink-0" />
-                  <span className="text-[9px] font-black uppercase tracking-widest text-white/40">
-                    Pos. <span className="text-white/80">#{queue.position}</span>
-                    {queue.pendingInCampaign > 1 && (
-                      <> · {queue.pendingInCampaign} msg</>
-                    )}
-                  </span>
+              {(hasPending && queue) || etaText ? (
+                <div className="flex flex-col gap-2">
+                  {hasPending && queue && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-white/5 w-fit">
+                      <Timer size={10} className="text-white/30 flex-shrink-0" />
+                      <span className="text-[9px] font-black uppercase tracking-widest text-white/40">
+                        Pos. <span className="text-white/80">#{queue.position}</span>
+                        {queue.pendingInCampaign > 1 && (
+                          <> · {queue.pendingInCampaign} msg</>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {etaText && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-white/5 w-fit">
+                      <Calendar size={10} className="text-white/30 flex-shrink-0" />
+                      <span className="text-[9px] font-black uppercase tracking-widest text-white/40">
+                        {etaText} {etaSubText && <span className="text-white/20 ml-1">({etaSubText})</span>}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : null}
 
               <div className="grid grid-cols-5 gap-1">
                 <div className="flex flex-col gap-0.5">

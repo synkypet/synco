@@ -59,11 +59,19 @@ export default function ConfiguracoesPage() {
     const { preferences, upsertPreferences, isUpdating: isUpdatingPreferences } = useSendPreferences(user?.id);
     const [sendWindowStart, setSendWindowStart] = useState('');
     const [sendWindowEnd, setSendWindowEnd] = useState('');
+    const [spacingMinMin, setSpacingMinMin] = useState<string>('3');
+    const [spacingMaxMin, setSpacingMaxMin] = useState<string>('5');
 
     useEffect(() => {
       if (preferences) {
         setSendWindowStart(preferences.send_window_start || '');
         setSendWindowEnd(preferences.send_window_end || '');
+        if (preferences.campaign_spacing_min_seconds) {
+          setSpacingMinMin(Math.floor(preferences.campaign_spacing_min_seconds / 60).toString());
+        }
+        if (preferences.campaign_spacing_max_seconds) {
+          setSpacingMaxMin(Math.floor(preferences.campaign_spacing_max_seconds / 60).toString());
+        }
       }
     }, [preferences]);
     
@@ -267,18 +275,68 @@ export default function ConfiguracoesPage() {
                                         </div>
                                     </div>
 
+                                    <div className="pt-6 mt-6 border-t border-white/5">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <Clock className="w-5 h-5 text-kinetic-orange" />
+                                            <h3 className="font-bold text-lg font-headline italic">Intervalo entre campanhas</h3>
+                                        </div>
+                                        <p className="text-[11px] text-white/30 uppercase tracking-widest mb-6 italic leading-relaxed">
+                                            Controle de quanto em quanto tempo uma nova campanha começa a ser enviada. Os envios para os grupos dentro da mesma campanha continuam usando o intervalo curto de segurança.
+                                        </p>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Mínimo (Minutos)</Label>
+                                                <Input 
+                                                    type="number" 
+                                                    min="1"
+                                                    max="60"
+                                                    className="bg-deep-void border border-white/5 h-12 w-full px-4 text-xs font-black rounded-xl shadow-skeuo-pressed text-white"
+                                                    value={spacingMinMin} 
+                                                    onChange={(e) => setSpacingMinMin(e.target.value)} 
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Máximo (Minutos)</Label>
+                                                <Input 
+                                                    type="number" 
+                                                    min="1"
+                                                    max="60"
+                                                    className="bg-deep-void border border-white/5 h-12 w-full px-4 text-xs font-black rounded-xl shadow-skeuo-pressed text-white"
+                                                    value={spacingMaxMin} 
+                                                    onChange={(e) => setSpacingMaxMin(e.target.value)} 
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-[9px] text-white/20 uppercase font-bold tracking-tight italic mb-6">
+                                            Exemplo: 5 e 5 = fixo a cada 5 minutos. 3 e 5 = aleatório entre 3 e 5 minutos.
+                                        </p>
+                                    </div>
+
                                     <div className="pt-4 flex flex-wrap gap-4 border-t border-white/5">
                                         <Button 
                                             className="h-12 px-8 font-black uppercase tracking-widest text-xs rounded-xl bg-kinetic-orange text-black hover:bg-kinetic-orange/90 shadow-glow-orange-intense transition-all"
-                                            onClick={() => upsertPreferences({ 
-                                                send_window_start: sendWindowStart || null, 
-                                                send_window_end: sendWindowEnd || null,
-                                                send_window_timezone: 'America/Sao_Paulo'
-                                            })}
-                                            disabled={!!isUpdatingPreferences || (!!sendWindowStart !== !!sendWindowEnd)}
+                                            onClick={() => {
+                                                const minVal = parseInt(spacingMinMin, 10);
+                                                const maxVal = parseInt(spacingMaxMin, 10);
+                                                
+                                                if (isNaN(minVal) || isNaN(maxVal) || minVal < 1 || maxVal < minVal || maxVal > 60) {
+                                                    toast.error('Intervalo inválido. Mínimo deve ser >= 1. Máximo >= Mínimo e <= 60.');
+                                                    return;
+                                                }
+
+                                                upsertPreferences({ 
+                                                    send_window_start: sendWindowStart || null, 
+                                                    send_window_end: sendWindowEnd || null,
+                                                    send_window_timezone: 'America/Sao_Paulo',
+                                                    campaign_spacing_min_seconds: minVal * 60,
+                                                    campaign_spacing_max_seconds: maxVal * 60
+                                                });
+                                            }}
+                                            disabled={!!isUpdatingPreferences}
                                         >
                                             {isUpdatingPreferences ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                                            Salvar horário de envio
+                                            Salvar preferências de envio
                                         </Button>
 
                                         <Button 
@@ -287,10 +345,14 @@ export default function ConfiguracoesPage() {
                                             onClick={() => {
                                                 setSendWindowStart('');
                                                 setSendWindowEnd('');
+                                                const minVal = parseInt(spacingMinMin, 10) || 3;
+                                                const maxVal = parseInt(spacingMaxMin, 10) || 5;
                                                 upsertPreferences({ 
                                                     send_window_start: null, 
                                                     send_window_end: null,
-                                                    send_window_timezone: 'America/Sao_Paulo'
+                                                    send_window_timezone: 'America/Sao_Paulo',
+                                                    campaign_spacing_min_seconds: minVal * 60,
+                                                    campaign_spacing_max_seconds: maxVal * 60
                                                 });
                                             }}
                                             disabled={isUpdatingPreferences}
