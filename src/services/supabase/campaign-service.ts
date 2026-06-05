@@ -304,40 +304,44 @@ export const campaignService = {
     const activeChannelIds = Array.from(new Set(Array.from(uniqueGroups.values()).map(g => g.channel_id)));
     
     for (const channelId of activeChannelIds) {
-      const { data: pendingJobs } = await supabase
+      const { data: lastJobs } = await supabase
         .from('send_jobs')
         .select('scheduled_at')
         .eq('user_id', userId)
         .eq('channel_id', channelId)
-        .in('status', ['pending', 'scheduled', 'processing'])
+        .not('scheduled_at', 'is', null)
+        .neq('status', 'canceled')
         .order('scheduled_at', { ascending: false, nullsFirst: false })
         .limit(1);
 
-      let maxScheduledAt = new Date();
-      if (pendingJobs && pendingJobs.length > 0 && pendingJobs[0].scheduled_at) {
-        maxScheduledAt = new Date(pendingJobs[0].scheduled_at);
+      let lastScheduledAt: Date | null = null;
+      if (lastJobs && lastJobs.length > 0 && lastJobs[0].scheduled_at) {
+        lastScheduledAt = new Date(lastJobs[0].scheduled_at);
       }
 
       const now = new Date();
-      const base = maxScheduledAt > now ? maxScheduledAt : now;
-      
-      let campaignStartAt: Date;
-      
-      if (base > now) {
-        campaignStartAt = new Date(base.getTime() + campaignSpacingSec * 1000);
-      } else {
-        if (dto.scheduled_at) {
-          const dtoTime = new Date(dto.scheduled_at);
-          campaignStartAt = dtoTime > now ? dtoTime : now;
-        } else {
-          campaignStartAt = now;
+      let targetStart = now;
+
+      if (lastScheduledAt) {
+        const earliestAllowedStart = new Date(lastScheduledAt.getTime() + campaignSpacingSec * 1000);
+        if (earliestAllowedStart > targetStart) {
+          targetStart = earliestAllowedStart;
         }
       }
+
+      if (dto.scheduled_at) {
+        const dtoStart = new Date(dto.scheduled_at);
+        if (dtoStart > targetStart) {
+          targetStart = dtoStart;
+        }
+      }
+
+      const campaignStartAt = targetStart;
 
       channelQueueEnds.set(channelId, campaignStartAt);
       channelJobIndex.set(channelId, 0);
       
-      console.log(`[CAMPAIGN-SCHEDULER] userId=${userId} channelId=${channelId} base=${base.toISOString()} campaignStart=${campaignStartAt.toISOString()} campaignSpacingSec=${campaignSpacingSec} jobSpacingSec=${jobSpacingSec}`);
+      console.log(`[CAMPAIGN-SCHEDULER] userId=${userId} channelId=${channelId} lastScheduledAt=${lastScheduledAt?.toISOString() || 'none'} earliestAllowedStart=${lastScheduledAt ? new Date(lastScheduledAt.getTime() + campaignSpacingSec * 1000).toISOString() : 'none'} dtoScheduledAt=${dto.scheduled_at || 'none'} campaignStart=${campaignStartAt.toISOString()} campaignSpacingSec=${campaignSpacingSec} jobSpacingSec=${jobSpacingSec}`);
     }
 
     insertedItems.forEach((item, index) => {
