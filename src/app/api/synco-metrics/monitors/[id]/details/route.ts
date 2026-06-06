@@ -31,6 +31,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         group_id,
         campaign_id,
         campaign_name,
+        monitor_type,
         monitor_name,
         ad_account_id,
         baseline_at,
@@ -49,14 +50,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const payload: any = {
       monitor: {
         id: monitor.id,
-        name: monitor.monitor_name || `${monitor.campaign_name} → ${(monitor.groups as any)?.name || 'Grupo'}`,
+        monitorType: monitor.monitor_type || 'meta_campaign',
+        name: monitor.monitor_name || (monitor.monitor_type === 'group_only' ? (monitor.groups as any)?.name || 'Grupo' : `${monitor.campaign_name} → ${(monitor.groups as any)?.name || 'Grupo'}`),
         campaignName: monitor.campaign_name,
         groupName: (monitor.groups as any)?.name || 'Grupo sem nome',
         baselineAt: monitor.baseline_at,
         baselineMemberCount: monitor.baseline_member_count,
         baselineSnapshotId: monitor.baseline_snapshot_id
       },
-      meta: {
+      meta: monitor.monitor_type === 'group_only' ? null : {
         spend: 0,
         leads: 0,
         clicks: 0,
@@ -74,7 +76,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         netGrowth: 0,
         effectiveStart: monitor.baseline_at
       },
-      comparison: {
+      comparison: monitor.monitor_type === 'group_only' ? null : {
         realCostPerMember: null,
         difference: 0,
         leadToMemberRate: 0
@@ -83,7 +85,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     };
 
     // 2. Fetch Meta Ads Data
-    const { data: connection } = await supabase
+    if (monitor.monitor_type !== 'group_only') {
+      const { data: connection } = await supabase
       .from('sm_meta_connections')
       .select('*')
       .eq('user_id', user.id)
@@ -221,6 +224,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         }
       }
     }
+    }
 
     // 3. Fetch Group Snapshot Data
     const { data: latestSnapshot } = await supabase
@@ -287,12 +291,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     // 5. Build Comparison
-    payload.comparison.difference = payload.group.estimatedJoined - payload.meta.leads;
-    if (payload.group.estimatedJoined > 0) {
-      payload.comparison.realCostPerMember = parseFloat((payload.meta.spend / payload.group.estimatedJoined).toFixed(2));
-    }
-    if (payload.meta.leads > 0) {
-      payload.comparison.leadToMemberRate = parseFloat(((payload.group.estimatedJoined / payload.meta.leads) * 100).toFixed(2));
+    if (payload.comparison && payload.meta) {
+      payload.comparison.difference = payload.group.estimatedJoined - payload.meta.leads;
+      if (payload.group.estimatedJoined > 0) {
+        payload.comparison.realCostPerMember = parseFloat((payload.meta.spend / payload.group.estimatedJoined).toFixed(2));
+      }
+      if (payload.meta.leads > 0) {
+        payload.comparison.leadToMemberRate = parseFloat(((payload.group.estimatedJoined / payload.meta.leads) * 100).toFixed(2));
+      }
     }
 
     return NextResponse.json(payload);

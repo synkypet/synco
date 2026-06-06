@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
         campaign_id,
         campaign_name,
         monitor_name,
+        monitor_type,
         ad_account_id,
         baseline_at,
         groups ( name )
@@ -52,11 +53,12 @@ export async function GET(request: NextRequest) {
       groupName: m.groups?.name || 'Grupo sem nome',
       campaignId: m.campaign_id,
       campaignName: m.campaign_name,
-      monitorName: m.monitor_name || `${m.campaign_name} → ${m.groups?.name || 'Grupo'}`,
+      monitorType: m.monitor_type || 'meta_campaign',
+      monitorName: m.monitor_name || (m.monitor_type === 'group_only' ? (m.groups?.name || 'Grupo') : `${m.campaign_name} → ${m.groups?.name || 'Grupo'}`),
       baselineAt: m.baseline_at,
-      meta: { spend: 0, leads: 0, clicks: 0, impressions: 0, cpc: null as number | null, ctr: null as number | null, cpm: null as number | null, costPerLead: null as number | null, error: null as string | null },
+      meta: m.monitor_type === 'group_only' ? null : { spend: 0, leads: 0, clicks: 0, impressions: 0, cpc: null as number | null, ctr: null as number | null, cpm: null as number | null, costPerLead: null as number | null, error: null as string | null },
       group: { currentMembers: 0, estimatedJoined: 0, estimatedLeft: 0, netGrowth: 0 },
-      comparison: { realCostPerMember: null as number | null, difference: 0, leadToMemberRate: null as number | null }
+      comparison: m.monitor_type === 'group_only' ? null : { realCostPerMember: null as number | null, difference: 0, leadToMemberRate: null as number | null }
     }));
 
     // 2. Conexão Meta e Insights em lote (level=campaign)
@@ -88,7 +90,9 @@ export async function GET(request: NextRequest) {
               metaData = await fetchMetaWithCacheAndLimit(metaUrl, secret.access_token, user.id);
             } catch (err: any) {
                if (err.message === 'META_RATE_LIMIT_EXCEEDED') {
-                 resultMonitors.forEach(m => m.meta.error = 'META_RATE_LIMIT_EXCEEDED');
+                 resultMonitors.forEach(m => {
+                   if (m.meta) m.meta.error = 'META_RATE_LIMIT_EXCEEDED';
+                 });
                  return NextResponse.json({ monitors: resultMonitors });
                }
                throw err;
@@ -136,6 +140,8 @@ export async function GET(request: NextRequest) {
 
               // Preencher resultado
               resultMonitors.forEach(m => {
+                if (m.monitorType === 'group_only' || !m.meta) return;
+
                 const metaRow = metaByCampaign[m.campaignId];
                 if (metaRow) {
                   m.meta.spend = parseFloat(metaRow.spend.toFixed(2));
@@ -170,6 +176,8 @@ export async function GET(request: NextRequest) {
               });
 
                resultMonitors.forEach(m => {
+                 if (m.monitorType === 'group_only' || !m.meta) return;
+
                  if (metaData.error.code === 190) {
                    m.meta.error = 'META_TOKEN_EXPIRED';
                  } else if (metaData.error.code === 10 || metaData.error.code === 200) {
@@ -257,15 +265,17 @@ export async function GET(request: NextRequest) {
       m.group.netGrowth = netDelta;
 
       // Comparison
-      const realEntries = m.group.estimatedJoined;
-      m.comparison.difference = realEntries - m.meta.leads;
-      
-      if (realEntries > 0) {
-        m.comparison.realCostPerMember = parseFloat((m.meta.spend / realEntries).toFixed(2));
-      }
-      
-      if (m.meta.leads > 0) {
-        m.comparison.leadToMemberRate = parseFloat(((realEntries / m.meta.leads) * 100).toFixed(2));
+      if (m.monitorType !== 'group_only' && m.comparison && m.meta) {
+        const realEntries = m.group.estimatedJoined;
+        m.comparison.difference = realEntries - m.meta.leads;
+        
+        if (realEntries > 0) {
+          m.comparison.realCostPerMember = parseFloat((m.meta.spend / realEntries).toFixed(2));
+        }
+        
+        if (m.meta.leads > 0) {
+          m.comparison.leadToMemberRate = parseFloat(((realEntries / m.meta.leads) * 100).toFixed(2));
+        }
       }
     });
 
@@ -283,10 +293,14 @@ export async function POST(request: NextRequest) {
     if (authError || !user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const payload = await request.json();
-    const { groupId, campaignId, campaignName, monitorName } = payload;
+    const { monitorType = 'meta_campaign', groupId, campaignId, campaignName, monitorName } = payload;
 
-    if (!groupId || !campaignId || !campaignName) {
-      return NextResponse.json({ error: 'Parâmetros obrigatórios ausentes' }, { status: 400 });
+    if (!groupId) {
+      return NextResponse.json({ error: 'Parâmetros obrigatórios ausentes (groupId)' }, { status: 400 });
+    }
+
+    if (monitorType === 'meta_campaign' && (!campaignId || !campaignName)) {
+      return NextResponse.json({ error: 'Parâmetros de campanha obrigatórios ausentes para Meta Ads' }, { status: 400 });
     }
 
     // 1. Validar grupo em sm_monitored_groups
@@ -303,14 +317,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Grupo inválido ou não monitorado pelo SyncoMetrics' }, { status: 400 });
     }
 
-    // 1.5 Verificar se já existe monitoramento para o mesmo grupo e campanha
-    const { data: existing } = await supabase
+    // 1.5 Verificar se já existe monitoramento para o mesmo grupo e campanha/tipo
+    let query = supabase
       .from('sm_metric_monitors')
       .select('id, status')
       .eq('user_id', user.id)
       .eq('group_id', groupId)
-      .eq('campaign_id', campaignId)
-      .maybeSingle();
+      .eq('monitor_type', monitorType);
+
+    if (monitorType === 'meta_campaign') {
+      query = query.eq('campaign_id', campaignId);
+    }
+
+    const { data: existing } = await query.maybeSingle();
 
     if (existing) {
       if (existing.status === 'deleted') {
@@ -333,15 +352,19 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .single();
 
-    // 3. Buscar ad_account_id
-    const { data: connection } = await supabase
-      .from('sm_meta_connections')
-      .select('ad_account_id')
-      .eq('user_id', user.id)
-      .single();
+    // 3. Buscar ad_account_id se for meta_campaign
+    let adAccountId = null;
+    if (monitorType === 'meta_campaign') {
+      const { data: connection } = await supabase
+        .from('sm_meta_connections')
+        .select('ad_account_id')
+        .eq('user_id', user.id)
+        .single();
 
-    if (!connection || !connection.ad_account_id) {
-      return NextResponse.json({ error: 'Conta Meta não conectada' }, { status: 400 });
+      if (!connection || !connection.ad_account_id) {
+        return NextResponse.json({ error: 'Conta Meta não conectada' }, { status: 400 });
+      }
+      adAccountId = connection.ad_account_id;
     }
 
     // 4. Inserir monitor com baseline
@@ -350,9 +373,10 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: user.id,
         group_id: groupId,
-        campaign_id: campaignId,
-        campaign_name: campaignName,
-        ad_account_id: connection.ad_account_id,
+        monitor_type: monitorType,
+        campaign_id: monitorType === 'meta_campaign' ? campaignId : null,
+        campaign_name: monitorType === 'meta_campaign' ? campaignName : null,
+        ad_account_id: adAccountId,
         monitor_name: monitorName || null,
         baseline_at: new Date().toISOString(),
         baseline_snapshot_id: latestSnapshot ? latestSnapshot.id : null,

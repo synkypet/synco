@@ -61,6 +61,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         group_id,
         campaign_id,
         campaign_name,
+        monitor_type,
         monitor_name,
         ad_account_id,
         baseline_at,
@@ -79,14 +80,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const payload: any = {
       monitor: {
         id: monitor.id,
-        name: monitor.monitor_name || `${monitor.campaign_name} → ${(monitor.groups as any)?.name || 'Grupo'}`,
+        monitorType: monitor.monitor_type || 'meta_campaign',
+        name: monitor.monitor_name || (monitor.monitor_type === 'group_only' ? (monitor.groups as any)?.name || 'Grupo' : `${monitor.campaign_name} → ${(monitor.groups as any)?.name || 'Grupo'}`),
         campaignName: monitor.campaign_name,
         groupName: (monitor.groups as any)?.name || 'Grupo sem nome',
         baselineAt: monitor.baseline_at,
         baselineMemberCount: monitor.baseline_member_count,
         baselineSnapshotId: monitor.baseline_snapshot_id
       },
-      meta: {
+      meta: monitor.monitor_type === 'group_only' ? null : {
         spend: 0,
         leads: 0,
         clicks: 0,
@@ -105,7 +107,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         netGrowth: 0,
         effectiveStart: monitor.baseline_at
       },
-      comparison: {
+      comparison: monitor.monitor_type === 'group_only' ? null : {
         realCostPerMember: null,
         difference: 0,
         leadToMemberRate: 0
@@ -114,7 +116,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     };
 
     // 2. Fetch Meta Ads Data
-    const { data: connection } = await supabase
+    if (monitor.monitor_type !== 'group_only') {
+      const { data: connection } = await supabase
       .from('sm_meta_connections')
       .select('*')
       .eq('user_id', user.id)
@@ -244,6 +247,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         }
       }
     }
+    }
 
     // 3. Fetch Group Snapshot Data
     const { data: latestSnapshot } = await supabase
@@ -310,12 +314,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     // 5. Build Comparison
-    payload.comparison.difference = payload.group.estimatedJoined - payload.meta.leads;
-    if (payload.group.estimatedJoined > 0) {
-      payload.comparison.realCostPerMember = parseFloat((payload.meta.spend / payload.group.estimatedJoined).toFixed(2));
-    }
-    if (payload.meta.leads > 0) {
-      payload.comparison.leadToMemberRate = parseFloat(((payload.group.estimatedJoined / payload.meta.leads) * 100).toFixed(2));
+    if (payload.comparison && payload.meta) {
+      payload.comparison.difference = payload.group.estimatedJoined - payload.meta.leads;
+      if (payload.group.estimatedJoined > 0) {
+        payload.comparison.realCostPerMember = parseFloat((payload.meta.spend / payload.group.estimatedJoined).toFixed(2));
+      }
+      if (payload.meta.leads > 0) {
+        payload.comparison.leadToMemberRate = parseFloat(((payload.group.estimatedJoined / payload.meta.leads) * 100).toFixed(2));
+      }
     }
 
     // 6. Build CSV
@@ -325,25 +331,35 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // --- Seção 1: Resumo ---
     addRow(['Seção', 'Campo', 'Valor']);
     addRow(['Resumo', 'Nome do monitoramento', payload.monitor.name]);
-    addRow(['Resumo', 'Campanha', payload.monitor.campaignName]);
+    addRow(['Resumo', 'Tipo', payload.monitor.monitorType === 'group_only' ? 'Apenas grupo' : 'Meta + Grupo']);
+    if (payload.monitor.monitorType !== 'group_only') {
+      addRow(['Resumo', 'Campanha', payload.monitor.campaignName]);
+    }
     addRow(['Resumo', 'Grupo', payload.monitor.groupName]);
     addRow(['Resumo', 'Período', period === 'today' ? 'Hoje' : period === 'last_7d' ? 'Últimos 7 dias' : 'Últimos 30 dias']);
     addRow(['Resumo', 'Início do monitoramento', formatDate(payload.monitor.baselineAt)]);
     addRow(['Resumo', 'Membros no início', formatNumber(payload.monitor.baselineMemberCount)]);
     addRow(['Resumo', 'Membros atuais', formatNumber(payload.group.currentMembers)]);
-    addRow(['Resumo', 'Gasto Meta', formatCurrency(payload.meta.spend)]);
-    addRow(['Resumo', 'Leads informados', formatNumber(payload.meta.leads)]);
-    addRow(['Resumo', 'Cliques', formatNumber(payload.meta.clicks)]);
-    addRow(['Resumo', 'Impressões', formatNumber(payload.meta.impressions)]);
-    addRow(['Resumo', 'CTR', payload.meta.ctr !== null ? `${payload.meta.ctr}%` : '0%']);
-    addRow(['Resumo', 'CPC', formatCurrency(payload.meta.cpc)]);
-    addRow(['Resumo', 'CPM', formatCurrency(payload.meta.cpm)]);
-    addRow(['Resumo', 'Custo por Lead', formatCurrency(payload.meta.costPerLead)]);
+    
+    if (payload.monitor.monitorType !== 'group_only' && payload.meta) {
+      addRow(['Resumo', 'Gasto Meta', formatCurrency(payload.meta.spend)]);
+      addRow(['Resumo', 'Leads informados', formatNumber(payload.meta.leads)]);
+      addRow(['Resumo', 'Cliques', formatNumber(payload.meta.clicks)]);
+      addRow(['Resumo', 'Impressões', formatNumber(payload.meta.impressions)]);
+      addRow(['Resumo', 'CTR', payload.meta.ctr !== null ? `${payload.meta.ctr}%` : '0%']);
+      addRow(['Resumo', 'CPC', formatCurrency(payload.meta.cpc)]);
+      addRow(['Resumo', 'CPM', formatCurrency(payload.meta.cpm)]);
+      addRow(['Resumo', 'Custo por Lead', formatCurrency(payload.meta.costPerLead)]);
+    }
+
     addRow(['Resumo', 'Crescimento líquido (Estimado)', `+${formatNumber(payload.group.estimatedJoined)}`]);
     addRow(['Resumo', 'Saldo do período', formatNumber(payload.group.netGrowth)]);
-    addRow(['Resumo', 'Custo por membro líquido', formatCurrency(payload.comparison.realCostPerMember)]);
-    addRow(['Resumo', 'Diferença Meta x Saldo', formatNumber(payload.comparison.difference)]);
-    addRow(['Resumo', 'Taxa Lead -> Membro líquido', payload.comparison.leadToMemberRate !== null ? `${payload.comparison.leadToMemberRate}%` : '0%']);
+
+    if (payload.monitor.monitorType !== 'group_only' && payload.comparison) {
+      addRow(['Resumo', 'Custo por membro líquido', formatCurrency(payload.comparison.realCostPerMember)]);
+      addRow(['Resumo', 'Diferença Meta x Saldo', formatNumber(payload.comparison.difference)]);
+      addRow(['Resumo', 'Taxa Lead -> Membro líquido', payload.comparison.leadToMemberRate !== null ? `${payload.comparison.leadToMemberRate}%` : '0%']);
+    }
     
     lines.push(''); // Linha em branco
 
@@ -365,26 +381,29 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     lines.push(''); // Linha em branco
 
     // --- Seção 3: Eventos Meta / Pixel ---
-    addRow(['Seção', 'Evento', 'Quantidade', 'Custo por evento', 'Candidato a Lead']);
-    if (payload.meta.events && payload.meta.events.length > 0) {
-      payload.meta.events.forEach((ev: any) => {
-        addRow([
-          'Eventos Meta',
-          ev.actionType,
-          formatNumber(ev.value),
-          formatCurrency(ev.cost),
-          ev.isLeadCandidate ? 'Sim' : 'Não'
-        ]);
-      });
-    } else {
-      addRow(['Eventos Meta', 'Nenhum evento retornado', '', '', '']);
+    if (payload.monitor.monitorType !== 'group_only') {
+      addRow(['Seção', 'Evento', 'Quantidade', 'Custo por evento', 'Candidato a Lead']);
+      if (payload.meta && payload.meta.events && payload.meta.events.length > 0) {
+        payload.meta.events.forEach((ev: any) => {
+          addRow([
+            'Eventos Meta',
+            ev.actionType,
+            formatNumber(ev.value),
+            formatCurrency(ev.cost),
+            ev.isLeadCandidate ? 'Sim' : 'Não'
+          ]);
+        });
+      } else {
+        addRow(['Eventos Meta', 'Nenhum evento retornado', '', '', '']);
+      }
+      lines.push(''); // Linha em branco
     }
-
-    lines.push(''); // Linha em branco
 
     // --- Seção 4: Observações ---
     addRow(['Observações', 'Texto']);
-    addRow(['Observações', 'As métricas da Meta são consultadas diretamente da Meta Ads para o período selecionado.']);
+    if (payload.monitor.monitorType !== 'group_only') {
+      addRow(['Observações', 'As métricas da Meta são consultadas diretamente da Meta Ads para o período selecionado.']);
+    }
     addRow(['Observações', 'As métricas do grupo são calculadas pela variação líquida da contagem de membros entre coletas.']);
     addRow(['Observações', 'Entradas e saídas simultâneas no mesmo intervalo podem se anular no saldo líquido.']);
 

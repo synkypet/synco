@@ -43,6 +43,7 @@ export default function SyncoMetricsPage() {
 
   // Form states for Create Monitor
   const [newMonitorGroupId, setNewMonitorGroupId] = useState('');
+  const [newMonitorType, setNewMonitorType] = useState('meta_campaign');
   const [newMonitorCampaignId, setNewMonitorCampaignId] = useState('');
   const [newMonitorName, setNewMonitorName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -196,8 +197,12 @@ export default function SyncoMetricsPage() {
 
 
   const handleCreateMonitor = async () => {
-    if (!newMonitorGroupId || !newMonitorCampaignId) {
-      showFeedback('Selecione o grupo e a campanha.', 'error');
+    if (!newMonitorGroupId) {
+      showFeedback('Selecione o grupo.', 'error');
+      return;
+    }
+    if (newMonitorType === 'meta_campaign' && !newMonitorCampaignId) {
+      showFeedback('Selecione a campanha.', 'error');
       return;
     }
     
@@ -209,9 +214,10 @@ export default function SyncoMetricsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          monitorType: newMonitorType,
           groupId: newMonitorGroupId,
-          campaignId: newMonitorCampaignId,
-          campaignName: cName,
+          campaignId: newMonitorType === 'meta_campaign' ? newMonitorCampaignId : undefined,
+          campaignName: newMonitorType === 'meta_campaign' ? cName : undefined,
           monitorName: newMonitorName
         })
       });
@@ -223,6 +229,7 @@ export default function SyncoMetricsPage() {
 
       setIsCreateModalOpen(false);
       setNewMonitorGroupId('');
+      setNewMonitorType('meta_campaign');
       setNewMonitorCampaignId('');
       setNewMonitorName('');
       loadMetrics(true);
@@ -369,6 +376,33 @@ export default function SyncoMetricsPage() {
               </p>
               
               <div className="space-y-4 mt-4">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewMonitorType('group_only')}
+                    className={`flex-1 p-3 rounded-lg border text-xs font-medium transition-colors ${newMonitorType === 'group_only' ? 'border-kinetic-orange bg-kinetic-orange/10 text-kinetic-orange' : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700'}`}
+                  >
+                    Apenas Grupo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewMonitorType('meta_campaign')}
+                    className={`flex-1 p-3 rounded-lg border text-xs font-medium transition-colors ${newMonitorType === 'meta_campaign' ? 'border-kinetic-orange bg-kinetic-orange/10 text-kinetic-orange' : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700'}`}
+                  >
+                    Meta Ads + Grupo
+                  </button>
+                </div>
+
+                {newMonitorType === 'group_only' ? (
+                  <p className="text-[11px] text-zinc-400 leading-relaxed bg-zinc-900/50 p-3 rounded-lg">
+                    Acompanhe crescimento e movimentação do grupo sem conectar Meta Ads. Ideal para lançamentos ou grupos orgânicos.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-zinc-400 leading-relaxed bg-zinc-900/50 p-3 rounded-lg">
+                    Corteje dados de campanhas da Meta com o crescimento do seu grupo. Descubra o custo real por membro.
+                  </p>
+                )}
+
                 <p className="text-xs text-emerald-400 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20 leading-relaxed">
                   <strong className="block mb-1">Início a partir do zero</strong>
                   Os resultados deste monitoramento começarão do zero a partir de agora. Dados anteriores do grupo não serão misturados.
@@ -454,34 +488,36 @@ export default function SyncoMetricsPage() {
                   )}
                 </div>
 
-                <div>
-                  <label className="text-sm text-zinc-400 block mb-1">Campanha Meta Ads</label>
-                  {metaConnectionError ? (
-                    <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex flex-col gap-2 items-start">
-                      <p className="text-xs text-red-400 leading-relaxed">
-                        <strong className="block mb-1">{metaConnectionError.title}</strong>
-                        {metaConnectionError.message}
-                      </p>
-                      <button 
-                        onClick={(e) => { e.preventDefault(); router.push('/configuracoes'); }}
-                        className="text-[10px] py-1.5 px-3 rounded font-medium bg-red-500/20 text-red-300 hover:bg-red-500/30 hover:text-white transition-colors"
+                {newMonitorType === 'meta_campaign' && (
+                  <div>
+                    <label className="text-sm text-zinc-400 block mb-1">Campanha Meta Ads</label>
+                    {metaConnectionError ? (
+                      <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex flex-col gap-2 items-start">
+                        <p className="text-xs text-red-400 leading-relaxed">
+                          <strong className="block mb-1">{metaConnectionError.title}</strong>
+                          {metaConnectionError.message}
+                        </p>
+                        <button 
+                          onClick={(e) => { e.preventDefault(); router.push('/configuracoes'); }}
+                          className="text-[10px] py-1.5 px-3 rounded font-medium bg-red-500/20 text-red-300 hover:bg-red-500/30 hover:text-white transition-colors"
+                        >
+                          Ir para Configurações
+                        </button>
+                      </div>
+                    ) : (
+                      <select 
+                        value={newMonitorCampaignId}
+                        onChange={e => setNewMonitorCampaignId(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange text-sm"
                       >
-                        Ir para Configurações
-                      </button>
-                    </div>
-                  ) : (
-                    <select 
-                      value={newMonitorCampaignId}
-                      onChange={e => setNewMonitorCampaignId(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-lg px-3 py-2 outline-none focus:border-kinetic-orange text-sm"
-                    >
-                      <option value="">Selecione uma campanha...</option>
-                      {campaigns.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+                        <option value="">Selecione uma campanha...</option>
+                        {campaigns.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="text-sm text-zinc-400 block mb-1">Nome do Monitoramento (Opcional)</label>
@@ -498,7 +534,7 @@ export default function SyncoMetricsPage() {
                   <button onClick={() => setIsCreateModalOpen(false)} className="text-zinc-400 text-sm px-4 py-2 hover:text-zinc-200">
                     Cancelar
                   </button>
-                  <KineticButton onClick={handleCreateMonitor} disabled={isCreating || !newMonitorGroupId || !newMonitorCampaignId} className="px-6">
+                  <KineticButton onClick={handleCreateMonitor} disabled={isCreating || !newMonitorGroupId || (newMonitorType === 'meta_campaign' && !newMonitorCampaignId)} className="px-6">
                     {isCreating ? 'Criando...' : 'Criar'}
                   </KineticButton>
                 </div>
@@ -526,31 +562,42 @@ export default function SyncoMetricsPage() {
               <TactileCard key={monitor.id} className="p-5 ring-1 ring-zinc-800/50 hover:ring-kinetic-orange/30 transition-all flex flex-col justify-between group">
                 <div>
                   <div className="flex justify-between items-start gap-2 mb-3">
-                    <h3 className="font-bold text-zinc-200 text-sm line-clamp-2" title={monitor.monitorName}>{monitor.monitorName}</h3>
+                    <div className="flex flex-col gap-1">
+                      {monitor.monitorType === 'group_only' && (
+                        <span className="text-[9px] w-fit font-bold uppercase tracking-wider text-kinetic-orange bg-kinetic-orange/10 px-1.5 py-0.5 rounded">Apenas Grupo</span>
+                      )}
+                      <h3 className="font-bold text-zinc-200 text-sm line-clamp-2" title={monitor.monitorName}>{monitor.monitorName}</h3>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-y-3 gap-x-2 mt-4 text-xs">
-                    <div className="bg-zinc-950/50 p-2 rounded border border-zinc-800/50">
-                      <span className="block text-zinc-500 mb-1">Gasto Meta</span>
-                      <span className="font-semibold text-zinc-300">{formatCurrency(monitor.meta.spend)}</span>
-                    </div>
-                    <div className="bg-zinc-950/50 p-2 rounded border border-zinc-800/50">
-                      <span className="block text-zinc-500 mb-1">Leads Meta</span>
-                      <span className="font-semibold text-zinc-300">{formatNumber(monitor.meta.leads)}</span>
-                    </div>
+                    {monitor.monitorType !== 'group_only' && (
+                      <>
+                        <div className="bg-zinc-950/50 p-2 rounded border border-zinc-800/50">
+                          <span className="block text-zinc-500 mb-1">Gasto Meta</span>
+                          <span className="font-semibold text-zinc-300">{formatCurrency(monitor.meta?.spend)}</span>
+                        </div>
+                        <div className="bg-zinc-950/50 p-2 rounded border border-zinc-800/50">
+                          <span className="block text-zinc-500 mb-1">Leads Meta</span>
+                          <span className="font-semibold text-zinc-300">{formatNumber(monitor.meta?.leads)}</span>
+                        </div>
+                      </>
+                    )}
                     <div className="bg-zinc-950/50 p-2 rounded border border-kinetic-orange/20">
                       <span className="block text-zinc-500 mb-1">Crescimento Líquido</span>
                       <span className={`font-semibold ${monitor.group.netGrowth > 0 ? 'text-emerald-400' : 'text-zinc-300'}`}>
                         {monitor.group.netGrowth > 0 ? `+${monitor.group.netGrowth}` : monitor.group.netGrowth}
                       </span>
                     </div>
-                    <div className="bg-zinc-950/50 p-2 rounded border border-kinetic-orange/20">
-                      <span className="block text-zinc-500 mb-1">Custo por Membro Líq.</span>
-                      <span className="font-semibold text-zinc-300">{formatCurrency(monitor.comparison.realCostPerMember)}</span>
-                    </div>
+                    {monitor.monitorType !== 'group_only' && (
+                      <div className="bg-zinc-950/50 p-2 rounded border border-kinetic-orange/20">
+                        <span className="block text-zinc-500 mb-1">Custo por Membro Líq.</span>
+                        <span className="font-semibold text-zinc-300">{formatCurrency(monitor.comparison?.realCostPerMember)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
-                {monitor.meta.error && (
+                {monitor.monitorType !== 'group_only' && monitor.meta?.error && (
                   <p className="text-[10px] text-amber-500 mt-3">
                     {monitor.meta.error === 'META_TOKEN_EXPIRED' ? 'Conexão Meta expirada' : 'Meta precisa reconectar'}
                   </p>
@@ -614,12 +661,19 @@ export default function SyncoMetricsPage() {
 
                     {/* Contexto do Monitoramento */}
                     <div className="mt-4 flex flex-col gap-1.5 p-3 bg-zinc-900/40 rounded-lg border border-zinc-800/80">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-zinc-500 w-16 shrink-0">Campanha:</span>
-                        <span className="text-zinc-300 font-medium truncate" title={selectedMonitor?.campaignName || selectedMonitor?.monitor?.campaignName || selectedMonitor?.campaign_name || "Campanha não identificada"}>
-                          {selectedMonitor?.campaignName || selectedMonitor?.monitor?.campaignName || selectedMonitor?.campaign_name || "Campanha não identificada"}
-                        </span>
-                      </div>
+                      {selectedMonitor?.monitor?.monitorType === 'group_only' || selectedMonitor?.monitorType === 'group_only' ? (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-zinc-500 w-16 shrink-0">Tipo:</span>
+                          <span className="text-kinetic-orange font-medium">Apenas Grupo</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-zinc-500 w-16 shrink-0">Campanha:</span>
+                          <span className="text-zinc-300 font-medium truncate" title={selectedMonitor?.campaignName || selectedMonitor?.monitor?.campaignName || selectedMonitor?.campaign_name || "Campanha não identificada"}>
+                            {selectedMonitor?.campaignName || selectedMonitor?.monitor?.campaignName || selectedMonitor?.campaign_name || "Campanha não identificada"}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 text-xs">
                         <span className="text-zinc-500 w-16 shrink-0">Grupo:</span>
                         <span className="text-zinc-300 font-medium truncate" title={selectedMonitor?.groupName || selectedMonitor?.monitor?.groupName || selectedMonitor?.group_name || "Grupo não identificado"}>
@@ -654,12 +708,14 @@ export default function SyncoMetricsPage() {
                       </button>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setShowEventsPanel(!showEventsPanel)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors border ${showEventsPanel ? 'bg-kinetic-orange/10 border-kinetic-orange/30 text-kinetic-orange' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`}
-                      >
-                        Eventos Meta / Pixel
-                      </button>
+                      {selectedMonitor?.monitor?.monitorType !== 'group_only' && selectedMonitor?.monitorType !== 'group_only' && (
+                        <button
+                          onClick={() => setShowEventsPanel(!showEventsPanel)}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors border ${showEventsPanel ? 'bg-kinetic-orange/10 border-kinetic-orange/30 text-kinetic-orange' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`}
+                        >
+                          Eventos Meta / Pixel
+                        </button>
+                      )}
                       <button
                         onClick={handleExportCSV}
                         disabled={isExporting}
@@ -693,37 +749,41 @@ export default function SyncoMetricsPage() {
                   )}
 
                   {/* Comparação */}
-                  <TactileCard className="p-4 border-kinetic-orange/30 bg-kinetic-orange/5 flex justify-between items-center">
-                    <div>
-                      <span className="text-xs text-kinetic-orange block mb-1 uppercase font-semibold">Custo Real por Membro</span>
-                      <span className="text-2xl font-bold text-zinc-100"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.comparison?.realCostPerMember)} className="h-8 w-32" /></span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs text-zinc-500 block mb-1">Diferença Meta x Real</span>
-                      <span className="text-lg font-semibold text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.comparison?.difference)} className="h-7 w-20 inline-block" /></span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs text-zinc-500 block mb-1">Taxa Lead → Membro</span>
-                      <span className="text-lg font-semibold text-emerald-400"><LoadingValue loading={detailsLoading} value={`${formatNumber(selectedMonitor.comparison?.leadToMemberRate)}%`} className="h-7 w-16 inline-block" /></span>
-                    </div>
-                  </TactileCard>
+                  {selectedMonitor?.monitor?.monitorType !== 'group_only' && selectedMonitor?.monitorType !== 'group_only' && (
+                    <TactileCard className="p-4 border-kinetic-orange/30 bg-kinetic-orange/5 flex justify-between items-center">
+                      <div>
+                        <span className="text-xs text-kinetic-orange block mb-1 uppercase font-semibold">Custo Real por Membro</span>
+                        <span className="text-2xl font-bold text-zinc-100"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.comparison?.realCostPerMember)} className="h-8 w-32" /></span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-zinc-500 block mb-1">Diferença Meta x Real</span>
+                        <span className="text-lg font-semibold text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.comparison?.difference)} className="h-7 w-20 inline-block" /></span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-zinc-500 block mb-1">Taxa Lead → Membro</span>
+                        <span className="text-lg font-semibold text-emerald-400"><LoadingValue loading={detailsLoading} value={`${formatNumber(selectedMonitor.comparison?.leadToMemberRate)}%`} className="h-7 w-16 inline-block" /></span>
+                      </div>
+                    </TactileCard>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Bloco Meta */}
-                    <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
-                      <h4 className="text-sm font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Desempenho Meta Ads</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between"><span className="text-zinc-500">Campanha</span><span className="text-zinc-300 truncate max-w-[150px] text-right" title={selectedMonitor.campaignName}>{selectedMonitor.campaignName}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Gasto Total</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.spend)} /></span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Leads Informados</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.meta?.leads)} /></span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Custo por Lead</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.costPerLead)} /></span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Cliques</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.meta?.clicks)} /></span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Impressões</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.meta?.impressions)} /></span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">CTR</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={`${formatNumber(selectedMonitor.meta?.ctr)}%`} /></span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">CPC</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.cpc)} /></span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">CPM</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.cpm)} /></span></div>
+                    {selectedMonitor?.monitor?.monitorType !== 'group_only' && selectedMonitor?.monitorType !== 'group_only' && (
+                      <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
+                        <h4 className="text-sm font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Desempenho Meta Ads</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between"><span className="text-zinc-500">Campanha</span><span className="text-zinc-300 truncate max-w-[150px] text-right" title={selectedMonitor.campaignName}>{selectedMonitor.campaignName}</span></div>
+                          <div className="flex justify-between"><span className="text-zinc-500">Gasto Total</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.spend)} /></span></div>
+                          <div className="flex justify-between"><span className="text-zinc-500">Leads Informados</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.meta?.leads)} /></span></div>
+                          <div className="flex justify-between"><span className="text-zinc-500">Custo por Lead</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.costPerLead)} /></span></div>
+                          <div className="flex justify-between"><span className="text-zinc-500">Cliques</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.meta?.clicks)} /></span></div>
+                          <div className="flex justify-between"><span className="text-zinc-500">Impressões</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatNumber(selectedMonitor.meta?.impressions)} /></span></div>
+                          <div className="flex justify-between"><span className="text-zinc-500">CTR</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={`${formatNumber(selectedMonitor.meta?.ctr)}%`} /></span></div>
+                          <div className="flex justify-between"><span className="text-zinc-500">CPC</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.cpc)} /></span></div>
+                          <div className="flex justify-between"><span className="text-zinc-500">CPM</span><span className="text-zinc-300"><LoadingValue loading={detailsLoading} value={formatCurrency(selectedMonitor.meta?.cpm)} /></span></div>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Bloco Grupo */}
                     <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
