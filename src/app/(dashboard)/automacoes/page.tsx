@@ -119,6 +119,8 @@ export default function AutomacoesDashboardPage() {
   const [shopeeList, setShopeeList] = useState(SHOPEE_LIST_TYPE.DEFAULT.toString());
   const [shopeeLimit, setShopeeLimit] = useState('10');
   const [sendIntervalMinutes, setSendIntervalMinutes] = useState('1');
+  const [couponIntervalMinMinutes, setCouponIntervalMinMinutes] = useState('60');
+  const [couponIntervalMaxMinutes, setCouponIntervalMaxMinutes] = useState('60');
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewResults, setPreviewResults] = useState<any[] | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
@@ -163,15 +165,15 @@ export default function AutomacoesDashboardPage() {
         send_interval_minutes: parseInt(sendIntervalMinutes) || 1,
         preset_type: 'custom'
       } : (entryType === 'captured_coupons_shopee' ? {
-        batchLimit: parseInt(shopeeLimit) || 3,
-        send_interval_minutes: parseInt(sendIntervalMinutes) || 10,
+        coupon_interval_min_minutes: parseInt(couponIntervalMinMinutes) || 60,
+        coupon_interval_max_minutes: parseInt(couponIntervalMaxMinutes) || 60,
         only_new_coupons: true,
         reaffiliate_before_send: true,
         dedupe_by_destination: true,
         template_type: 'shopee_coupon'
       } : {
-        batchLimit: parseInt(shopeeLimit) || 5,
-        send_interval_minutes: parseInt(sendIntervalMinutes) || 5,
+        coupon_interval_min_minutes: parseInt(couponIntervalMinMinutes) || 60,
+        coupon_interval_max_minutes: parseInt(couponIntervalMaxMinutes) || 60,
         shopee_list_type: shopeeList
       }),
       // Filtros alinhados com os campos reais lidos pelo discovery service
@@ -542,36 +544,63 @@ export default function AutomacoesDashboardPage() {
                     {/* Frequência e Limite (Compartilhado por Radar e Cupons) */}
                     {(entryType === 'radar_offers' || entryType === 'captured_coupons_shopee' || entryType === 'coupon_shopee') && !isMarketplaceRequiredAndMissing && (
                       <div className="pt-4 border-t border-white/5 space-y-5 animate-in slide-in-from-bottom-2 duration-300">
-                         <div className="grid grid-cols-2 gap-4">
-                           <div className="space-y-2">
-                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Intervalo de Envio</Label>
-                             <div className="relative">
+                         {entryType === 'radar_offers' ? (
+                           <div className="grid grid-cols-2 gap-4">
+                             <div className="space-y-2">
+                               <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Intervalo de Envio</Label>
+                               <div className="relative">
+                                 <Input 
+                                   type="number" 
+                                   min="1" 
+                                   max="1440" 
+                                   placeholder="10" 
+                                   value={sendIntervalMinutes} 
+                                   onChange={(e) => setSendIntervalMinutes(e.target.value)} 
+                                   className="pl-3 pr-20"
+                                 />
+                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/20 uppercase pointer-events-none">min(s)</span>
+                               </div>
+                             </div>
+                             <div className="space-y-2">
+                               <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Limite por ciclo</Label>
+                               <div className="relative">
+                                 <Input 
+                                   type="number" 
+                                   min="1" 
+                                   max="50" 
+                                   placeholder="3" 
+                                   value={shopeeLimit} 
+                                   onChange={(e) => setShopeeLimit(e.target.value)} 
+                                 />
+                               </div>
+                             </div>
+                           </div>
+                         ) : (
+                           <div className="grid grid-cols-2 gap-4">
+                             <div className="space-y-2">
+                               <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Intervalo Mín. (Minutos)</Label>
                                <Input 
                                  type="number" 
                                  min="1" 
                                  max="1440" 
-                                 placeholder="10" 
-                                 value={sendIntervalMinutes} 
-                                 onChange={(e) => setSendIntervalMinutes(e.target.value)} 
-                                 className="pl-3 pr-20"
+                                 placeholder="60" 
+                                 value={couponIntervalMinMinutes} 
+                                 onChange={(e) => setCouponIntervalMinMinutes(e.target.value)} 
                                />
-                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/20 uppercase pointer-events-none">min(s)</span>
                              </div>
-                           </div>
-                           <div className="space-y-2">
-                             <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Limite por ciclo</Label>
-                             <div className="relative">
+                             <div className="space-y-2">
+                               <Label className="text-[10px] uppercase font-black text-white/30 tracking-widest">Intervalo Máx. (Minutos)</Label>
                                <Input 
                                  type="number" 
                                  min="1" 
-                                 max="50" 
-                                 placeholder="3" 
-                                 value={shopeeLimit} 
-                                 onChange={(e) => setShopeeLimit(e.target.value)} 
+                                 max="1440" 
+                                 placeholder="60" 
+                                 value={couponIntervalMaxMinutes} 
+                                 onChange={(e) => setCouponIntervalMaxMinutes(e.target.value)} 
                                />
                              </div>
                            </div>
-                         </div>
+                         )}
 
                          <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5">
                             <div className="flex items-center gap-2">
@@ -579,8 +608,8 @@ export default function AutomacoesDashboardPage() {
                               <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Operação Controlada</span>
                             </div>
                             <p className="text-[8px] text-white/30 font-medium leading-normal italic">
-                              {entryType === 'captured_coupons_shopee' 
-                                ? "O sistema busca novos cupons periodicamente e os envia respeitando o intervalo para evitar bloqueios." 
+                              {entryType === 'captured_coupons_shopee' || entryType === 'coupon_shopee'
+                                ? "O sistema enviará 1 oferta por ciclo sorteando o intervalo de disparo entre o Mínimo e Máximo configurados." 
                                 : "Os grupos são disparados em sequência com proteção automática (vazão de ~1 grupo a cada 5s)."}
                             </p>
                          </div>
@@ -687,19 +716,7 @@ export default function AutomacoesDashboardPage() {
                       </div>
                     )}
 
-                    {entryType === 'captured_coupons_shopee' && !isMarketplaceRequiredAndMissing && (
-                      <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
-                        <div className="p-4 bg-kinetic-orange/5 border border-kinetic-orange/20 rounded-2xl">
-                          <p className="text-[10px] font-bold text-kinetic-orange uppercase tracking-widest mb-2">Operação de Cupons Radar</p>
-                          <p className="text-[10px] font-medium text-white/60 leading-relaxed">
-                            O SYNCO enviará cupons capturados pelo Radar nos grupos monitorados. 
-                            Os cupons são <span className="text-white font-bold">re-afiliados automaticamente</span> para o seu link antes do envio.
-                            <br/><br/>
-                            <span className="text-emerald-400/80">✓ Deduplicação automática:</span> Cupons nunca são repetidos para o mesmo destino.
-                          </p>
-                        </div>
-                      </div>
-                    )}
+
 
                     {entryType === 'group_monitor' && (
                       <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-bottom-2 duration-300">

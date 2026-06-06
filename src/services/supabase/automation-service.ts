@@ -121,7 +121,7 @@ export const automationService = {
     if (sourceError) throw sourceError;
 
     // 2. Criar a Rota Inicial (Destino)
-    const { error: routeError } = await supabase
+    const { data: route, error: routeError } = await supabase
       .from('automation_routes')
       .insert({
         source_id: source.id,
@@ -130,9 +130,20 @@ export const automationService = {
         is_active: true,
         filters: setup.filters || {},
         template_config: {}
-      });
+      })
+      .select()
+      .single();
 
     if (routeError) throw routeError;
+
+    // 3. Sincronização Automática (Apenas para fontes de cupons)
+    if (setup.source_type === 'captured_coupons_shopee' || setup.source_type === 'coupon_shopee') {
+      try {
+        await this.syncRulesFromCandidates(source.id, route.id, userId, client);
+      } catch (syncError) {
+        console.warn('[AUTOMATION-SERVICE] Falha ao sincronizar cupons automaticamente na criação:', syncError);
+      }
+    }
 
     return source;
   },
@@ -743,14 +754,13 @@ export const automationService = {
     const isGlobalAggregator = source?.source_type === 'captured_coupons_shopee';
 
     // 1. Buscar candidatos recentes (discovered_coupons)
-    // SEMPRE filtramos por is_verified_coupon=true para evitar que produtos virem regras de automação
+    // SEMPRE filtramos por validation_status para bater com a tela do Radar
     let couponQuery = supabase
       .from('discovered_coupons')
       .select('id')
+      .in('validation_status', ['candidate', 'verified'])
+      .order('last_seen_at', { ascending: false })
       .limit(100);
-
-    // Tentamos aplicar o filtro de verificação
-    couponQuery = couponQuery.eq('is_verified_coupon', true);
 
     if (isGlobalAggregator) {
       couponQuery = couponQuery
@@ -765,10 +775,12 @@ export const automationService = {
 
     // --- COMPATIBILIDADE (OPÇÃO A) ---
     if (candError && candError.code === '42703') {
-      console.warn('[AUTOMATION-SERVICE] Coluna is_verified_coupon ausente. Fallback para busca com classificação factual live.');
+      console.warn('[AUTOMATION-SERVICE] Coluna validation_status ausente. Fallback para busca antiga.');
       let fallbackQuery = supabase
         .from('discovered_coupons')
         .select('id, raw_text, coupon_label, redemption_url')
+        .eq('is_verified_coupon', true)
+        .order('last_seen_at', { ascending: false })
         .limit(100);
 
       if (isGlobalAggregator) {
@@ -796,6 +808,7 @@ export const automationService = {
     let promoQuery = supabase
       .from('discovered_promo_pages')
       .select('id')
+      .order('created_at', { ascending: false })
       .limit(100);
 
     if (isGlobalAggregator) {

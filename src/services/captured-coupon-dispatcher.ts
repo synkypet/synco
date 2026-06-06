@@ -145,6 +145,7 @@ export const capturedCouponDispatcher = {
           .eq('is_selected', true)
           .eq('is_active', true)
           .order('last_sent_at', { ascending: true, nullsFirst: true })
+          .order('sort_order', { ascending: true })
           .limit(1);
 
         if (rulesError) {

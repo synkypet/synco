@@ -67,6 +67,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true });
     }
 
+    if (action === 'bulk_delete') {
+      const { ids } = payload;
+      if (!ids || !Array.isArray(ids)) {
+        return NextResponse.json({ error: 'ids array is required' }, { status: 400 });
+      }
+      
+      const { error } = await supabaseAdmin
+        .from('automation_coupon_rules')
+        .delete()
+        .in('id', ids)
+        .eq('user_id', user.id); // Segurança
+
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
     if (action === 'update_route') {
       const { routeId, updates } = payload;
       

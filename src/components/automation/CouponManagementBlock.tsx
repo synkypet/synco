@@ -5,30 +5,19 @@ import { TactileCard } from '@/components/ui/TactileCard';
 import { KineticButton } from '@/components/ui/KineticButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Ticket, 
   Clock, 
-  Calendar, 
   RefreshCcw, 
   ExternalLink, 
   Trash2, 
-  MoreVertical,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
   ChevronDown,
   ChevronUp,
   Settings2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AddManualCouponDialog } from './AddManualCouponDialog';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 
 interface CouponRule {
@@ -36,8 +25,7 @@ interface CouponRule {
   item_type: 'coupon' | 'promo_landing';
   is_selected: boolean;
   is_active: boolean;
-  interval_minutes: number;
-  next_run_at: string | null;
+  sort_order: number;
   last_sent_at: string | null;
   coupon?: {
     coupon_label: string;
@@ -64,7 +52,7 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
   const [routeData, setRouteData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const fetchRules = useCallback(async () => {
     setIsLoading(true);
@@ -72,7 +60,11 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
       const response = await fetch(`/api/shopee/automation-coupons/rules?sourceId=${sourceId}&routeId=${routeId}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Erro ao carregar regras');
-      setRules(data.rules);
+      
+      const sortedRules = (data.rules || []).sort((a: CouponRule, b: CouponRule) => {
+        return (a.sort_order || 0) - (b.sort_order || 0);
+      });
+      setRules(sortedRules);
       if (data.route) {
         setRouteData(data.route);
       }
@@ -108,61 +100,83 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
     }
   };
 
-  const handleToggle = async (ruleId: string, field: 'is_selected' | 'is_active', value: boolean) => {
-    setIsUpdating(ruleId);
+  const updateSortOrder = async (ruleId: string, newOrder: number) => {
     try {
-      const response = await fetch('/api/shopee/automation-coupons/rules', {
+      setRules(prev => prev.map(r => r.id === ruleId ? { ...r, sort_order: newOrder } : r).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
+      await fetch('/api/shopee/automation-coupons/rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'update',
-          payload: {
-            ruleId,
-            updates: { [field]: value }
-          }
+          payload: { ruleId, updates: { sort_order: newOrder } }
         })
       });
-      if (!response.ok) throw new Error('Erro ao atualizar regra');
-      
-      setRules(prev => prev.map(r => r.id === ruleId ? { ...r, [field]: value } : r));
     } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setIsUpdating(null);
+      toast.error('Erro ao atualizar ordenação');
+      fetchRules();
     }
   };
 
-  const handleGlobalIntervalChange = async (minutes: number) => {
-    let targetMinutes = minutes;
-    
-    if (targetMinutes < 5) {
-      toast.warning('O intervalo mínimo permitido é de 5 minutos.');
-      targetMinutes = 5;
+  const moveUp = (index: number, rule: CouponRule, list: CouponRule[]) => {
+    if (index === 0) return;
+    const prev = list[index - 1];
+    updateSortOrder(rule.id, (prev.sort_order || 0) - 1);
+  };
+
+  const moveDown = (index: number, rule: CouponRule, list: CouponRule[]) => {
+    if (index === list.length - 1) return;
+    const next = list[index + 1];
+    updateSortOrder(rule.id, (next.sort_order || 0) + 1);
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
     }
-    
-    setIsUpdating('route-interval');
+    setSelectedIds(newSelected);
+  };
+
+  const handleBulkToggleSend = async (val: boolean) => {
+    if (selectedIds.size === 0) return;
+    try {
+      await Promise.all(Array.from(selectedIds).map(id => 
+        fetch('/api/shopee/automation-coupons/rules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update',
+            payload: { ruleId: id, updates: { is_selected: val } }
+          })
+        })
+      ));
+      toast.success(`Itens ${val ? 'incluídos' : 'excluídos'} do envio.`);
+      fetchRules();
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      toast.error('Erro ao atualizar itens');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
     try {
       const response = await fetch('/api/shopee/automation-coupons/rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'update_route',
-          payload: {
-            routeId,
-            updates: { coupon_interval_minutes: targetMinutes }
-          }
+          action: 'bulk_delete',
+          payload: { ids: Array.from(selectedIds) }
         })
       });
-      
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Erro ao atualizar cadência da automação');
-      
-      setRouteData((prev: any) => ({ ...prev, coupon_interval_minutes: targetMinutes }));
-      toast.success(`Automação configurada para enviar a cada ${targetMinutes} min`);
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setIsUpdating(null);
+      if (!response.ok) throw new Error();
+      toast.success('Itens removidos da automação');
+      fetchRules();
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      toast.error('Erro ao remover itens');
     }
   };
 
@@ -171,20 +185,72 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
     return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const formatDate = (iso: string | null) => {
-    if (!iso) return 'Nunca';
-    return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const getUrl = (rule: CouponRule) => {
+    if (rule.item_type === 'coupon') return rule.coupon?.redemption_url || rule.coupon?.affiliate_url;
+    return rule.promo_page?.canonical_url || rule.promo_page?.raw_url;
   };
 
-  const getCouponUrl = (coupon: any) => {
-    if (!coupon) return undefined;
-    return coupon.redemption_url || coupon.affiliate_url || coupon.source_url;
-  };
+  const couponsList = rules.filter(r => r.item_type === 'coupon');
+  const promosList = rules.filter(r => r.item_type === 'promo_landing');
 
-  const getPromoPageUrl = (promoPage: any) => {
-    if (!promoPage) return undefined;
-    return promoPage.canonical_url || promoPage.raw_url || promoPage.source_url;
-  };
+  const renderList = (list: CouponRule[], title: string) => (
+    <div className="flex flex-col gap-3">
+      <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-2">
+        {title} <Badge variant="outline" className="text-[10px] ml-2">{list.length}</Badge>
+      </h4>
+      {list.length === 0 ? (
+        <div className="py-8 text-center bg-anthracite-surface/20 rounded-xl border border-dashed border-gray-800">
+          <p className="text-gray-500 text-xs">Nenhum item encontrado.</p>
+        </div>
+      ) : (
+        list.map((rule, index) => {
+          const url = getUrl(rule);
+          return (
+            <TactileCard 
+              key={rule.id} 
+              className={`p-3 transition-all duration-300 flex items-center gap-3 ${!rule.is_selected ? 'opacity-50' : 'ring-1 ring-kinetic-orange/30'}`}
+            >
+              <Checkbox 
+                checked={selectedIds.has(rule.id)}
+                onCheckedChange={() => toggleSelect(rule.id)}
+              />
+              <div className="flex flex-col gap-1 items-center">
+                <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-gray-500 hover:text-white" onClick={() => moveUp(index, rule, list)} disabled={index === 0}>
+                  <ChevronUp className="w-3 h-3" />
+                </Button>
+                <span className="text-[8px] font-mono text-gray-600">{rule.sort_order || 0}</span>
+                <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-gray-500 hover:text-white" onClick={() => moveDown(index, rule, list)} disabled={index === list.length - 1}>
+                  <ChevronDown className="w-3 h-3" />
+                </Button>
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col">
+                <span className="text-white font-medium text-xs truncate">
+                  {rule.item_type === 'coupon' ? rule.coupon?.coupon_label : rule.promo_page?.title}
+                </span>
+                <div className="flex items-center gap-2 text-[9px] text-gray-500 mt-1">
+                  {rule.item_type === 'coupon' && rule.coupon?.code && (
+                    <span className="bg-deep-void px-1 rounded font-mono text-gray-400 border border-gray-800">
+                      {rule.coupon.code}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Envio: {formatTime(rule.last_sent_at)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                {url && (
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => window.open(url, '_blank')}>
+                    <ExternalLink className="w-3 h-3 text-gray-400" />
+                  </Button>
+                )}
+              </div>
+            </TactileCard>
+          );
+        })
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -194,7 +260,7 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
             <Ticket className="w-5 h-5 text-kinetic-orange" />
             Gestão de Cupons e Promoções
           </h3>
-          <p className="text-xs text-gray-500">Selecione e agende o envio dos itens capturados</p>
+          <p className="text-xs text-gray-500">Selecione e ordene os itens que serão enviados na automação.</p>
         </div>
         <div className="flex gap-2">
           <Button 
@@ -211,155 +277,28 @@ export function CouponManagementBlock({ sourceId, routeId }: CouponManagementBlo
         </div>
       </div>
 
-      {routeData && (
-        <TactileCard className="p-5 bg-anthracite-surface/40 border border-white/5">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1 max-w-lg">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <Settings2 className="w-4 h-4 text-kinetic-orange" />
-                Cadência da Automação
-              </h4>
-              <p className="text-[11px] text-gray-400 leading-relaxed">
-                Os cupons selecionados abaixo serão enviados <strong>um por vez</strong>, em rotação contínua. 
-                Cada cupom processado vira uma campanha normal e respeita a sua fila global de envios.
-              </p>
-            </div>
-            
-            <div className="flex flex-col items-start md:items-end gap-1 shrink-0">
-              <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Enviar 1 cupom a cada (min)</div>
-              <div className="flex items-center gap-2">
-                <Input 
-                  type="number"
-                  min={5}
-                  className="h-9 w-24 bg-deep-void border border-white/10 text-sm text-center font-bold text-white"
-                  value={routeData.coupon_interval_minutes || 60}
-                  onChange={(e) => setRouteData((prev: any) => ({ ...prev, coupon_interval_minutes: parseInt(e.target.value) || 60 }))}
-                  onBlur={(e) => handleGlobalIntervalChange(parseInt(e.target.value) || 60)}
-                />
-              </div>
-            </div>
+      {selectedIds.size > 0 && (
+        <div className="p-3 bg-kinetic-orange/10 border border-kinetic-orange/20 rounded-xl flex items-center justify-between animate-in fade-in">
+          <span className="text-xs font-bold text-kinetic-orange">{selectedIds.size} itens selecionados</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleBulkToggleSend(true)}>Habilitar Envio</Button>
+            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleBulkToggleSend(false)}>Pausar Envio</Button>
+            <Button size="sm" variant="destructive" className="h-7 text-[10px]" onClick={handleBulkDelete}><Trash2 className="w-3 h-3 mr-1" /> Remover da Automação</Button>
           </div>
-          
-          <div className="mt-4 flex flex-wrap gap-4 pt-4 border-t border-white/5 text-[11px] font-medium">
-            <div className="flex items-center gap-1.5 text-gray-400">
-              <Clock className="w-3.5 h-3.5" />
-              <span>Última rodada: <span className="text-white">{formatTime(routeData.coupon_last_run_at)} {formatDate(routeData.coupon_last_run_at)}</span></span>
-            </div>
-            <div className="flex items-center gap-1.5 text-kinetic-orange">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Próxima rodada prevista: <span className="text-white">{formatTime(routeData.coupon_next_run_at)} {formatDate(routeData.coupon_next_run_at)}</span></span>
-            </div>
-          </div>
-        </TactileCard>
+        </div>
       )}
 
-      <div className="grid gap-3">
-        {isLoading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <TactileCard key={i} className="p-4 h-24 animate-pulse bg-anthracite-surface/50" />
-          ))
-        ) : rules.length === 0 ? (
-          <div className="py-12 text-center space-y-3 bg-anthracite-surface/20 rounded-xl border border-dashed border-gray-800">
-            <Ticket className="w-12 h-12 text-gray-700 mx-auto" />
-            <p className="text-gray-500 text-sm">Nenhum cupom ou promoção encontrada para esta rota.</p>
-            <Button variant="outline" size="sm" onClick={handleSync} className="bg-anthracite-surface border-none text-white hover:bg-deep-void">Sincronizar Agora</Button>
-          </div>
-        ) : (
-          rules.map((rule) => {
-            const hasRuleLink = rule.item_type === 'coupon' 
-              ? !!getCouponUrl(rule.coupon) 
-              : !!getPromoPageUrl(rule.promo_page);
-
-            return (
-              <TactileCard 
-                key={rule.id} 
-                className={`p-4 transition-all duration-300 ${!rule.is_active ? 'opacity-60 grayscale' : ''} ${rule.is_selected ? 'ring-1 ring-kinetic-orange/30' : ''}`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Enviar?</div>
-                    <Switch 
-                      checked={rule.is_selected} 
-                      onCheckedChange={(val) => handleToggle(rule.id, 'is_selected', val)}
-                      className="data-[state=checked]:bg-kinetic-orange"
-                    />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${rule.item_type === 'coupon' ? 'border-kinetic-orange text-kinetic-orange' : 'border-blue-500 text-blue-500'}`}>
-                        {rule.item_type === 'coupon' ? 'CUPOM' : 'PROMO'}
-                      </Badge>
-                      <span className="text-white font-medium text-sm truncate">
-                        {rule.item_type === 'coupon' ? rule.coupon?.coupon_label : rule.promo_page?.title}
-                      </span>
-                      {rule.item_type === 'coupon' && rule.coupon?.code && (
-                        <span className="bg-deep-void px-1.5 py-0.5 rounded text-[10px] font-mono text-gray-400 border border-gray-800">
-                          {rule.coupon.code}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-4 text-[10px] text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Último: {formatTime(rule.last_sent_at)} ({formatDate(rule.last_sent_at)})
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-6">
-
-
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Ativo</div>
-                      <Switch 
-                        checked={rule.is_active} 
-                        onCheckedChange={(val) => handleToggle(rule.id, 'is_active', val)}
-                        className="data-[state=checked]:bg-green-500"
-                      />
-                    </div>
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-transparent">
-                          <MoreVertical className="w-4 h-4 text-gray-500" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-anthracite-surface border-none text-white">
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            const url = rule.item_type === 'coupon' 
-                              ? getCouponUrl(rule.coupon) 
-                              : getPromoPageUrl(rule.promo_page);
-                            if (url) {
-                              window.open(url, '_blank');
-                            }
-                          }}
-                          disabled={!hasRuleLink}
-                          className={`gap-2 ${!hasRuleLink ? 'opacity-50 cursor-not-allowed text-white/20' : ''}`}
-                        >
-                          <ExternalLink className="w-4 h-4" /> Ver Origem
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 text-red-500">
-                          <Trash2 className="w-4 h-4" /> Remover Regra
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-                
-                {rule.item_type === 'promo_landing' && (
-                  <div className="mt-2 p-2 rounded bg-green-500/5 border border-green-500/10 flex items-center gap-2 text-[10px] text-green-500/80">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                    Envio recorrente automático ativado e totalmente suportado.
-                  </div>
-                )}
-              </TactileCard>
-            );
-          })
-        )}
-      </div>
+      {isLoading ? (
+        <div className="grid md:grid-cols-2 gap-6">
+          <TactileCard className="p-4 h-64 animate-pulse bg-anthracite-surface/50" />
+          <TactileCard className="p-4 h-64 animate-pulse bg-anthracite-surface/50" />
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-6 items-start">
+          {renderList(couponsList, 'Cupons Capturados')}
+          {renderList(promosList, 'Páginas Promocionais')}
+        </div>
+      )}
     </div>
   );
 }
