@@ -13,6 +13,7 @@ export function MetaAdsSettings() {
   const [isTestingMeta, setIsTestingMeta] = useState(false);
   const [metaTestError, setMetaTestError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [safetyChecked, setSafetyChecked] = useState(false);
 
   useEffect(() => {
     const fetchConnection = async () => {
@@ -157,6 +158,47 @@ export function MetaAdsSettings() {
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2 mb-2">
+                <div className="p-4 border border-orange-500/50 bg-orange-950/20 rounded-xl flex gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <TrendingUp className="w-5 h-5 text-orange-500" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-orange-400 mb-2">Atenção antes de conectar a Meta</h4>
+                    <p className="text-sm text-zinc-300 leading-relaxed mb-4">
+                      Para reduzir riscos de restrição, não use na Meta o mesmo número de telefone usado para automações/envios no WhatsApp.
+                    </p>
+                    <div className="space-y-4 mb-4">
+                      <div>
+                        <strong className="text-orange-400 block mb-1 text-sm">1. WhatsApp de envios do SYNCO:</strong>
+                        <p className="text-sm text-zinc-400">Use um número dedicado apenas para operação dos grupos e automações.</p>
+                      </div>
+                      <div>
+                        <strong className="text-orange-400 block mb-1 text-sm">2. Meta Business / Pixel / Token:</strong>
+                        <p className="text-sm text-zinc-400">Use uma conta e número administrativo separados, sem ligação direta com o número usado para disparos no WhatsApp.</p>
+                      </div>
+                    </div>
+                    
+                    <p className="text-sm text-zinc-300 leading-relaxed mb-2">Evite usar o mesmo número para:</p>
+                    <ul className="list-disc list-inside text-sm text-zinc-400 mb-4 space-y-1">
+                      <li>conectar o WhatsApp no SYNCO;</li>
+                      <li>enviar ofertas em grupos;</li>
+                      <li>criar token da Meta;</li>
+                      <li>administrar o Meta Business;</li>
+                      <li>gerenciar Pixel;</li>
+                      <li>rodar campanhas de anúncios.</li>
+                    </ul>
+
+                    <p className="text-sm text-zinc-300 leading-relaxed mb-4">
+                      Isso ajuda a reduzir sinais cruzados de automação entre WhatsApp, Meta Business, Pixel e anúncios.
+                    </p>
+                    
+                    <p className="text-xs text-orange-500/70">
+                      Essa recomendação não garante ausência de restrições, mas é uma prática de segurança para manter operações de WhatsApp e Meta Ads separadas.
+                    </p>
+                  </div>
+                </div>
+              </div>
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">ID da Conta de Anúncios</label>
                 <input 
@@ -188,15 +230,31 @@ export function MetaAdsSettings() {
                 className="bg-deep-void border border-white/5 h-12 w-full px-4 text-xs font-mono rounded-xl shadow-skeuo-pressed outline-none focus:ring-1 focus:ring-kinetic-orange/30 transition-all text-white"
               />
             </div>
-            <div className="pt-4 flex flex-wrap gap-4 border-t border-white/5">
-              <KineticButton 
-                onClick={handleTestMeta} 
-                disabled={isTestingMeta || !metaToken || !metaAccountId}
-                className="h-12 px-8 font-black uppercase tracking-widest text-xs rounded-xl flex items-center gap-2"
-              >
-                {isTestingMeta && <RefreshCw className="w-4 h-4 animate-spin" />}
-                {isTestingMeta ? 'Conectando...' : 'Conectar e Salvar'}
-              </KineticButton>
+            <div className="pt-4 border-t border-white/5 space-y-4">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <div className="mt-0.5">
+                  <input 
+                    type="checkbox" 
+                    checked={safetyChecked}
+                    onChange={(e) => setSafetyChecked(e.target.checked)}
+                    className="w-4 h-4 rounded border-white/20 bg-black/50 text-kinetic-orange focus:ring-kinetic-orange focus:ring-offset-0 focus:ring-offset-transparent cursor-pointer"
+                  />
+                </div>
+                <span className="text-sm text-zinc-300 group-hover:text-white transition-colors leading-snug">
+                  Entendi que devo evitar usar o mesmo número das automações do WhatsApp para administrar Meta Business, Pixel ou gerar token da Meta.
+                </span>
+              </label>
+
+              <div className="flex flex-wrap gap-4">
+                <KineticButton 
+                  onClick={handleTestMeta} 
+                  disabled={isTestingMeta || !metaToken || !metaAccountId || !safetyChecked}
+                  className="h-12 px-8 font-black uppercase tracking-widest text-xs rounded-xl flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isTestingMeta && <RefreshCw className="w-4 h-4 animate-spin" />}
+                  {isTestingMeta ? 'Conectando...' : 'Conectar e Salvar'}
+                </KineticButton>
+              </div>
             </div>
           </div>
         )}
