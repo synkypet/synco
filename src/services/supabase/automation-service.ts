@@ -137,13 +137,8 @@ export const automationService = {
     if (routeError) throw routeError;
 
     // 3. Sincronização Automática (Apenas para fontes de cupons)
-    if (setup.source_type === 'captured_coupons_shopee' || setup.source_type === 'coupon_shopee') {
-      try {
-        await this.syncRulesFromCandidates(source.id, route.id, userId, client);
-      } catch (syncError) {
-        console.warn('[AUTOMATION-SERVICE] Falha ao sincronizar cupons automaticamente na criação:', syncError);
-      }
-    }
+    // REMOVIDO: O sync não é mais automático para não poluir a automação de cupons.
+    // O usuário adicionará manualmente da biblioteca.
 
     return source;
   },

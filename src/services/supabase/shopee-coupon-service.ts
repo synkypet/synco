@@ -247,6 +247,7 @@ export const shopeeCouponService = {
       couponType?: string;
       search?: string;
       limit?: number;
+      isManual?: boolean;
     } = {},
     client?: SupabaseClient
   ): Promise<any[]> {
@@ -279,6 +280,14 @@ export const shopeeCouponService = {
 
     if (couponType) {
       query = query.eq('coupon_type', couponType);
+    }
+
+    if (filters.isManual !== undefined) {
+      if (filters.isManual === true) {
+        query = query.eq('is_manual', true);
+      } else {
+        query = query.or('is_manual.eq.false,is_manual.is.null');
+      }
     }
 
     if (search) {

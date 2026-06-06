@@ -24,6 +24,8 @@ export async function GET(request: Request) {
                        searchParams.get('is_verified') === 'false' ? false : undefined;
     const couponType = searchParams.get('coupon_type') || undefined;
     const search = searchParams.get('search') || undefined;
+    const isManual = searchParams.get('is_manual') === 'true' ? true : 
+                     searchParams.get('is_manual') === 'false' ? false : undefined;
     const limitParam = searchParams.get('limit');
     const limit = limitParam ? parseInt(limitParam) : 50;
     
@@ -50,7 +52,8 @@ export async function GET(request: Request) {
         isVerified: effectiveIsVerified,
         couponType,
         search,
-        limit
+        limit,
+        isManual
       }, supabaseAdmin);
     } catch (err: any) {
       if (err.code === '42703') {
@@ -59,7 +62,8 @@ export async function GET(request: Request) {
           status,
           couponType,
           search,
-          limit
+          limit,
+          isManual
         }, supabaseAdmin);
       } else {
         throw err;
