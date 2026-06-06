@@ -14,9 +14,14 @@ import {
   Target,
   ChevronDown,
   ChevronUp,
-  Tag
+  Tag,
+  Image as ImageIcon,
+  Eye,
+  Send
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CouponPreviewModal } from './CouponPreviewModal';
+import { CouponTestModal } from './CouponTestModal';
 
 interface RouteCardProps {
   route: AutomationRoute;
@@ -29,13 +34,17 @@ export function RouteCard({ route, targetName, onUpdate, onDelete }: RouteCardPr
   const [isExpanded, setIsExpanded] = useState(false);
   const [localFilters, setLocalFilters] = useState(route.filters || {});
   const [localTemplate, setLocalTemplate] = useState(route.template_config?.body || '');
+  const [localMediaUrl, setLocalMediaUrl] = useState(route.template_config?.media_url || '');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
 
   const saveChanges = () => {
     onUpdate(route.id, {
       filters: localFilters,
       template_config: {
         ...route.template_config,
-        body: localTemplate
+        body: localTemplate,
+        media_url: localMediaUrl
       }
     });
   };
@@ -141,6 +150,24 @@ export function RouteCard({ route, targetName, onUpdate, onDelete }: RouteCardPr
 
           <div className="pt-6 border-t border-white/5 space-y-4">
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-kinetic-orange">
+              <ImageIcon size={14} /> Mídia Padrão (Opcional)
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-bold opacity-60">URL da Imagem (.jpg, .png)</Label>
+              <Input 
+                placeholder="https://exemplo.com/imagem.png"
+                className="bg-white/5 border-white/10"
+                value={localMediaUrl}
+                onChange={(e) => setLocalMediaUrl(e.target.value)}
+              />
+              {localMediaUrl && !localMediaUrl.startsWith('http') && (
+                <div className="text-[10px] text-destructive">URL deve iniciar com http:// ou https://</div>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-6 border-t border-white/5 space-y-4">
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-kinetic-orange">
                <MessageSquare size={14} /> Template de Mensagem
             </div>
             <textarea 
@@ -162,7 +189,25 @@ export function RouteCard({ route, targetName, onUpdate, onDelete }: RouteCardPr
             </div>
           </div>
 
-          <div className="pt-4 flex justify-end">
+          <div className="pt-4 flex justify-between items-center">
+             <div className="flex gap-2">
+               <Button 
+                 variant="outline" 
+                 size="sm" 
+                 className="text-[10px] font-bold uppercase tracking-widest gap-2 bg-white/5 border-white/10 hover:bg-white/10"
+                 onClick={() => setPreviewOpen(true)}
+               >
+                 <Eye size={14} /> Preview
+               </Button>
+               <Button 
+                 variant="outline" 
+                 size="sm" 
+                 className="text-[10px] font-bold uppercase tracking-widest gap-2 bg-white/5 border-white/10 hover:bg-white/10 text-kinetic-orange hover:text-kinetic-orange/80 border-kinetic-orange/20"
+                 onClick={() => setTestOpen(true)}
+               >
+                 <Send size={14} /> Enviar Teste
+               </Button>
+             </div>
              <Button 
                size="sm" 
                className="bg-kinetic-orange hover:bg-kinetic-orange/80 shadow-lg shadow-kinetic-orange/20 font-bold uppercase tracking-widest text-[10px]"
@@ -173,6 +218,20 @@ export function RouteCard({ route, targetName, onUpdate, onDelete }: RouteCardPr
           </div>
         </div>
       </div>
+
+      <CouponPreviewModal 
+        isOpen={previewOpen} 
+        onClose={() => setPreviewOpen(false)} 
+        templateBody={localTemplate} 
+        mediaUrl={localMediaUrl} 
+      />
+
+      <CouponTestModal 
+        isOpen={testOpen} 
+        onClose={() => setTestOpen(false)} 
+        templateBody={localTemplate} 
+        mediaUrl={localMediaUrl} 
+      />
     </TactileCard>
   );
 }

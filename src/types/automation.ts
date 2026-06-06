@@ -18,6 +18,7 @@ export interface AutomationFilters {
 export interface AutomationTemplateConfig {
   body?: string;
   tone?: string;
+  media_url?: string;
 }
 
 export interface AutomationRoute {

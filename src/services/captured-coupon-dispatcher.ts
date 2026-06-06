@@ -309,6 +309,7 @@ export const capturedCouponDispatcher = {
               items: [{
                 product_name: norm.code ? `Cupom Shopee ${norm.code}` : (norm.discountLine.replace(/^💸\s*/, '') || 'Cupom Shopee'),
                 custom_text: messageText,
+                image_url: route.template_config?.media_url || null,
                 affiliate_url: finalAffiliateLink,
                 offer_type: 'coupon_offer',
                 eligibility_status: 'eligible',
