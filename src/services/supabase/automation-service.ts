@@ -335,6 +335,23 @@ export const automationService = {
    */
   async deleteRoute(id: string, client?: SupabaseClient): Promise<void> {
     const supabase = client || createClient();
+
+    // Buscar caminhos de imagem para exclusão
+    const { data: routeData } = await supabase
+      .from('automation_routes')
+      .select('template_config')
+      .eq('id', id)
+      .single();
+
+    const media = routeData?.template_config?.media;
+    if (media) {
+      const pathsToRemove = [media.global_path, media.coupon_path, media.page_path].filter(Boolean);
+      if (pathsToRemove.length > 0) {
+        // Tenta remover os arquivos, mas não quebra se falhar
+        await supabase.storage.from('automation-media').remove(pathsToRemove).catch(e => console.error('[CLEANUP]', e));
+      }
+    }
+
     const { error } = await supabase
       .from('automation_routes')
       .delete()

@@ -289,6 +289,18 @@ export const capturedCouponDispatcher = {
               continue;
             }
 
+            const mediaConfig = route.template_config?.media || {};
+            let finalImageUrl = coupon.image_url || null;
+            if (!finalImageUrl) {
+              if (mediaConfig.use_same_for_all && mediaConfig.global_url) {
+                finalImageUrl = mediaConfig.global_url;
+              } else if (itemType === 'coupon' && mediaConfig.coupon_url) {
+                finalImageUrl = mediaConfig.coupon_url;
+              } else if (itemType === 'promo_landing' && mediaConfig.page_url) {
+                finalImageUrl = mediaConfig.page_url;
+              }
+            }
+
             // --- 10. CREATE CAMPAIGN ---
             const campaign = await campaignService.create(source.user_id, {
               name: `Automação: ${source.name}`,
@@ -310,7 +322,7 @@ export const capturedCouponDispatcher = {
               items: [{
                 product_name: norm.code ? `Cupom Shopee ${norm.code}` : (norm.discountLine.replace(/^💸\s*/, '') || 'Cupom Shopee'),
                 custom_text: messageText,
-                image_url: route.template_config?.media_url || null,
+                image_url: finalImageUrl,
                 affiliate_url: finalAffiliateLink,
                 offer_type: 'coupon_offer',
                 eligibility_status: 'eligible',

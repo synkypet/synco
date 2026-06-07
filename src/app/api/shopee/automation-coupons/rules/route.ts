@@ -2,21 +2,28 @@ import { NextResponse } from 'next/server';
 import { requireOperationalAccess } from '@/lib/access/require-operational-access';
 import { automationService } from '@/services/supabase/automation-service';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { shopeeCouponService } from '@/services/supabase/shopee-coupon-service';
+import { classifyShopeeCapturedContent } from '@/lib/coupon-classifier';
+import { isShopeeAffiliateUrl } from '@/lib/marketplaces/shopee/coupon-extractor';
+import { shopeePromoPageService } from '@/services/supabase/shopee-promo-page-service';
 
 export async function GET(request: Request) {
   try {
     const gate = await requireOperationalAccess();
     if (!gate.ok) return gate.response;
+    const { user } = gate;
 
     const { searchParams } = new URL(request.url);
     const sourceId = searchParams.get('sourceId');
     const routeId = searchParams.get('routeId');
 
     if (!sourceId || !routeId) {
-      return NextResponse.json({ rules: [], route: null, error: 'Parâmetros ausentes' });
+      return NextResponse.json({ rules: [], available_coupons: [], available_promo_pages: [], route: null, error: 'Parâmetros ausentes' });
     }
 
     const supabaseAdmin = createAdminClient();
+    
+    // 1. Regras atuais da automação (Selecionados)
     let rules: any[] = [];
     try {
       rules = await automationService.getCouponRules(sourceId, routeId, supabaseAdmin);
@@ -28,27 +35,97 @@ export async function GET(request: Request) {
       );
     }
     
+    // 2. Dados da Rota
     const { data: routeData, error: routeError } = await supabaseAdmin
       .from('automation_routes')
       .select('coupon_interval_minutes, coupon_next_run_at, coupon_last_run_at, template_config')
       .eq('id', routeId)
       .single();
 
-    if (routeError) {
-      if (routeError.code === 'PGRST116') {
-        // Expected when no route config exists yet, return empty
-        return NextResponse.json({ rules: rules || [], route: null });
-      } else {
-        console.error('[GET-ROUTE-ERROR]', routeError);
-        return NextResponse.json(
-          { error: 'Erro interno ao consultar dados da rota.', details: routeError }, 
-          { status: 500 }
-        );
+    if (routeError && routeError.code !== 'PGRST116') {
+      console.error('[GET-ROUTE-ERROR]', routeError);
+      return NextResponse.json(
+        { error: 'Erro interno ao consultar dados da rota.', details: routeError }, 
+        { status: 500 }
+      );
+    }
+
+    // 3. Buscar Cupons Disponíveis (Idêntico ao Radar)
+    let rawCoupons = [];
+    try {
+      rawCoupons = await shopeeCouponService.listDiscoveredCoupons(user.id, {
+        isVerified: true,
+        limit: 50
+      }, supabaseAdmin);
+    } catch (err: any) {
+      if (err.code === '42703') {
+        rawCoupons = await shopeeCouponService.listDiscoveredCoupons(user.id, {
+          limit: 50
+        }, supabaseAdmin);
       }
     }
 
+    const classifiedCoupons = rawCoupons.map(coupon => {
+       const isPersistedCouponOffer = coupon.offer_type === 'coupon_offer';
+       const hasPersistedCouponType = ['codigo', 'link_resgate', 'pagina_cupons'].includes(coupon.coupon_type);
+       const isPersistedVerified = coupon.is_verified_coupon === true || coupon.validation_status === 'verified';
+       
+       let result;
+       if (isPersistedCouponOffer && hasPersistedCouponType && isPersistedVerified) {
+         const hasLink = !!coupon.redemption_url;
+         if (coupon.coupon_type === 'codigo') {
+           const hasValidCode = !!coupon.code && coupon.code.trim().length > 0;
+           if (hasValidCode) {
+             result = { content_type: 'verified_coupon', has_valid_link: hasLink };
+           } else {
+             result = classifyShopeeCapturedContent({
+               text: coupon.raw_text || '', title: coupon.coupon_label || undefined, code: coupon.code || undefined, redemption_url: coupon.redemption_url || undefined, price: coupon.price
+             });
+           }
+         } else if (coupon.coupon_type === 'link_resgate' || coupon.coupon_type === 'pagina_cupons') {
+           if (hasLink) {
+             result = { content_type: 'verified_coupon', has_valid_link: true };
+           } else {
+             result = { content_type: 'rejected', has_valid_link: false };
+           }
+         } else {
+           result = classifyShopeeCapturedContent({ text: coupon.raw_text || '', title: coupon.coupon_label || undefined, code: coupon.code || undefined, redemption_url: coupon.redemption_url || undefined, price: coupon.price });
+         }
+       } else {
+         result = classifyShopeeCapturedContent({ text: coupon.raw_text || '', title: coupon.coupon_label || undefined, code: coupon.code || undefined, redemption_url: coupon.redemption_url || undefined, price: coupon.price });
+       }
+
+       const wouldShowAsCoupon = result.content_type === 'verified_coupon' && result.has_valid_link;
+       const isAffiliated = isShopeeAffiliateUrl(coupon.redemption_url || '');
+
+       return {
+         ...coupon,
+         effective_redemption_url: coupon.redemption_url,
+         reaffiliation_status: isAffiliated ? 'reaffiliated' : 'failed',
+         classification: result.content_type,
+         has_valid_link: result.has_valid_link,
+         would_show_as_coupon: wouldShowAsCoupon
+       };
+    });
+
+    const finalCoupons = classifiedCoupons.filter(c => c.would_show_as_coupon);
+
+    // 4. Buscar Promo Pages Disponíveis (Idêntico ao Radar)
+    let rawPages: any[] = [];
+    try {
+      rawPages = await shopeePromoPageService.listDiscoveredPromoPages(user.id, { limit: 50 }, supabaseAdmin);
+    } catch(e) {}
+    
+    const enrichedPages = rawPages.map(page => ({
+      ...page,
+      effective_redemption_url: page.canonical_url || page.raw_url,
+      reaffiliation_status: 'not_needed'
+    }));
+
     return NextResponse.json({ 
       rules: rules || [], 
+      available_coupons: finalCoupons,
+      available_promo_pages: enrichedPages,
       route: routeData || null 
     });
   } catch (error: any) {
@@ -70,8 +147,7 @@ export async function POST(request: Request) {
     const supabaseAdmin = createAdminClient();
 
     if (action === 'sync') {
-      const { sourceId, routeId } = payload;
-      await automationService.syncRulesFromCandidates(sourceId, routeId, user.id, supabaseAdmin);
+      // Sincronização não é mais necessária, a interface usa available_coupons via GET.
       return NextResponse.json({ success: true });
     }
 
