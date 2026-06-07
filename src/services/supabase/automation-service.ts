@@ -753,7 +753,7 @@ export const automationService = {
     let couponQuery = supabase
       .from('discovered_coupons')
       .select('id')
-      .in('validation_status', ['candidate', 'verified'])
+      .or('validation_status.in.(candidate,verified),is_manual.eq.true')
       .order('last_seen_at', { ascending: false })
       .limit(100);
 
@@ -803,7 +803,8 @@ export const automationService = {
     let promoQuery = supabase
       .from('discovered_promo_pages')
       .select('id')
-      .order('created_at', { ascending: false })
+      .in('status', ['valid'])
+      .order('last_seen_at', { ascending: false })
       .limit(100);
 
     if (isGlobalAggregator) {

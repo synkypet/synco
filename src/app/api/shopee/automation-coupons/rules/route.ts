@@ -7,31 +7,35 @@ export async function GET(request: Request) {
   try {
     const gate = await requireOperationalAccess();
     if (!gate.ok) return gate.response;
-    const { user } = gate;
 
     const { searchParams } = new URL(request.url);
     const sourceId = searchParams.get('sourceId');
     const routeId = searchParams.get('routeId');
 
     if (!sourceId || !routeId) {
-      return NextResponse.json({ error: 'sourceId e routeId são obrigatórios' }, { status: 400 });
+      return NextResponse.json({ rules: [], route: null, error: 'Parâmetros ausentes' });
     }
 
     const supabaseAdmin = createAdminClient();
     const rules = await automationService.getCouponRules(sourceId, routeId, supabaseAdmin);
     
-    const { data: routeData } = await supabaseAdmin
+    const { data: routeData, error: routeError } = await supabaseAdmin
       .from('automation_routes')
-      .select('coupon_interval_minutes, coupon_next_run_at, coupon_last_run_at')
+      .select('coupon_interval_minutes, coupon_next_run_at, coupon_last_run_at, template_config')
       .eq('id', routeId)
       .single();
 
+    if (routeError && routeError.code !== 'PGRST116') {
+      console.error('[GET-ROUTE-ERROR]', routeError);
+    }
+
     return NextResponse.json({ 
-      rules, 
-      route: routeData 
+      rules: rules || [], 
+      route: routeData || null 
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('GET /api/shopee/automation-coupons/rules ERROR:', error);
+    return NextResponse.json({ rules: [], route: null, error: String(error) });
   }
 }
 

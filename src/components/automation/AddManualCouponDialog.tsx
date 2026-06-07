@@ -14,10 +14,11 @@ interface AddManualCouponDialogProps {
   sourceId: string;
   routeId: string;
   onSuccess: () => void;
-  couponToEdit?: any; // Se passado, funciona como modo de edição
+  couponToEdit?: any; // Se passado, funciona como modo de edição ou clone
+  isClone?: boolean; // Se true, o botão exibe 'Clonar'
 }
 
-export function AddManualCouponDialog({ sourceId, routeId, onSuccess, couponToEdit }: AddManualCouponDialogProps) {
+export function AddManualCouponDialog({ sourceId, routeId, onSuccess, couponToEdit, isClone }: AddManualCouponDialogProps) {
   const [open, setOpen] = useState(false);
   
   const [formData, setFormData] = useState({
@@ -30,7 +31,7 @@ export function AddManualCouponDialog({ sourceId, routeId, onSuccess, couponToEd
 
   const [isSaving, setIsSaving] = useState(false);
 
-  const isEdit = !!couponToEdit;
+  const isEdit = !!couponToEdit && !isClone;
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -107,7 +108,11 @@ export function AddManualCouponDialog({ sourceId, routeId, onSuccess, couponToEd
       <DialogTrigger asChild>
         {isEdit ? (
           <Button variant="outline" size="sm" className="h-7 text-[10px]">
-            Editar Cupom
+            Editar
+          </Button>
+        ) : isClone ? (
+          <Button variant="outline" size="sm" className="h-7 text-[10px]">
+            Clonar para Biblioteca
           </Button>
         ) : (
           <Button variant="outline" size="sm" className="gap-2 bg-anthracite-surface border-none text-white hover:bg-deep-void shadow-skeuo-flat">
@@ -118,7 +123,7 @@ export function AddManualCouponDialog({ sourceId, routeId, onSuccess, couponToEd
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px] bg-deep-void border-none shadow-skeuo-elevated text-white">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">{isEdit ? 'Editar Cupom' : 'Criar Cupom Manual'}</DialogTitle>
+          <DialogTitle className="text-xl font-bold">{isEdit ? 'Editar Cupom' : isClone ? 'Clonar Cupom' : 'Criar Cupom Manual'}</DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
