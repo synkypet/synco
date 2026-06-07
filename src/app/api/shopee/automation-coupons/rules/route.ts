@@ -17,7 +17,16 @@ export async function GET(request: Request) {
     }
 
     const supabaseAdmin = createAdminClient();
-    const rules = await automationService.getCouponRules(sourceId, routeId, supabaseAdmin);
+    let rules: any[] = [];
+    try {
+      rules = await automationService.getCouponRules(sourceId, routeId, supabaseAdmin);
+    } catch (ruleErr: any) {
+      console.error('[GET-RULES-ERROR]', ruleErr);
+      return NextResponse.json(
+        { error: 'Erro ao buscar regras de cupom no banco de dados. Contate o suporte.', details: String(ruleErr) }, 
+        { status: 500 }
+      );
+    }
     
     const { data: routeData, error: routeError } = await supabaseAdmin
       .from('automation_routes')
@@ -25,8 +34,17 @@ export async function GET(request: Request) {
       .eq('id', routeId)
       .single();
 
-    if (routeError && routeError.code !== 'PGRST116') {
-      console.error('[GET-ROUTE-ERROR]', routeError);
+    if (routeError) {
+      if (routeError.code === 'PGRST116') {
+        // Expected when no route config exists yet, return empty
+        return NextResponse.json({ rules: rules || [], route: null });
+      } else {
+        console.error('[GET-ROUTE-ERROR]', routeError);
+        return NextResponse.json(
+          { error: 'Erro interno ao consultar dados da rota.', details: routeError }, 
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({ 
@@ -35,7 +53,10 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error('GET /api/shopee/automation-coupons/rules ERROR:', error);
-    return NextResponse.json({ rules: [], route: null, error: String(error) });
+    return NextResponse.json(
+      { error: 'Erro não esperado no servidor.', details: String(error) }, 
+      { status: 500 }
+    );
   }
 }
 

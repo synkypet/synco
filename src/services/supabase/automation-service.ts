@@ -727,7 +727,7 @@ export const automationService = {
 
     if (error) {
       console.error('[AUTO-SERVICE] [GET-COUPON-RULES-ERROR]', error);
-      return [];
+      throw error;
     }
     return data || [];
   },
