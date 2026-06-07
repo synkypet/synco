@@ -31,6 +31,9 @@ Use it to track completed blocks, known debt, active risks, and the next executi
   - I8: Implementação de Quality Gate obrigatório e auto-retry no Monitor de Grupos para Mercado Livre, prevenindo disparos de mensagens com dados incompletos ou quebrados de forma automatizada. ✅
 - BLOCO J — SyncoMetrics Meta Metrics ✅
   - J1: Implementação de UI de falha resiliente para chamadas Graph API Meta, sanitizando logging de erro interno para evitar vazamento de tokens, além de não expor erros 500 no client. Adição de block alerts e botão de reconexão. ✅
+- BLOCO K — Shopee Automation Coupons Management ✅
+  - K1: Resolução de erro 500 silencioso e melhoria de layout/persistência (template_config) de metadados visuais. ✅
+  - K2: Implementação de UI com split list/disponíveis vs selecionados e edição/clonagem de cupons manuais a partir da biblioteca do Radar. ✅
 
 ---
 
