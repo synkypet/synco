@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Campaign, CreateCampaignDTO } from '@/types/campaign';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { triggerWorker } from '@/lib/worker/trigger';
+import { getNextAllowedSendTime } from '@/lib/scheduling/send-window';
 
 export const campaignService = {
 
@@ -281,7 +282,7 @@ export const campaignService = {
     // ─── 6. Geração Real dos Send Jobs e Agendamento (Fila Global) ──────────────
     const { data: userPrefs } = await supabase
       .from('user_send_preferences')
-      .select('campaign_spacing_min_seconds, campaign_spacing_max_seconds')
+      .select('campaign_spacing_min_seconds, campaign_spacing_max_seconds, send_window_start, send_window_end, send_window_timezone')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -357,8 +358,20 @@ export const campaignService = {
         }
       }
 
+      // Normalizar para a janela global APENAS se a origem respeitar a janela (ex. radar, monitor, coupon).
+      // Origens manuais (undefined ou "manual") podem furar a janela para envio imediato.
+      const respectsWindow = ['radar', 'monitor', 'coupon', 'automation_coupon', 'automation'].includes(dto.origin || '');
+      if (respectsWindow) {
+        targetStart = getNextAllowedSendTime(
+          targetStart,
+          userPrefs?.send_window_start ?? null,
+          userPrefs?.send_window_end ?? null,
+          userPrefs?.send_window_timezone ?? 'America/Sao_Paulo'
+        );
+      }
+
       const campaignStartAt = targetStart;
-      console.log(`[CAMPAIGN-SCHEDULER] userId=${userId} channelId=${channelId} spacingSource=${spacingSource} minSec=${CAMPAIGN_SPACING_MIN} maxSec=${CAMPAIGN_SPACING_MAX} selectedSec=${campaignSpacingSec} campaignStartAt=${campaignStartAt.toISOString()}`);
+      console.log(`[CAMPAIGN-SCHEDULER] userId=${userId} channelId=${channelId} origin=${dto.origin} respectsWindow=${respectsWindow} spacingSource=${spacingSource} minSec=${CAMPAIGN_SPACING_MIN} maxSec=${CAMPAIGN_SPACING_MAX} selectedSec=${campaignSpacingSec} campaignStartAt=${campaignStartAt.toISOString()}`);
 
       channelQueueEnds.set(channelId, campaignStartAt);
       channelJobIndex.set(channelId, 0);
